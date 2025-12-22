@@ -16,16 +16,6 @@ export default function Home() {
   const [error, setError] = React.useState("")
   const router = useRouter()
 
-  React.useEffect(() => {
-    // Check if access code is already stored
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(ACCESS_CODE_KEY)
-      if (stored === ACCESS_CODE) {
-        router.push("/dashboard")
-      }
-    }
-  }, [router])
-
   const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "") // Remove non-digits
     
