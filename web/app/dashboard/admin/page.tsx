@@ -45,8 +45,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { defaultJudges, type Judge } from "@/lib/judges-data"
-import { adminProjects, type AdminProject } from "@/lib/admin-projects-data"
+import type { Judge } from "@/lib/judges-data"
+import type { AdminProject } from "@/lib/admin-projects-data"
 import { defaultTracks, type Track } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { SectionCards } from "@/components/section-cards"
@@ -59,8 +59,8 @@ export default function AdminPage() {
   const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [investmentFund, setInvestmentFund] = React.useState("10000")
-  const [judgesList, setJudgesList] = React.useState<Judge[]>(defaultJudges)
-  const [projectsList, setProjectsList] = React.useState<AdminProject[]>(adminProjects)
+  const [judgesList, setJudgesList] = React.useState<Judge[]>([])
+  const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
   const [judgesPerProject, setJudgesPerProject] = React.useState(2) // Default: 2 judges per project
   const [slotDuration, setSlotDuration] = React.useState(5) // Calendar slot duration in minutes
   const [scheduleStartTime, setScheduleStartTime] = React.useState("13:00") // Default 1 PM
