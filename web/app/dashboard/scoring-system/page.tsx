@@ -12,48 +12,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { IconPlus, IconCoins } from "@tabler/icons-react"
-import { toast } from "sonner"
+import { IconCoins } from "@tabler/icons-react"
 
 const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
-
-const scoringCriteria = [
-  {
-    id: 1,
-    name: "Innovation",
-    weight: 30,
-    description: "Creativity and originality of the solution",
-    minScore: 0,
-    maxScore: 100,
-  },
-  {
-    id: 2,
-    name: "Technical Excellence",
-    weight: 25,
-    description: "Quality of technical implementation",
-    minScore: 0,
-    maxScore: 100,
-  },
-  {
-    id: 3,
-    name: "Impact",
-    weight: 25,
-    description: "Potential social and economic impact",
-    minScore: 0,
-    maxScore: 100,
-  },
-  {
-    id: 4,
-    name: "Feasibility",
-    weight: 20,
-    description: "Practicality and implementation feasibility",
-    minScore: 0,
-    maxScore: 100,
-  },
-]
 
 export default function ScoringSystemPage() {
   const router = useRouter()
@@ -105,19 +67,11 @@ export default function ScoringSystemPage() {
             <div className="@container/main flex flex-1 flex-col gap-2">
               <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
                 <div className="px-4 lg:px-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h1 className="text-3xl font-bold tracking-tight">Scoring System</h1>
-                      <p className="text-muted-foreground">
-                        Configure scoring criteria and investment allocation rules
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() => toast.info("Add criteria feature coming soon")}
-                    >
-                      <IconPlus className="mr-2 h-4 w-4" />
-                      Add Criteria
-                    </Button>
+                  <div className="mb-6">
+                    <h1 className="text-3xl font-bold tracking-tight">Scoring System</h1>
+                    <p className="text-muted-foreground">
+                      View the investment-based scoring configuration used by judges.
+                    </p>
                   </div>
 
                   <div className="mb-6">
@@ -170,53 +124,7 @@ export default function ScoringSystemPage() {
                     </Card>
                   </div>
 
-                  <div className="space-y-4">
-                    <h2 className="text-2xl font-semibold tracking-tight">Scoring Criteria</h2>
-                    <div className="grid gap-4">
-                      {scoringCriteria.map((criterion, index) => (
-                        <Card key={criterion.id}>
-                          <CardHeader>
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <CardTitle className="text-lg">{criterion.name}</CardTitle>
-                                <CardDescription className="mt-1">
-                                  {criterion.description}
-                                </CardDescription>
-                              </div>
-                              <Badge variant="outline" className="ml-4">
-                                Weight: {criterion.weight}%
-                              </Badge>
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label htmlFor={`min-${criterion.id}`}>Min Score</Label>
-                                  <Input
-                                    id={`min-${criterion.id}`}
-                                    type="number"
-                                    defaultValue={criterion.minScore}
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor={`max-${criterion.id}`}>Max Score</Label>
-                                  <Input
-                                    id={`max-${criterion.id}`}
-                                    type="number"
-                                    defaultValue={criterion.maxScore}
-                                  />
-                                </div>
-                              </div>
-                              {index < scoringCriteria.length - 1 && (
-                                <Separator className="mt-4" />
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
+                  {/* Scoring criteria inputs have been removed; scoring is fully investment-based now. */}
                 </div>
               </div>
             </div>
