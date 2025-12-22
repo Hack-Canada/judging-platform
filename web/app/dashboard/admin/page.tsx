@@ -50,6 +50,7 @@ import { adminProjects, type AdminProject } from "@/lib/admin-projects-data"
 import { defaultTracks, type Track } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { SectionCards } from "@/components/section-cards"
+import { supabase } from "@/lib/supabase-client"
 
 const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
@@ -82,96 +83,134 @@ export default function AdminPage() {
   const [roomsList, setRoomsList] = React.useState<Room[]>(defaultRooms)
 
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(ACCESS_CODE_KEY)
-      if (stored === ACCESS_CODE) {
-        setHasAccess(true)
-      } else {
-        setHasAccess(false)
-        router.push("/")
+    if (typeof window === "undefined") return
+
+    const stored = localStorage.getItem(ACCESS_CODE_KEY)
+    if (stored === ACCESS_CODE) {
+      setHasAccess(true)
+    } else {
+      setHasAccess(false)
+      router.push("/")
+      return
+    }
+
+    // Load settings from localStorage (fund, calendar, scoring, tracks, rooms)
+    const savedFund = localStorage.getItem("admin_investment_fund")
+    if (savedFund) {
+      setInvestmentFund(savedFund)
+    }
+    const savedSlotDuration = localStorage.getItem("calendar_slot_duration")
+    if (savedSlotDuration) {
+      setSlotDuration(parseInt(savedSlotDuration) || 5)
+    }
+    const savedCalendarJudgesPerProject = localStorage.getItem("calendar_judges_per_project")
+    if (savedCalendarJudgesPerProject) {
+      setJudgesPerProject(parseInt(savedCalendarJudgesPerProject) || 2)
+    }
+    const savedStartTime = localStorage.getItem("calendar_start_time")
+    if (savedStartTime) {
+      setScheduleStartTime(savedStartTime)
+    }
+    const savedEndTime = localStorage.getItem("calendar_end_time")
+    if (savedEndTime) {
+      setScheduleEndTime(savedEndTime)
+    }
+    const savedMinInvestment = localStorage.getItem("scoring_min_investment")
+    if (savedMinInvestment) {
+      setMinInvestment(savedMinInvestment)
+    }
+    const savedMaxInvestment = localStorage.getItem("scoring_max_investment")
+    if (savedMaxInvestment) {
+      setMaxInvestment(savedMaxInvestment)
+    }
+
+    const savedTracks = localStorage.getItem("tracks_data")
+    if (savedTracks) {
+      try {
+        setTracksList(JSON.parse(savedTracks))
+      } catch {
+        // keep defaults on parse error
       }
-      // Load saved investment fund
-      const savedFund = localStorage.getItem("admin_investment_fund")
-      if (savedFund) {
-        setInvestmentFund(savedFund)
+    }
+
+    const savedRooms = localStorage.getItem("rooms_data")
+    if (savedRooms) {
+      try {
+        setRoomsList(JSON.parse(savedRooms))
+      } catch {
+        // keep defaults on parse error
       }
-      // Load saved calendar settings
-      const savedSlotDuration = localStorage.getItem("calendar_slot_duration")
-      if (savedSlotDuration) {
-        setSlotDuration(parseInt(savedSlotDuration) || 5)
+    }
+
+    const savedJudgesLocal = localStorage.getItem("judges_data")
+    if (savedJudgesLocal) {
+      try {
+        setJudgesList(JSON.parse(savedJudgesLocal))
+      } catch {
+        // keep defaults on parse error
       }
-      const savedCalendarJudgesPerProject = localStorage.getItem("calendar_judges_per_project")
-      if (savedCalendarJudgesPerProject) {
-        setJudgesPerProject(parseInt(savedCalendarJudgesPerProject) || 2)
-      }
-      const savedStartTime = localStorage.getItem("calendar_start_time")
-      if (savedStartTime) {
-        setScheduleStartTime(savedStartTime)
-      }
-      const savedEndTime = localStorage.getItem("calendar_end_time")
-      if (savedEndTime) {
-        setScheduleEndTime(savedEndTime)
-      }
-      // Load saved scoring system settings
-      const savedMinInvestment = localStorage.getItem("scoring_min_investment")
-      if (savedMinInvestment) {
-        setMinInvestment(savedMinInvestment)
-      }
-      const savedMaxInvestment = localStorage.getItem("scoring_max_investment")
-      if (savedMaxInvestment) {
-        setMaxInvestment(savedMaxInvestment)
-      }
-      // Load saved judges
-      const savedJudges = localStorage.getItem("judges_data")
-      if (savedJudges) {
-        try {
-          setJudgesList(JSON.parse(savedJudges))
-        } catch (e) {
-          // Use default if parsing fails
+    }
+
+    const savedAssignments = localStorage.getItem("admin_judge_assignments")
+    let hasSavedAssignments = false
+    if (savedAssignments) {
+      try {
+        const parsed = JSON.parse(savedAssignments)
+        if (parsed.projects) {
+          setProjectsList(parsed.projects)
         }
-      }
-      // Load saved tracks
-      const savedTracks = localStorage.getItem("tracks_data")
-      if (savedTracks) {
-        try {
-          setTracksList(JSON.parse(savedTracks))
-        } catch (e) {
-          // Use default if parsing fails
+        if (parsed.judges) {
+          setJudgesList(parsed.judges)
         }
-      }
-      // Load saved rooms
-      const savedRooms = localStorage.getItem("rooms_data")
-      if (savedRooms) {
-        try {
-          setRoomsList(JSON.parse(savedRooms))
-        } catch (e) {
-          // Use default if parsing fails
+        if (parsed.judgesPerProject) {
+          setJudgesPerProject(parsed.judgesPerProject)
         }
+        hasSavedAssignments = true
+      } catch {
+        // If parsing fails, we'll fall back to auto-assign below
       }
-      // Load saved assignments
-      const savedAssignments = localStorage.getItem("admin_judge_assignments")
-      if (savedAssignments) {
-        try {
-          const parsed = JSON.parse(savedAssignments)
-          if (parsed.projects) {
-            setProjectsList(parsed.projects)
-          }
-          if (parsed.judges) {
-            setJudgesList(parsed.judges)
-          }
-          if (parsed.judgesPerProject) {
-            setJudgesPerProject(parsed.judgesPerProject)
-          }
-        } catch (e) {
-          // If parsing fails, auto-assign (no toast on initial load)
+    }
+
+    const loadFromSupabase = async () => {
+      try {
+        const [{ data: supabaseJudges, error: judgesError }, { data: supabaseProjects, error: projectsError }] =
+          await Promise.all([
+            supabase
+              .from("judges")
+              .select("id, name, email, assignedProjects, totalInvested, tracks"),
+            supabase
+              .from("projects")
+              .select("id, name, track")
+          ])
+
+        if (!judgesError && supabaseJudges && supabaseJudges.length > 0 && !savedJudgesLocal && !hasSavedAssignments) {
+          setJudgesList(supabaseJudges as unknown as Judge[])
+        }
+
+        if (!projectsError && supabaseProjects && supabaseProjects.length > 0 && !hasSavedAssignments) {
+          const mappedProjects: AdminProject[] = (supabaseProjects as any[]).map((row, index) => ({
+            id: index + 1,
+            name: row.name ?? "Untitled Project",
+            assignedJudges: [],
+            totalInvestment: 0,
+            status: "Active",
+            track: row.track ?? "General",
+          }))
+          setProjectsList(mappedProjects)
+        }
+
+        // If we still have no saved assignments, auto-assign once based on the final lists
+        if (!hasSavedAssignments) {
           setTimeout(() => autoAssignJudges(false), 100)
         }
-      } else {
-        // Auto-assign on first load (no toast on initial load)
-        setTimeout(() => autoAssignJudges(false), 100)
+      } catch (error) {
+        console.error("Failed to load admin data from Supabase", error)
+      } finally {
+        setIsInitialized(true)
       }
-      setIsInitialized(true)
     }
+
+    void loadFromSupabase()
   }, [router])
 
   const saveJudges = (newJudges: Judge[]) => {
