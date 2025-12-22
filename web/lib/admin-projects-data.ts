@@ -1,0 +1,61 @@
+export type AdminProject = {
+  id: number
+  name: string
+  assignedJudges: string[]
+  totalInvestment: number
+  status: "Active" | "Completed" | "Draft"
+  track: string // Track name
+}
+
+export const adminProjects: AdminProject[] = [
+  { id: 1, name: "AI Healthcare Assistant", assignedJudges: ["Sarah Chen", "Michael Torres"], totalInvestment: 890, status: "Active", track: "General" },
+  { id: 2, name: "Sustainable Energy Platform", assignedJudges: ["Emily Johnson"], totalInvestment: 650, status: "Active", track: "General" },
+  { id: 3, name: "Blockchain Voting System", assignedJudges: ["Sarah Chen", "Emily Johnson", "David Kim"], totalInvestment: 2100, status: "Active", track: "General" },
+  { id: 4, name: "Smart City IoT Network", assignedJudges: [], totalInvestment: 0, status: "Draft", track: "General" },
+  { id: 5, name: "Virtual Reality Education", assignedJudges: ["Alexandra Martinez"], totalInvestment: 450, status: "Active", track: "General" },
+  { id: 6, name: "Climate Change Tracker", assignedJudges: ["Michael Torres", "David Kim"], totalInvestment: 720, status: "Active", track: "General" },
+  { id: 7, name: "FinTech Mobile App", assignedJudges: ["Sarah Chen"], totalInvestment: 380, status: "Active", track: "General" },
+  { id: 8, name: "Autonomous Delivery Drones", assignedJudges: ["Emily Johnson", "Alexandra Martinez"], totalInvestment: 1100, status: "Active", track: "General" },
+  { id: 9, name: "Mental Health Platform", assignedJudges: ["Sarah Chen", "Michael Torres", "Emily Johnson", "David Kim"], totalInvestment: 1950, status: "Active", track: "General" },
+  { id: 10, name: "E-Commerce Analytics Tool", assignedJudges: ["David Kim"], totalInvestment: 290, status: "Active", track: "General" },
+  { id: 11, name: "Renewable Energy Dashboard", assignedJudges: ["Sarah Chen", "Michael Torres"], totalInvestment: 840, status: "Active", track: "General" },
+  { id: 12, name: "Social Media Moderation AI", assignedJudges: ["Emily Johnson"], totalInvestment: 520, status: "Active", track: "General" },
+  { id: 13, name: "Smart Home Automation", assignedJudges: ["Alexandra Martinez", "David Kim"], totalInvestment: 680, status: "Active", track: "General" },
+  { id: 14, name: "Food Waste Reduction App", assignedJudges: ["Michael Torres"], totalInvestment: 210, status: "Active", track: "General" },
+  { id: 15, name: "Cybersecurity Training Platform", assignedJudges: ["Sarah Chen", "Emily Johnson"], totalInvestment: 950, status: "Active", track: "General" },
+  { id: 16, name: "Telemedicine Solution", assignedJudges: ["David Kim", "Alexandra Martinez"], totalInvestment: 760, status: "Active", track: "General" },
+  { id: 17, name: "Supply Chain Optimizer", assignedJudges: ["Michael Torres"], totalInvestment: 330, status: "Active", track: "General" },
+  { id: 18, name: "Language Learning AI", assignedJudges: ["Sarah Chen", "Emily Johnson", "David Kim", "Alexandra Martinez"], totalInvestment: 1420, status: "Active", track: "General" },
+  { id: 19, name: "Carbon Footprint Calculator", assignedJudges: ["Emily Johnson"], totalInvestment: 180, status: "Active", track: "General" },
+  { id: 20, name: "Job Matching Platform", assignedJudges: ["Sarah Chen", "Michael Torres"], totalInvestment: 870, status: "Active", track: "General" },
+  { id: 21, name: "AR Shopping Experience", assignedJudges: ["David Kim"], totalInvestment: 410, status: "Active", track: "General" },
+  { id: 22, name: "Disaster Response System", assignedJudges: ["Alexandra Martinez", "Michael Torres"], totalInvestment: 920, status: "Active", track: "General" },
+  { id: 23, name: "Personal Finance Manager", assignedJudges: ["Sarah Chen"], totalInvestment: 480, status: "Active", track: "General" },
+  { id: 24, name: "E-Learning Platform", assignedJudges: ["Emily Johnson", "David Kim", "Alexandra Martinez"], totalInvestment: 1180, status: "Active", track: "General" },
+  { id: 25, name: "Smart Agriculture System", assignedJudges: ["Michael Torres"], totalInvestment: 250, status: "Active", track: "General" },
+  { id: 26, name: "Community Engagement App", assignedJudges: ["Sarah Chen"], totalInvestment: 360, status: "Active", track: "General" },
+  { id: 27, name: "Fitness Tracking Platform", assignedJudges: ["Emily Johnson", "David Kim"], totalInvestment: 640, status: "Active", track: "General" },
+  { id: 28, name: "Event Management System", assignedJudges: ["Alexandra Martinez"], totalInvestment: 320, status: "Active", track: "General" },
+  { id: 29, name: "Real Estate Analytics", assignedJudges: ["Michael Torres"], totalInvestment: 270, status: "Active", track: "General" },
+  { id: 30, name: "Music Discovery Platform", assignedJudges: ["Sarah Chen"], totalInvestment: 390, status: "Active", track: "General" },
+  { id: 31, name: "Travel Planning Assistant", assignedJudges: ["Emily Johnson", "Alexandra Martinez"], totalInvestment: 710, status: "Active", track: "General" },
+  { id: 32, name: "Pet Care Management", assignedJudges: ["David Kim"], totalInvestment: 150, status: "Active", track: "General" },
+  { id: 33, name: "Legal Document Automation", assignedJudges: ["Sarah Chen", "Michael Torres"], totalInvestment: 830, status: "Active", track: "General" },
+  { id: 34, name: "Content Creation Tool", assignedJudges: ["Emily Johnson", "David Kim", "Alexandra Martinez"], totalInvestment: 1050, status: "Active", track: "General" },
+  { id: 35, name: "Parking Space Finder", assignedJudges: ["Michael Torres"], totalInvestment: 190, status: "Active", track: "General" },
+  { id: 36, name: "Recipe Sharing Platform", assignedJudges: ["Sarah Chen"], totalInvestment: 240, status: "Active", track: "General" },
+  { id: 37, name: "Local Business Directory", assignedJudges: ["Emily Johnson"], totalInvestment: 310, status: "Active", track: "General" },
+  { id: 38, name: "Study Group Organizer", assignedJudges: ["David Kim", "Alexandra Martinez"], totalInvestment: 570, status: "Active", track: "General" },
+  { id: 39, name: "Crowdfunding Platform", assignedJudges: ["Sarah Chen", "Michael Torres"], totalInvestment: 890, status: "Active", track: "General" },
+  { id: 40, name: "Task Management System", assignedJudges: ["Emily Johnson"], totalInvestment: 460, status: "Active", track: "General" },
+  { id: 41, name: "Weather Prediction AI", assignedJudges: ["Alexandra Martinez"], totalInvestment: 280, status: "Active", track: "General" },
+  { id: 42, name: "Online Marketplace", assignedJudges: ["Sarah Chen", "David Kim"], totalInvestment: 780, status: "Active", track: "General" },
+  { id: 43, name: "News Aggregator", assignedJudges: ["Michael Torres", "Emily Johnson"], totalInvestment: 620, status: "Active", track: "General" },
+  { id: 44, name: "Video Streaming Platform", assignedJudges: ["Sarah Chen", "Emily Johnson", "David Kim", "Alexandra Martinez"], totalInvestment: 1680, status: "Active", track: "General" },
+  { id: 45, name: "Productivity Suite", assignedJudges: ["Michael Torres"], totalInvestment: 440, status: "Active", track: "General" },
+  { id: 46, name: "Gaming Community Hub", assignedJudges: ["David Kim"], totalInvestment: 350, status: "Active", track: "General" },
+  { id: 47, name: "Fashion Styling App", assignedJudges: ["Alexandra Martinez"], totalInvestment: 220, status: "Active", track: "General" },
+  { id: 48, name: "Investment Portfolio Tracker", assignedJudges: ["Sarah Chen"], totalInvestment: 510, status: "Active", track: "General" },
+  { id: 49, name: "Home Renovation Planner", assignedJudges: ["Emily Johnson"], totalInvestment: 260, status: "Active", track: "General" },
+  { id: 50, name: "Social Networking Platform", assignedJudges: ["Sarah Chen", "Michael Torres", "Emily Johnson", "David Kim"], totalInvestment: 1820, status: "Active", track: "General" },
+]
