@@ -623,49 +623,70 @@ export default function CalendarPage() {
                                     return (
                                       <TableCell key={room.id} className="align-top">
                                         {slot ? (
-                                          <div className="space-y-2 p-2 bg-muted/50 rounded-md">
-                                            <div className="flex items-center justify-between gap-2">
-                                              <Badge variant="default" className="text-xs">
-                                                {slot.projectName}
-                                              </Badge>
-                                              <div className="flex items-center gap-1">
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon"
-                                                  className="h-6 w-6"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    handleOpenDialog(slot)
-                                                  }}
-                                                >
-                                                  <IconEdit className="h-3 w-3" />
-                                                </Button>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon"
-                                                  className="h-6 w-6 text-destructive"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    handleDeleteSlot(slot.id)
-                                                  }}
-                                                >
-                                                  <IconTrash className="h-3 w-3" />
-                                                </Button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenDialog(slot)}
+                                            className="group flex w-full flex-col gap-2 rounded-lg border border-border bg-gradient-to-b from-background to-muted/70 px-3 py-2 text-left shadow-sm transition hover:-translate-y-[1px] hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                          >
+                                            <div className="flex items-start justify-between gap-2">
+                                              <div className="space-y-1">
+                                                <p className="line-clamp-1 text-sm font-semibold">
+                                                  {slot.projectName}
+                                                </p>
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                  <Badge variant="outline" className="text-[10px]">
+                                                    General: {projects.find(p => p.id === slot.projectId)?.track || "General"}
+                                                  </Badge>
+                                                  <Badge variant="secondary" className="text-[10px]">
+                                                    {room.name}
+                                                  </Badge>
+                                                </div>
+                                              </div>
+                                              <div className="flex flex-col items-end gap-1">
+                                                <span className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                                  {time} – {endTime}
+                                                </span>
+                                                <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100">
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation()
+                                                      handleOpenDialog(slot)
+                                                    }}
+                                                  >
+                                                    <IconEdit className="h-3 w-3" />
+                                                  </Button>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-destructive"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation()
+                                                      handleDeleteSlot(slot.id)
+                                                    }}
+                                                  >
+                                                    <IconTrash className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
                                               </div>
                                             </div>
-                                            <Badge variant="outline" className="text-xs">
-                                              {projects.find(p => p.id === slot.projectId)?.track || "General"}
-                                            </Badge>
                                             {slot.judgeNames.length > 0 && (
-                                              <div className="flex flex-wrap gap-1 mt-2">
+                                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                                <span className="text-[10px] font-medium text-muted-foreground">Judge:</span>
                                                 {slot.judgeNames.map((name, idx) => (
-                                                  <Badge key={idx} variant="outline" className="text-xs">
+                                                  <Badge
+                                                    key={idx}
+                                                    variant="outline"
+                                                    className="rounded-full bg-background/70 text-[10px]"
+                                                  >
                                                     {name}
                                                   </Badge>
                                                 ))}
                                               </div>
                                             )}
-                                          </div>
+                                          </button>
                                         ) : (
                                           <div 
                                             className="p-2 border-2 border-dashed border-muted rounded-md cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors text-center"
