@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is the web app for the hackathon judging platform.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies and run the development server:
 
 ```bash
+cd web
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase (Postgres + Realtime)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The app can use [Supabase](https://supabase.com) as a Postgres database with realtime updates.
 
-## Learn More
+### 1. Environment variables
 
-To learn more about Next.js, take a look at the following resources:
+Create a `.env.local` file inside the `web` folder and add:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+You can find these values in your Supabase project under **Project Settings → API**.
 
-## Deploy on Vercel
+### 2. Minimal `projects` table
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+In your Supabase SQL editor, create a minimal `projects` table:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```sql
+create table if not exists public.projects (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  status text not null default 'Active',
+  track text not null default 'General',
+  created_at timestamptz not null default now()
+);
+```
+
+Then, in the Supabase dashboard, enable **Realtime** for the `public` schema or just the `projects` table so that inserts/updates/deletes can be streamed to the app.
+
+### 3. Realtime example
+
+The plan for this repo includes a small example page under the dashboard that:
+
+- Fetches `projects` from Supabase on load.
+- Subscribes to Postgres changes on the `projects` table.
+- Updates the UI whenever projects are inserted, updated, or deleted.
+
+Supabase is currently an optional enhancement; the rest of the app can continue to use local/lib data if Supabase is not configured.
