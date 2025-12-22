@@ -1,13 +1,13 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { AccessCodeDialog } from "@/components/access-code-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator"
 import { IconPlus, IconCoins } from "@tabler/icons-react"
 import { toast } from "sonner"
 
-const ACCESS_CODE = "111"
+const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
 
 const scoringCriteria = [
@@ -56,6 +56,7 @@ const scoringCriteria = [
 ]
 
 export default function ScoringSystemPage() {
+  const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [minInvestment, setMinInvestment] = React.useState("0")
   const [maxInvestment, setMaxInvestment] = React.useState("1000")
@@ -67,6 +68,7 @@ export default function ScoringSystemPage() {
         setHasAccess(true)
       } else {
         setHasAccess(false)
+        router.push("/")
       }
       // Load settings from admin (read-only)
       const savedMinInvestment = localStorage.getItem("scoring_min_investment")
@@ -78,10 +80,10 @@ export default function ScoringSystemPage() {
         setMaxInvestment(savedMaxInvestment)
       }
     }
-  }, [])
+  }, [router])
 
   if (!hasAccess) {
-    return <AccessCodeDialog />
+    return null
   }
 
   return (

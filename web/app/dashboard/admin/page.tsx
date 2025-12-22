@@ -1,13 +1,13 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { AccessCodeDialog } from "@/components/access-code-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,10 +50,11 @@ import { adminProjects, type AdminProject } from "@/lib/admin-projects-data"
 import { defaultTracks, type Track } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 
-const ACCESS_CODE = "111"
+const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
 
 export default function AdminPage() {
+  const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [investmentFund, setInvestmentFund] = React.useState("10000")
   const [judgesList, setJudgesList] = React.useState<Judge[]>(defaultJudges)
@@ -86,6 +87,7 @@ export default function AdminPage() {
         setHasAccess(true)
       } else {
         setHasAccess(false)
+        router.push("/")
       }
       // Load saved investment fund
       const savedFund = localStorage.getItem("admin_investment_fund")
@@ -169,7 +171,7 @@ export default function AdminPage() {
       }
       setIsInitialized(true)
     }
-  }, [])
+  }, [router])
 
   const saveJudges = (newJudges: Judge[]) => {
     setJudgesList(newJudges)
@@ -365,7 +367,7 @@ export default function AdminPage() {
   const remainingFund = parseFloat(investmentFund) - totalJudgesInvestment
 
   if (!hasAccess) {
-    return <AccessCodeDialog />
+    return null
   }
 
   return (

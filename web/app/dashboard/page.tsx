@@ -7,7 +7,6 @@ import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { DataTable } from "@/components/data-table"
 import { SectionCards } from "@/components/section-cards"
 import { SiteHeader } from "@/components/site-header"
-import { AccessCodeDialog } from "@/components/access-code-dialog"
 import {
   SidebarInset,
   SidebarProvider,
@@ -15,7 +14,7 @@ import {
 
 import data from "./data.json"
 
-const ACCESS_CODE = "111"
+const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
 
 export default function Page() {
@@ -30,12 +29,13 @@ export default function Page() {
         setHasAccess(true)
       } else {
         setHasAccess(false)
+        router.push("/")
       }
     }
-  }, [])
+  }, [router])
 
   if (!hasAccess) {
-    return <AccessCodeDialog />
+    return null
   }
 
   return (

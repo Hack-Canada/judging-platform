@@ -1,13 +1,13 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { AccessCodeDialog } from "@/components/access-code-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,10 +43,11 @@ import { defaultProjects } from "@/lib/projects-data"
 import { generateTimeSlots, getEndTime, type TimeSlot, type DaySchedule } from "@/lib/schedule-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 
-const ACCESS_CODE = "111"
+const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
 
 export default function CalendarPage() {
+  const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [selectedDate, setSelectedDate] = React.useState(() => {
     const today = new Date()
@@ -77,6 +78,7 @@ export default function CalendarPage() {
         setHasAccess(true)
       } else {
         setHasAccess(false)
+        router.push("/")
       }
       // Load saved schedule
       const savedSchedule = localStorage.getItem(`schedule_${selectedDate}`)
@@ -123,7 +125,7 @@ export default function CalendarPage() {
         setRooms(defaultRooms)
       }
     }
-  }, [selectedDate])
+  }, [selectedDate, router])
   
   // Update time slots when time range changes
   React.useEffect(() => {
@@ -444,7 +446,7 @@ export default function CalendarPage() {
   }
 
   if (!hasAccess) {
-    return <AccessCodeDialog />
+    return null
   }
 
   return (

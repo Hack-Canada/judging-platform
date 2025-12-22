@@ -7,7 +7,6 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { AccessCodeDialog } from "@/components/access-code-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,10 +39,11 @@ import { toast } from "sonner"
 import { defaultProjects, type Project } from "@/lib/projects-data"
 import { defaultTracks } from "@/lib/tracks-data"
 
-const ACCESS_CODE = "111"
+const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
 
 export default function ProjectsPage() {
+  const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [projects, setProjects] = React.useState<Project[]>(defaultProjects)
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -65,6 +65,7 @@ export default function ProjectsPage() {
         setHasAccess(true)
       } else {
         setHasAccess(false)
+        router.push("/")
       }
       // Load saved projects
       const savedProjects = localStorage.getItem("projects_data")
@@ -76,7 +77,7 @@ export default function ProjectsPage() {
         }
       }
     }
-  }, [])
+  }, [router])
 
   const saveProjects = (newProjects: Project[]) => {
     setProjects(newProjects)
@@ -162,7 +163,7 @@ export default function ProjectsPage() {
   )
 
   if (!hasAccess) {
-    return <AccessCodeDialog />
+    return null
   }
 
   return (
