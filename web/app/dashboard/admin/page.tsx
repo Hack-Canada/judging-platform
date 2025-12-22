@@ -193,7 +193,6 @@ export default function AdminPage() {
             name: row.name ?? "Untitled Project",
             assignedJudges: [],
             totalInvestment: 0,
-            status: "Active",
             track: row.track ?? "General",
           }))
           setProjectsList(mappedProjects)
@@ -325,8 +324,8 @@ export default function AdminPage() {
 
   const autoAssignJudges = (showToast = false) => {
     // Track-aware assignment: assign judges based on their track assignments
-    const activeProjects = projectsList.filter(p => p.status === "Active")
-    
+    const activeProjects = projectsList
+
     // Reset all project assignments
     const updatedProjects = projectsList.map(project => ({
       ...project,
@@ -366,7 +365,7 @@ export default function AdminPage() {
     
     // Update judge assignedProjects count
     const updatedJudges = judgesList.map(judge => {
-      const assignedCount = updatedProjects.filter(p => 
+      const assignedCount = updatedProjects.filter(p =>
         p.assignedJudges.includes(judge.name)
       ).length
       return {
@@ -862,7 +861,6 @@ export default function AdminPage() {
                             <TableHead>Track</TableHead>
                             <TableHead>Assigned Judges</TableHead>
                             <TableHead>Total Investment</TableHead>
-                            <TableHead>Status</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -883,13 +881,8 @@ export default function AdminPage() {
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="font-medium">${project.totalInvestment.toLocaleString()}</TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={project.status === "Active" ? "default" : "outline"}
-                                >
-                                  {project.status}
-                                </Badge>
+                              <TableCell className="font-medium">
+                                ${project.totalInvestment.toLocaleString()}
                               </TableCell>
                             </TableRow>
                           ))}

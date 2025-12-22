@@ -38,10 +38,16 @@ import {
 } from "@/components/ui/table"
 import { IconPlus, IconEdit, IconTrash, IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
 import { toast } from "sonner"
-import { defaultJudges } from "@/lib/judges-data"
-import { defaultProjects } from "@/lib/projects-data"
+import type { Judge } from "@/lib/judges-data"
 import { generateTimeSlots, getEndTime, type TimeSlot, type DaySchedule } from "@/lib/schedule-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
+import { supabase } from "@/lib/supabase-client"
+
+type CalendarProject = {
+  id: number
+  name: string
+  track: string
+}
 
 const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
@@ -53,8 +59,8 @@ export default function CalendarPage() {
     const today = new Date()
     return today.toISOString().split("T")[0]
   })
-  const [judges] = React.useState(defaultJudges)
-  const [projects] = React.useState(defaultProjects)
+  const [judges, setJudges] = React.useState<Judge[]>([])
+  const [projects, setProjects] = React.useState<CalendarProject[]>([])
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [slots, setSlots] = React.useState<TimeSlot[]>([])
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
@@ -72,59 +78,88 @@ export default function CalendarPage() {
   })
 
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(ACCESS_CODE_KEY)
-      if (stored === ACCESS_CODE) {
-        setHasAccess(true)
-      } else {
-        setHasAccess(false)
-        router.push("/")
-      }
-      // Load saved schedule
-      const savedSchedule = localStorage.getItem(`schedule_${selectedDate}`)
-      if (savedSchedule) {
-        try {
-          setSlots(JSON.parse(savedSchedule))
-        } catch (e) {
-          // Use default if parsing fails
-        }
-      }
-      // Load settings from admin (read-only)
-      const savedJudgesPerProject = localStorage.getItem("calendar_judges_per_project")
-      if (savedJudgesPerProject) {
-        setJudgesPerProject(parseInt(savedJudgesPerProject) || 2)
-      }
-      const savedSlotDuration = localStorage.getItem("calendar_slot_duration")
-      if (savedSlotDuration) {
-        setSlotDuration(parseInt(savedSlotDuration) || 5)
-      }
-      const savedStartTime = localStorage.getItem("calendar_start_time")
-      if (savedStartTime) {
-        setScheduleStartTime(savedStartTime)
-      }
-      const savedEndTime = localStorage.getItem("calendar_end_time")
-      if (savedEndTime) {
-        setScheduleEndTime(savedEndTime)
-      }
-      // Load saved rooms (merge with defaults to ensure all rooms are present)
-      const savedRooms = localStorage.getItem("rooms_data")
-      if (savedRooms) {
-        try {
-          const parsedRooms = JSON.parse(savedRooms)
-          // Ensure we have at least the default rooms
-          if (parsedRooms && Array.isArray(parsedRooms) && parsedRooms.length > 0) {
-            setRooms(parsedRooms)
-          } else {
-            setRooms(defaultRooms)
-          }
-        } catch (e) {
-          // Use default if parsing fails
-          setRooms(defaultRooms)
-        }
-      } else {
-        setRooms(defaultRooms)
+    if (typeof window === "undefined") return
+
+    const stored = localStorage.getItem(ACCESS_CODE_KEY)
+    if (stored === ACCESS_CODE) {
+      setHasAccess(true)
+    } else {
+      setHasAccess(false)
+      router.push("/")
+      return
+    }
+
+    // Load saved schedule
+    const savedSchedule = localStorage.getItem(`schedule_${selectedDate}`)
+    if (savedSchedule) {
+      try {
+        setSlots(JSON.parse(savedSchedule))
+      } catch {
+        // ignore parse errors
       }
     }
+
+    // Load settings from admin (read-only)
+    const savedJudgesPerProject = localStorage.getItem("calendar_judges_per_project")
+    if (savedJudgesPerProject) {
+      setJudgesPerProject(parseInt(savedJudgesPerProject) || 2)
+    }
+    const savedSlotDuration = localStorage.getItem("calendar_slot_duration")
+    if (savedSlotDuration) {
+      setSlotDuration(parseInt(savedSlotDuration) || 5)
+    }
+    const savedStartTime = localStorage.getItem("calendar_start_time")
+    if (savedStartTime) {
+      setScheduleStartTime(savedStartTime)
+    }
+    const savedEndTime = localStorage.getItem("calendar_end_time")
+    if (savedEndTime) {
+      setScheduleEndTime(savedEndTime)
+    }
+
+    // Load saved rooms (merge with defaults to ensure all rooms are present)
+    const savedRooms = localStorage.getItem("rooms_data")
+    if (savedRooms) {
+      try {
+        const parsedRooms = JSON.parse(savedRooms)
+        if (parsedRooms && Array.isArray(parsedRooms) && parsedRooms.length > 0) {
+          setRooms(parsedRooms)
+        } else {
+          setRooms(defaultRooms)
+        }
+      } catch {
+        setRooms(defaultRooms)
+      }
+    } else {
+      setRooms(defaultRooms)
+    }
+
+    const loadFromSupabase = async () => {
+      try {
+        const [{ data: supabaseJudges, error: judgesError }, { data: supabaseProjects, error: projectsError }] =
+          await Promise.all([
+            supabase.from("judges").select("id, name, email, tracks"),
+            supabase.from("projects").select("id, name, track"),
+          ])
+
+        if (!judgesError && supabaseJudges) {
+          setJudges(supabaseJudges as unknown as Judge[])
+        }
+
+        if (!projectsError && supabaseProjects) {
+          const mappedProjects: CalendarProject[] = (supabaseProjects as any[]).map((row) => ({
+            id: row.id,
+            name: row.name ?? "Untitled",
+            track: row.track ?? "General",
+          }))
+          setProjects(mappedProjects)
+        }
+      } catch (error) {
+        console.error("Failed to load calendar data from Supabase", error)
+      }
+    }
+
+    void loadFromSupabase()
   }, [selectedDate, router])
   
   // Update time slots when time range changes
@@ -285,7 +320,7 @@ export default function CalendarPage() {
   }
 
   const handleAutoSchedule = () => {
-    const activeProjects = projects.filter(p => p.status === "Active")
+    const activeProjects = projects
     
     // Helper function to check if a judge can judge a project's track
     const canJudgeTrack = (judge: typeof judges[0], projectTrack: string): boolean => {
@@ -847,9 +882,7 @@ export default function CalendarPage() {
                     <SelectValue placeholder="Select a project" />
                   </SelectTrigger>
                   <SelectContent>
-                    {projects
-                      .filter(p => p.status === "Active")
-                      .map((project) => (
+                    {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id.toString()}>
                           {project.name} {project.track && `(${project.track})`}
                         </SelectItem>
