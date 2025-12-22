@@ -17,7 +17,6 @@ const ACCESS_CODE_KEY = "dashboard_access_code"
 type RealtimeProject = {
   id: string
   name: string
-  status: string
   track: string
   created_at: string
 }
@@ -50,7 +49,7 @@ export default function ProjectsRealtimePage() {
         setError(null)
         const { data, error } = await supabase
           .from("projects")
-          .select("id, name, status, track, created_at")
+          .select("id, name, track, created_at")
           .order("created_at", { ascending: true })
 
         if (error) {
@@ -174,9 +173,6 @@ export default function ProjectsRealtimePage() {
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <p className="line-clamp-2 font-semibold">{project.name}</p>
-                                <Badge variant="outline" className="text-[10px]">
-                                  {project.status}
-                                </Badge>
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                                 <span className="font-medium">Track:</span>
