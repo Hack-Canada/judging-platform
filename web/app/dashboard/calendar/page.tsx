@@ -296,107 +296,145 @@ export default function CalendarPage() {
     }
     
     const newSlots: TimeSlot[] = []
-    // Use the configured start time for auto-scheduling
     let currentTime = scheduleStartTime
+    let projectIndex = 0
+    const usedProjects = new Set<number>() // Track which projects have been scheduled
 
-    for (let projectIndex = 0; projectIndex < activeProjects.length; projectIndex++) {
-      const project = activeProjects[projectIndex]
-      const projectTrack = project.track || "General"
-      
-      // Filter judges who can judge this track
-      const eligibleJudges = judges.filter(judge => 
-        canJudgeTrack(judge, projectTrack)
+    // Helper to get available rooms at a specific time
+    const getAvailableRooms = (time: string): Room[] => {
+      const bookedRoomIds = new Set(
+        newSlots
+          .filter(s => s.startTime === time)
+          .map(s => s.roomId)
       )
+      return rooms.filter(room => !bookedRoomIds.has(room.id))
+    }
+
+    // Helper to get slots at a specific time
+    const getSlotsAtTime = (time: string): TimeSlot[] => {
+      return newSlots.filter(s => s.startTime === time)
+    }
+
+    // Helper to check if judges conflict
+    const hasJudgeConflict = (judgeIds: number[], time: string): boolean => {
+      const slotsAtTime = getSlotsAtTime(time)
+      return slotsAtTime.some(slot => 
+        judgeIds.some(judgeId => slot.judgeIds.includes(judgeId))
+      )
+    }
+
+    // Helper to get next time slot
+    const getNextTime = (time: string): string | null => {
+      const [hours, minutes] = time.split(":").map(Number)
+      const totalMinutes = hours * 60 + minutes + slotDuration
+      const nextHours = Math.floor(totalMinutes / 60)
+      const nextMinutes = totalMinutes % 60
+      const nextTime = `${nextHours.toString().padStart(2, "0")}:${nextMinutes.toString().padStart(2, "0")}`
       
-      if (eligibleJudges.length === 0) {
-        // Skip projects with no eligible judges
+      // Check if we exceed the end time
+      const [endHour, endMin] = scheduleEndTime.split(":").map(Number)
+      if (nextHours > endHour || (nextHours === endHour && nextMinutes > endMin)) {
+        return null
+      }
+      return nextTime
+    }
+
+    // Main scheduling loop: for each time slot, try to fill all rooms
+    while (currentTime && projectIndex < activeProjects.length) {
+      const availableRooms = getAvailableRooms(currentTime)
+      
+      // If all rooms are filled at this time, move to next time slot
+      if (availableRooms.length === 0) {
+        const nextTime = getNextTime(currentTime)
+        if (!nextTime) break
+        currentTime = nextTime
         continue
       }
+
+      // Try to fill each available room at this time slot
+      let scheduledAtThisTime = false
       
-      const projectJudges: number[] = []
-      for (let i = 0; i < judgesPerProject && eligibleJudges.length > 0; i++) {
-        const judgeIndex = i % eligibleJudges.length
-        const judge = eligibleJudges[judgeIndex]
-        if (!projectJudges.includes(judge.id)) {
-          projectJudges.push(judge.id)
+      for (const room of availableRooms) {
+        // Find next available project that can be scheduled in this room
+        let projectAssigned = false
+        
+        for (let i = projectIndex; i < activeProjects.length; i++) {
+          const project = activeProjects[i]
+          
+          // Skip if already used
+          if (usedProjects.has(project.id)) continue
+          
+          const projectTrack = project.track || "General"
+          
+          // Filter judges who can judge this track
+          const eligibleJudges = judges.filter(judge => 
+            canJudgeTrack(judge, projectTrack)
+          )
+          
+          if (eligibleJudges.length === 0) continue
+          
+          // Select judges for this project
+          const projectJudges: number[] = []
+          for (let j = 0; j < judgesPerProject && eligibleJudges.length > 0; j++) {
+            const judgeIdx = j % eligibleJudges.length
+            const judge = eligibleJudges[judgeIdx]
+            if (!projectJudges.includes(judge.id)) {
+              projectJudges.push(judge.id)
+            }
+          }
+
+          // Check for judge conflicts at this time
+          if (hasJudgeConflict(projectJudges, currentTime)) {
+            continue // Try next project
+          }
+
+          // Assign this project to this room at this time
+          const selectedJudgesList = judges.filter(j => projectJudges.includes(j.id))
+          
+          newSlots.push({
+            id: `${selectedDate}-${currentTime}-${project.id}-${room.id}`,
+            startTime: currentTime,
+            endTime: getEndTime(currentTime, slotDuration),
+            projectId: project.id,
+            projectName: project.name,
+            judgeIds: projectJudges,
+            judgeNames: selectedJudgesList.map(j => j.name),
+            roomId: room.id,
+            roomName: room.name,
+          })
+
+          usedProjects.add(project.id)
+          projectAssigned = true
+          scheduledAtThisTime = true
+          break // Move to next room
         }
+
+        // If we couldn't assign a project to this room, continue to next room
+        if (!projectAssigned) continue
       }
 
-      const selectedJudgesList = judges.filter(j => projectJudges.includes(j.id))
-      
-      // Assign to a room - try to find available room without judge conflicts
-      let assignedRoom: Room | null = null
-      let assignedTime = currentTime
-      
-      // Try to assign at current time across rooms
-      for (const room of rooms) {
-        // Check if room is available at this time
-        const isRoomBooked = newSlots.some(s => 
-          s.startTime === assignedTime && s.roomId === room.id
-        )
-        
-        if (isRoomBooked) continue
-        
-        // Check for judge conflicts at this time (across all rooms)
-        const slotsAtSameTime = newSlots.filter(s => s.startTime === assignedTime)
-        const hasJudgeConflict = slotsAtSameTime.some(s => {
-          return projectJudges.some(judgeId => s.judgeIds.includes(judgeId))
-        })
-        
-        if (!hasJudgeConflict) {
-          assignedRoom = room
-          break
-        }
+      // If we scheduled something at this time, check if all rooms are filled
+      // If not all rooms filled and no more projects can be scheduled, move to next time
+      if (!scheduledAtThisTime || getAvailableRooms(currentTime).length === 0) {
+        const nextTime = getNextTime(currentTime)
+        if (!nextTime) break
+        currentTime = nextTime
       }
       
-      // If no room available at current time, move to next time slot
-      if (!assignedRoom) {
-        const [hours, minutes] = currentTime.split(":").map(Number)
-        const totalMinutes = hours * 60 + minutes + slotDuration
-        const nextHours = Math.floor(totalMinutes / 60)
-        const nextMinutes = totalMinutes % 60
-        assignedTime = `${nextHours.toString().padStart(2, "0")}:${nextMinutes.toString().padStart(2, "0")}`
-        
-        // Stop if we exceed the end time
-        const [endHour, endMin] = scheduleEndTime.split(":").map(Number)
-        if (nextHours > endHour || (nextHours === endHour && nextMinutes > endMin)) break
-        
-        // Try again with next time slot - use first available room
-        assignedRoom = rooms[0] // Use first room for next time slot
-        currentTime = assignedTime
-      } else {
-        currentTime = assignedTime
-      }
-      
-      if (assignedRoom) {
-        newSlots.push({
-          id: `${selectedDate}-${assignedTime}-${project.id}-${assignedRoom.id}`,
-          startTime: assignedTime,
-          endTime: getEndTime(assignedTime, slotDuration),
-          projectId: project.id,
-          projectName: project.name,
-          judgeIds: projectJudges,
-          judgeNames: selectedJudgesList.map(j => j.name),
-          roomId: assignedRoom.id,
-          roomName: assignedRoom.name,
-        })
-        
-        // Move to next time slot for next project
-        const [hours, minutes] = assignedTime.split(":").map(Number)
-        const totalMinutes = hours * 60 + minutes + slotDuration
-        const nextHours = Math.floor(totalMinutes / 60)
-        const nextMinutes = totalMinutes % 60
-        currentTime = `${nextHours.toString().padStart(2, "0")}:${nextMinutes.toString().padStart(2, "0")}`
-        
-        // Stop if we exceed the end time
-        const [endHour, endMin] = scheduleEndTime.split(":").map(Number)
-        if (nextHours > endHour || (nextHours === endHour && nextMinutes > endMin)) break
+      // Update project index to continue from where we left off
+      while (projectIndex < activeProjects.length && usedProjects.has(activeProjects[projectIndex].id)) {
+        projectIndex++
       }
     }
 
     saveSchedule(newSlots)
+    const filledSlots = timeSlots.filter(time => {
+      const slotsAtTime = newSlots.filter(s => s.startTime === time)
+      return slotsAtTime.length === rooms.length
+    }).length
+    
     toast.success("Auto-scheduled!", {
-      description: `Scheduled ${newSlots.length} projects for ${selectedDate}`,
+      description: `Scheduled ${newSlots.length} projects across ${timeSlots.length} time slots. ${filledSlots} time slots have all rooms occupied.`,
     })
   }
 
