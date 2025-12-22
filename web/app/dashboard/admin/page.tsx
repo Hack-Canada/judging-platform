@@ -49,6 +49,7 @@ import { defaultJudges, type Judge } from "@/lib/judges-data"
 import { adminProjects, type AdminProject } from "@/lib/admin-projects-data"
 import { defaultTracks, type Track } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
+import { SectionCards } from "@/components/section-cards"
 
 const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
@@ -394,6 +395,11 @@ export default function AdminPage() {
                     <p className="text-muted-foreground">
                       Manage judges, projects, and investment funds
                     </p>
+                  </div>
+
+                  {/* Stats Cards */}
+                  <div className="mb-6">
+                    <SectionCards />
                   </div>
 
                   {/* Live Stats */}
