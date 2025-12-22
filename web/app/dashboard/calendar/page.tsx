@@ -310,19 +310,6 @@ export default function CalendarPage() {
       return rooms.filter(room => !bookedRoomIds.has(room.id))
     }
 
-    // Helper to get slots at a specific time
-    const getSlotsAtTime = (time: string): TimeSlot[] => {
-      return newSlots.filter(s => s.startTime === time)
-    }
-
-    // Helper to check if judges conflict
-    const hasJudgeConflict = (judgeIds: number[], time: string): boolean => {
-      const slotsAtTime = getSlotsAtTime(time)
-      return slotsAtTime.some(slot => 
-        judgeIds.some(judgeId => slot.judgeIds.includes(judgeId))
-      )
-    }
-
     // Helper to get next time slot
     const getNextTime = (time: string): string | null => {
       const [hours, minutes] = time.split(":").map(Number)
@@ -372,20 +359,28 @@ export default function CalendarPage() {
           )
           
           if (eligibleJudges.length === 0) continue
+
+          // Get judges already used at this time across all rooms
+          const usedJudgeIdsAtTime = new Set<number>()
+          newSlots
+            .filter(s => s.startTime === currentTime)
+            .forEach(s => s.judgeIds.forEach(id => usedJudgeIdsAtTime.add(id)))
+
+          // Filter eligible judges that are free at this time
+          const availableEligibleJudges = eligibleJudges.filter(judge => !usedJudgeIdsAtTime.has(judge.id))
           
-          // Select judges for this project
+          if (availableEligibleJudges.length < judgesPerProject) {
+            // Not enough free judges to schedule this project at this time
+            continue
+          }
+          
+          // Select judges for this project from available pool
           const projectJudges: number[] = []
-          for (let j = 0; j < judgesPerProject && eligibleJudges.length > 0; j++) {
-            const judgeIdx = j % eligibleJudges.length
-            const judge = eligibleJudges[judgeIdx]
+          for (let j = 0; j < judgesPerProject; j++) {
+            const judge = availableEligibleJudges[j % availableEligibleJudges.length]
             if (!projectJudges.includes(judge.id)) {
               projectJudges.push(judge.id)
             }
-          }
-
-          // Check for judge conflicts at this time
-          if (hasJudgeConflict(projectJudges, currentTime)) {
-            continue // Try next project
           }
 
           // Assign this project to this room at this time
