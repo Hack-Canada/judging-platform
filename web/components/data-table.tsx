@@ -377,6 +377,17 @@ export function DataTable({
     [data]
   )
 
+  // Get unique judges from data for filter dropdown
+  const uniqueJudges = React.useMemo(() => {
+    const judges = new Set<string>()
+    data.forEach((item) => {
+      if (item.judge && item.judge !== "Assign judge") {
+        judges.add(item.judge)
+      }
+    })
+    return Array.from(judges).sort()
+  }, [data])
+
   const table = useReactTable({
     data,
     columns,
@@ -481,6 +492,29 @@ export function DataTable({
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
+          <Select
+            value={(table.getColumn("judge")?.getFilterValue() as string) ?? "all"}
+            onValueChange={(value) => {
+              const column = table.getColumn("judge")
+              if (value === "all") {
+                column?.setFilterValue(undefined)
+              } else {
+                column?.setFilterValue(value)
+              }
+            }}
+          >
+            <SelectTrigger className="w-[180px]" size="sm">
+              <SelectValue placeholder="Filter by judge" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Judges</SelectItem>
+              {uniqueJudges.map((judge) => (
+                <SelectItem key={judge} value={judge}>
+                  {judge}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm">
             <IconPlus />
             <span className="hidden lg:inline">Add Entry</span>
