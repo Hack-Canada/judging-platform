@@ -43,12 +43,9 @@ import { supabase } from "@/lib/supabase-client"
 const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
 
-type DbProjectStatus = "Active" | "Completed" | "Draft"
-
 type DbProject = {
   id: string
   name: string
-  status: DbProjectStatus
   entries: number
   judges: number
   track: string
@@ -67,7 +64,6 @@ export default function ProjectsPage() {
   
   const [formData, setFormData] = React.useState({
     name: "",
-    status: "Active" as DbProjectStatus,
     track: "General",
   })
 
@@ -88,7 +84,7 @@ export default function ProjectsPage() {
         setLoading(true)
         const { data, error } = await supabase
           .from("projects")
-          .select("id, name, status, track")
+          .select("id, name, track")
           .order("name", { ascending: true })
 
         if (error) {
@@ -102,7 +98,6 @@ export default function ProjectsPage() {
           data?.map((row: any) => ({
             id: String(row.id),
             name: row.name ?? "",
-            status: (row.status ?? "Active") as DbProjectStatus,
             track: row.track ?? "General",
             entries: 0,
             judges: 0,
@@ -124,10 +119,10 @@ export default function ProjectsPage() {
   const handleOpenDialog = (project?: DbProject) => {
     if (project) {
       setEditingProject(project)
-      setFormData({ name: project.name, status: project.status, track: project.track || "General" })
+      setFormData({ name: project.name, track: project.track || "General" })
     } else {
       setEditingProject(null)
-      setFormData({ name: "", status: "Active", track: "General" })
+      setFormData({ name: "", track: "General" })
     }
     setIsDialogOpen(true)
   }
@@ -135,7 +130,7 @@ export default function ProjectsPage() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false)
     setEditingProject(null)
-    setFormData({ name: "", status: "Active", track: "General" })
+    setFormData({ name: "", track: "General" })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,7 +148,6 @@ export default function ProjectsPage() {
           .from("projects")
           .update({
             name: formData.name,
-            status: formData.status,
             track: formData.track,
           })
           .eq("id", editingProject.id)
@@ -166,7 +160,7 @@ export default function ProjectsPage() {
         setProjects((prev) =>
           prev.map((p) =>
             p.id === editingProject.id
-              ? { ...p, name: formData.name, status: formData.status, track: formData.track }
+              ? { ...p, name: formData.name, track: formData.track }
               : p
           )
         )
@@ -179,10 +173,9 @@ export default function ProjectsPage() {
           .from("projects")
           .insert({
             name: formData.name,
-            status: formData.status,
             track: formData.track,
           })
-          .select("id, name, status, track")
+          .select("id, name, track")
           .single()
 
         if (error) {
@@ -193,7 +186,6 @@ export default function ProjectsPage() {
         const newProject: DbProject = {
           id: String(data.id),
           name: data.name ?? "",
-          status: (data.status ?? "Active") as DbProjectStatus,
           track: data.track ?? "General",
           entries: 0,
           judges: 0,
@@ -316,17 +308,6 @@ export default function ProjectsPage() {
                             <div className="flex items-start justify-between">
                               <CardTitle className="text-xl">{project.name}</CardTitle>
                               <div className="flex items-center gap-2">
-                                <Badge
-                                  variant={
-                                    project.status === "Active"
-                                      ? "default"
-                                      : project.status === "Completed"
-                                      ? "secondary"
-                                      : "outline"
-                                  }
-                                >
-                                  {project.status}
-                                </Badge>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -401,24 +382,6 @@ export default function ProjectsPage() {
                   placeholder="Enter project name"
                   required
                 />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, status: value as Project["status"] })
-                  }
-                >
-                  <SelectTrigger id="status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                    <SelectItem value="Draft">Draft</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="track">Track</Label>
