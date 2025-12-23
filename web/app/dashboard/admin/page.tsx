@@ -686,30 +686,44 @@ export default function AdminPage() {
               .in("submission_id", submissionIds)
           }
           
-          // Create new assignments
-          const assignmentsToInsert: Array<{ judge_id: string; submission_id: string }> = []
+          // Create new assignments (with deduplication)
+          const assignmentsMap = new Map<string, { judge_id: string; submission_id: string }>()
           
           updatedProjects.forEach((project) => {
             const submissionId = (project as any).submissionId
             if (submissionId && project.assignedJudges.length > 0) {
-              project.assignedJudges.forEach((judgeName) => {
+              // Remove duplicate judge names from assignedJudges
+              const uniqueJudgeNames = Array.from(new Set(project.assignedJudges))
+              
+              uniqueJudgeNames.forEach((judgeName) => {
                 const judge = updatedJudges.find((j: Judge) => j.name === judgeName)
                 if (judge) {
                   // Convert judge.id to string (it's a UUID from Supabase)
                   const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
-                  assignmentsToInsert.push({
-                    judge_id: judgeId,
-                    submission_id: submissionId,
-                  })
+                  // Use composite key to prevent duplicates
+                  const assignmentKey = `${judgeId}:${submissionId}`
+                  
+                  if (!assignmentsMap.has(assignmentKey)) {
+                    assignmentsMap.set(assignmentKey, {
+                      judge_id: judgeId,
+                      submission_id: submissionId,
+                    })
+                  }
                 }
               })
             }
           })
           
+          const assignmentsToInsert = Array.from(assignmentsMap.values())
+          
           if (assignmentsToInsert.length > 0) {
+            // Use upsert to handle any edge cases where duplicates might still exist
             const { error: insertError } = await supabase
               .from("judge_project_assignments")
-              .insert(assignmentsToInsert)
+              .upsert(assignmentsToInsert, {
+                onConflict: "judge_id,submission_id",
+                ignoreDuplicates: false
+              })
             
             if (insertError) {
               console.error("Failed to save assignments to Supabase:", insertError)
