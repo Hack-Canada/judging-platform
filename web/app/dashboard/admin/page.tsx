@@ -88,6 +88,15 @@ export default function AdminPage() {
   // Track if assignments have been modified and need saving
   const [assignmentsModified, setAssignmentsModified] = React.useState(false)
   const [savingAssignments, setSavingAssignments] = React.useState(false)
+  
+  // Track stats state
+  const [trackStats, setTrackStats] = React.useState<Map<string, {
+    trackName: string
+    submissionCount: number
+    totalInvestment: number
+    averageInvestment: number
+    judgeCount: number
+  }>>(new Map())
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
@@ -99,6 +108,105 @@ export default function AdminPage() {
       setHasAccess(false)
       router.push("/")
       return
+    }
+
+    // Load track stats function (defined here for use in useEffect)
+    const loadTrackStats = async (submissionsData: any[], judgesData: any[]) => {
+      try {
+        // Get all submissions with their tracks
+        const submissionTracksMap = new Map<string, string[]>() // submission_id -> tracks[]
+        submissionsData.forEach((sub: any) => {
+          const tracks = sub.tracks && Array.isArray(sub.tracks) ? sub.tracks : ["General"]
+          submissionTracksMap.set(sub.id, tracks)
+        })
+        
+        // Get all investments
+        const { data: investmentsData, error: investmentsError } = await supabase
+          .from("judge_investments")
+          .select("submission_id, amount")
+        
+        if (investmentsError) {
+          console.error("[Load Track Stats] Error loading investments:", investmentsError)
+          return
+        }
+        
+        // Calculate investment per submission
+        const submissionInvestments = new Map<string, number>() // submission_id -> total investment
+        investmentsData?.forEach((inv: any) => {
+          const current = submissionInvestments.get(inv.submission_id) || 0
+          submissionInvestments.set(inv.submission_id, current + parseFloat(String(inv.amount || 0)))
+        })
+        
+        // Aggregate stats by track
+        const statsMap = new Map<string, {
+          submissionIds: Set<string>
+          totalInvestment: number
+          judgeIds: Set<string>
+        }>()
+        
+        // Process each submission
+        submissionsData.forEach((sub: any) => {
+          const tracks = submissionTracksMap.get(sub.id) || ["General"]
+          const investment = submissionInvestments.get(sub.id) || 0
+          
+          tracks.forEach((track: string) => {
+            if (!statsMap.has(track)) {
+              statsMap.set(track, {
+                submissionIds: new Set(),
+                totalInvestment: 0,
+                judgeIds: new Set(),
+              })
+            }
+            
+            const stats = statsMap.get(track)!
+            stats.submissionIds.add(sub.id)
+            stats.totalInvestment += investment
+          })
+        })
+        
+        // Count judges per track
+        judgesData.forEach((judge: any) => {
+          const judgeTracks = judge.tracks && Array.isArray(judge.tracks) ? judge.tracks : ["General"]
+          judgeTracks.forEach((track: string) => {
+            if (statsMap.has(track)) {
+              statsMap.get(track)!.judgeIds.add(judge.id)
+            }
+          })
+          // All judges can judge General
+          if (statsMap.has("General")) {
+            statsMap.get("General")!.judgeIds.add(judge.id)
+          }
+        })
+        
+        // Convert to final stats format
+        const finalStats = new Map<string, {
+          trackName: string
+          submissionCount: number
+          totalInvestment: number
+          averageInvestment: number
+          judgeCount: number
+        }>()
+        
+        statsMap.forEach((stats, trackName) => {
+          const submissionCount = stats.submissionIds.size
+          const totalInvestment = stats.totalInvestment
+          const averageInvestment = submissionCount > 0 ? totalInvestment / submissionCount : 0
+          const judgeCount = stats.judgeIds.size
+          
+          finalStats.set(trackName, {
+            trackName,
+            submissionCount,
+            totalInvestment,
+            averageInvestment,
+            judgeCount,
+          })
+        })
+        
+        setTrackStats(finalStats)
+        console.log("[Load Track Stats] Loaded stats for", finalStats.size, "tracks")
+      } catch (error) {
+        console.error("[Load Track Stats] Error:", error)
+      }
     }
 
     const loadFromSupabase = async () => {
@@ -286,6 +394,9 @@ export default function AdminPage() {
           setProjectsList(mappedProjects as any)
         }
 
+        // Load track stats
+        await loadTrackStats(supabaseSubmissions || [], judgesArray || [])
+        
         // Auto-assign if there are submissions but no assignments yet
         // Use a longer delay to ensure judgesList state has been set
         if (supabaseSubmissions && supabaseSubmissions.length > 0 && 
@@ -427,9 +538,14 @@ export default function AdminPage() {
         })
         
         console.log("[Load Judges] All mapped judges:", mappedJudges)
-        console.log("[Load Judges] Setting judges list state...")
-        setJudgesList(mappedJudges)
-        console.log("[Load Judges] Successfully loaded", mappedJudges.length, "judges")
+      console.log("[Load Judges] Setting judges list state...")
+      setJudgesList(mappedJudges)
+      console.log("[Load Judges] Successfully loaded", mappedJudges.length, "judges")
+      
+      // Reload track stats after judges are updated
+      if (submissions.length > 0) {
+        loadTrackStats(submissions, mappedJudges)
+      }
         
         // Verify state was set
         setTimeout(() => {
@@ -999,6 +1115,51 @@ export default function AdminPage() {
                       </CardContent>
                     </Card>
                   </div>
+
+                  {/* Track/Category Stats */}
+                  {trackStats.size > 0 && (
+                    <Card className="mb-6">
+                      <CardHeader>
+                        <CardTitle>Track Statistics</CardTitle>
+                        <CardDescription>
+                          Investment and submission statistics by track/category
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          {Array.from(trackStats.values())
+                            .sort((a, b) => a.trackName.localeCompare(b.trackName))
+                            .map((stats) => (
+                            <Card key={stats.trackName}>
+                              <CardHeader className="pb-3">
+                                <CardTitle className="text-lg font-semibold">
+                                  {stats.trackName}
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Submissions</p>
+                                  <p className="text-2xl font-bold">{stats.submissionCount}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Total Investment</p>
+                                  <p className="text-2xl font-bold">${stats.totalInvestment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Average Investment</p>
+                                  <p className="text-2xl font-bold">${stats.averageInvestment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Assigned Judges</p>
+                                  <p className="text-2xl font-bold">{stats.judgeCount}</p>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {/* Investment Funds Configuration */}
                   <Card className="mb-6">
