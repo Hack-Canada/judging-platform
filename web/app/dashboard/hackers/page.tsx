@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -20,6 +20,7 @@ const ACCESS_CODE_KEY = "dashboard_access_code"
 
 export default function HackersPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
   const [currentStep, setCurrentStep] = React.useState<1 | 2 | 3>(1)
@@ -171,6 +172,16 @@ export default function HackersPage() {
       setLoadingSchedule(false)
     }
   }, [])
+
+  // Allow skipping the submission step via URL: /dashboard/hackers?view=schedule
+  React.useEffect(() => {
+    const view = searchParams.get("view")
+    if (view === "schedule") {
+      setCurrentStep((prev) => (prev < 2 ? 2 : prev))
+      setViewAllSchedules(true)
+      void loadAllSchedules()
+    }
+  }, [searchParams, loadAllSchedules])
 
   const handleMemberChange = (index: number, value: string) => {
     const newMembers = [...formData.members]
