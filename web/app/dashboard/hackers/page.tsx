@@ -161,8 +161,8 @@ export default function HackersPage() {
         }
       }
 
-      toast.success("Submission successful!", {
-        description: "Your project has been submitted for judging",
+      toast.success("Submission received!", {
+        description: "Your project has been recorded and is pending schedule.",
       })
 
       // Reset form
