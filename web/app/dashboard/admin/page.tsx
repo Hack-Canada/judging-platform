@@ -88,6 +88,49 @@ export default function AdminPage() {
   // Track if assignments have been modified and need saving
   const [assignmentsModified, setAssignmentsModified] = React.useState(false)
   const [savingAssignments, setSavingAssignments] = React.useState(false)
+
+  // Room editing helpers
+  const handleRoomChange = (id: number, updates: Partial<Room>) => {
+    setRoomsList((prev) =>
+      prev.map((room) =>
+        room.id === id ? { ...room, ...updates } : room,
+      ),
+    )
+  }
+
+  const saveRoomsToSupabase = async (updatedRooms: Room[]) => {
+    try {
+      const { error } = await supabase
+        .from("admin_settings")
+        .upsert(
+          {
+            setting_key: "rooms_data",
+            setting_value: JSON.stringify(updatedRooms),
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "setting_key",
+          },
+        )
+
+      if (error) {
+        console.error("Failed to save rooms data:", error)
+        toast.error("Failed to save rooms", {
+          description: error.message,
+        })
+        return
+      }
+
+      toast.success("Rooms updated", {
+        description: "Room settings have been saved",
+      })
+    } catch (error) {
+      console.error("Failed to save rooms data:", error)
+      toast.error("Failed to save rooms", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    }
+  }
   
   // Track stats state
   const [trackStats, setTrackStats] = React.useState<Map<string, {
@@ -1471,33 +1514,20 @@ export default function AdminPage() {
                           </CardDescription>
                         </div>
                         <Button onClick={async () => {
+                          const nextId =
+                            roomsList.length > 0
+                              ? Math.max(...roomsList.map((r) => r.id)) + 1
+                              : 1
                           const newRoom: Room = {
-                            id: Math.max(...roomsList.map(r => r.id), 0) + 1,
+                            id: nextId,
                             name: `Room ${String.fromCharCode(65 + roomsList.length)}`,
-                            capacity: 15,
+                            description: "",
                           }
                           const updated = [...roomsList, newRoom]
                           setRoomsList(updated)
-                          
-                          // Save to Supabase
-                          try {
-                            const { error } = await supabase
-                              .from("admin_settings")
-                              .upsert({
-                                setting_key: "rooms_data",
-                                setting_value: JSON.stringify(updated),
-                                updated_at: new Date().toISOString(),
-                              }, {
-                                onConflict: "setting_key"
-                              })
 
-                            if (error) {
-                              console.error("Failed to save rooms data:", error)
-                            }
-                          } catch (error) {
-                            console.error("Failed to save rooms data:", error)
-                          }
-                          
+                          await saveRoomsToSupabase(updated)
+
                           toast.success("Room added!", {
                             description: `${newRoom.name} has been added`,
                           })
@@ -1512,18 +1542,34 @@ export default function AdminPage() {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Room Name</TableHead>
-                            <TableHead>Capacity</TableHead>
                             <TableHead>Description</TableHead>
-                            <TableHead className="w-[50px]"></TableHead>
+                            <TableHead className="w-[80px]"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {roomsList.map((room) => (
                             <TableRow key={room.id}>
-                              <TableCell className="font-medium">{room.name}</TableCell>
-                              <TableCell>{room.capacity || "-"}</TableCell>
-                              <TableCell className="text-muted-foreground">
-                                {room.description || "-"}
+                              <TableCell className="font-medium">
+                                <Input
+                                  value={room.name}
+                                  onChange={(e) =>
+                                    handleRoomChange(room.id, { name: e.target.value })
+                                  }
+                                  onBlur={() => saveRoomsToSupabase(roomsList)}
+                                  placeholder="Room name"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  value={room.description || ""}
+                                  onChange={(e) =>
+                                    handleRoomChange(room.id, {
+                                      description: e.target.value,
+                                    })
+                                  }
+                                  onBlur={() => saveRoomsToSupabase(roomsList)}
+                                  placeholder="Description / notes"
+                                />
                               </TableCell>
                               <TableCell>
                                 <Button
@@ -1537,28 +1583,13 @@ export default function AdminPage() {
                                       })
                                       return
                                     }
-                                    const updated = roomsList.filter(r => r.id !== room.id)
+                                    const updated = roomsList.filter(
+                                      (r) => r.id !== room.id,
+                                    )
                                     setRoomsList(updated)
-                                    
-                                    // Save to Supabase
-                                    try {
-                                      const { error } = await supabase
-                                        .from("admin_settings")
-                                        .upsert({
-                                          setting_key: "rooms_data",
-                                          setting_value: JSON.stringify(updated),
-                                          updated_at: new Date().toISOString(),
-                                        }, {
-                                          onConflict: "setting_key"
-                                        })
 
-                                      if (error) {
-                                        console.error("Failed to save rooms data:", error)
-                                      }
-                                    } catch (error) {
-                                      console.error("Failed to save rooms data:", error)
-                                    }
-                                    
+                                    await saveRoomsToSupabase(updated)
+
                                     toast.success("Room deleted!", {
                                       description: `${room.name} has been removed`,
                                     })

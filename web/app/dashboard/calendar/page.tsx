@@ -1161,7 +1161,6 @@ export default function CalendarPage() {
                           {room.name}
                           {isRoomBooked && " (Room Booked)"}
                           {hasJudgeConflict && !isRoomBooked && " (Judge Conflict)"}
-                          {room.capacity && ` (Capacity: ${room.capacity})`}
                         </SelectItem>
                       )
                     })}
