@@ -81,6 +81,10 @@ export default function AdminPage() {
   })
   const [tracksList, setTracksList] = React.useState<Track[]>(defaultTracks)
   const [roomsList, setRoomsList] = React.useState<Room[]>(defaultRooms)
+  
+  // Hacker submissions state
+  const [submissions, setSubmissions] = React.useState<any[]>([])
+  const [loadingSubmissions, setLoadingSubmissions] = React.useState(false)
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
@@ -211,6 +215,44 @@ export default function AdminPage() {
 
     void loadFromSupabase()
   }, [router])
+
+  // Load submissions
+  React.useEffect(() => {
+    if (!hasAccess || !isInitialized) return
+
+    const loadSubmissions = async () => {
+      try {
+        setLoadingSubmissions(true)
+        const { data, error } = await supabase
+          .from("submissions")
+          .select("*")
+          .order("submitted_at", { ascending: false })
+
+        if (error && !error.message.includes("relation") && !error.message.includes("does not exist")) {
+          console.error("Error loading submissions:", error)
+          return
+        }
+
+        if (data) {
+          setSubmissions(data)
+        }
+      } catch (error) {
+        console.error("Failed to load submissions", error)
+      } finally {
+        setLoadingSubmissions(false)
+      }
+    }
+
+    void loadSubmissions()
+  }, [hasAccess, isInitialized])
+
+  const handleAutoAssignJudgesToProjects = async () => {
+    // Trigger auto-assignment
+    autoAssignJudges(true)
+    toast.success("Automated judging started!", {
+      description: "Judges have been assigned to all projects",
+    })
+  }
 
   const saveJudges = (newJudges: Judge[]) => {
     setJudgesList(newJudges)
@@ -842,6 +884,95 @@ export default function AdminPage() {
                           ))}
                         </TableBody>
                       </Table>
+                    </CardContent>
+                  </Card>
+
+                  {/* Hacker Submissions Management */}
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>Hacker Submissions</CardTitle>
+                          <CardDescription>
+                            Review and manage project submissions from hackers
+                          </CardDescription>
+                        </div>
+                        <Button onClick={handleAutoAssignJudgesToProjects} size="sm">
+                          Auto-Assign Judges
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingSubmissions ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Loading submissions...
+                        </div>
+                      ) : submissions.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No submissions yet. Hackers can submit their projects using the submission form.
+                        </div>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Project Name</TableHead>
+                              <TableHead>Team Name</TableHead>
+                              <TableHead>Members</TableHead>
+                              <TableHead>Devpost Link</TableHead>
+                              <TableHead>Tracks</TableHead>
+                              <TableHead>Submitted</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {submissions.map((submission, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell className="font-medium">
+                                  {submission.project_name || "-"}
+                                </TableCell>
+                                <TableCell>{submission.team_name || "-"}</TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {submission.name && (
+                                      <Badge variant="outline">{submission.name}</Badge>
+                                    )}
+                                    {submission.members && Array.isArray(submission.members) && submission.members
+                                      .filter((m: string) => m && m.trim())
+                                      .map((member: string, i: number) => (
+                                        <Badge key={i} variant="outline">{member}</Badge>
+                                      ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  {submission.devpost_link ? (
+                                    <a
+                                      href={submission.devpost_link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline"
+                                    >
+                                      View Devpost
+                                    </a>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {submission.tracks && Array.isArray(submission.tracks) && submission.tracks.map((track: string, i: number) => (
+                                      <Badge key={i} variant="secondary">{track}</Badge>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {submission.submitted_at
+                                    ? new Date(submission.submitted_at).toLocaleDateString()
+                                    : "-"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
                     </CardContent>
                   </Card>
 

@@ -8,6 +8,8 @@ import {
   IconInnerShadowTop,
   IconSettings,
   IconCalendar,
+  IconUser,
+  IconUsers,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -23,9 +25,14 @@ import {
 const data = {
   navMain: [
     {
-      title: "Judges",
-      url: "/dashboard",
+      title: "Judges View",
+      url: "/dashboard/judges",
       icon: IconGavel,
+    },
+    {
+      title: "Hackers Submission",
+      url: "/dashboard/hackers",
+      icon: IconUsers,
     },
     {
       title: "Projects",
