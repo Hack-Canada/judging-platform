@@ -37,11 +37,13 @@ import {
 const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
 
-type JudgeProject = {
+type JudgeSubmission = {
   id: string
-  name: string
-  track: string
+  project_name: string
+  tracks: string[]
   investment: number
+  team_name?: string
+  devpost_link?: string
 }
 
 export default function JudgesPage() {
@@ -49,7 +51,7 @@ export default function JudgesPage() {
   const [hasAccess, setHasAccess] = React.useState(false)
   const [judgeName, setJudgeName] = React.useState<string>("")
   const [judge, setJudge] = React.useState<Judge | null>(null)
-  const [projects, setProjects] = React.useState<JudgeProject[]>([])
+  const [submissions, setSubmissions] = React.useState<JudgeSubmission[]>([])
   const [loading, setLoading] = React.useState(true)
   const [investments, setInvestments] = React.useState<Record<string, number>>({})
   const [editingInvestment, setEditingInvestment] = React.useState<string | null>(null)
@@ -58,6 +60,9 @@ export default function JudgesPage() {
   const [judgeNameInput, setJudgeNameInput] = React.useState("")
   const [judgeNameError, setJudgeNameError] = React.useState("")
   const [checkingJudge, setCheckingJudge] = React.useState(false)
+  
+  // Load assigned submissions for this judge
+  const [assignedSubmissionIds, setAssignedSubmissionIds] = React.useState<string[]>([])
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
@@ -190,7 +195,7 @@ export default function JudgesPage() {
   const handleClearJudgeName = () => {
     setJudgeName("")
     setJudge(null)
-    setProjects([])
+    setSubmissions([])
     setInvestments({})
     setJudgeNameInput("")
     setJudgeNameError("")
@@ -313,60 +318,56 @@ export default function JudgesPage() {
         })
         setJudge(judgeData)
 
-        // Load assigned projects from Supabase
-        console.log("[Load Judge Data] Loading assignments for judge_id:", judgeData.id)
+        // Load assigned submissions for this judge
+        console.log("[Load Judge Data] Loading assigned submissions for judge_id:", judgeData.id)
         const { data: assignmentsData, error: assignmentsError } = await supabase
           .from("judge_project_assignments")
-          .select("project_id")
+          .select("submission_id")
           .eq("judge_id", judgeData.id)
 
         console.log("[Load Judge Data] Assignments query result:", { assignmentsData, assignmentsError })
 
         if (assignmentsError) {
           console.error("[Load Judge Data] Error loading assignments:", assignmentsError)
-          console.error("[Load Judge Data] Assignments error details:", {
-            message: assignmentsError.message,
-            details: assignmentsError.details,
-            hint: assignmentsError.hint,
-            code: assignmentsError.code,
-          })
         }
 
-        const assignedProjectIds = assignmentsData?.map(a => a.project_id) || []
-        console.log("[Load Judge Data] Assigned project IDs:", assignedProjectIds)
+        const assignedSubmissionIds = assignmentsData?.map(a => a.submission_id) || []
+        console.log("[Load Judge Data] Assigned submission IDs:", assignedSubmissionIds)
+        setAssignedSubmissionIds(assignedSubmissionIds)
 
-        // Load project details from Supabase (only if there are assigned projects)
-        let projectsData: any[] | null = null
-        if (assignedProjectIds.length > 0) {
-          console.log("[Load Judge Data] Loading project details for IDs:", assignedProjectIds)
-          const { data, error: projectsError } = await supabase
-            .from("projects")
-            .select("id, name, track")
-            .in("id", assignedProjectIds)
+        // Load submission details from Supabase (only assigned ones)
+        let submissionsData: any[] | null = null
+        if (assignedSubmissionIds.length > 0) {
+          console.log("[Load Judge Data] Loading submission details for IDs:", assignedSubmissionIds)
+          const { data, error: submissionsError } = await supabase
+            .from("submissions")
+            .select("id, project_name, tracks, team_name, devpost_link")
+            .in("id", assignedSubmissionIds)
+            .order("submitted_at", { ascending: false })
           
-          console.log("[Load Judge Data] Projects query result:", { data, projectsError })
+          console.log("[Load Judge Data] Submissions query result:", { data, error: submissionsError })
 
-          if (projectsError) {
-            console.error("[Load Judge Data] Error loading projects:", projectsError)
-            console.error("[Load Judge Data] Projects error details:", {
-              message: projectsError.message,
-              details: projectsError.details,
-              hint: projectsError.hint,
-              code: projectsError.code,
+          if (submissionsError) {
+            console.error("[Load Judge Data] Error loading submissions:", submissionsError)
+            console.error("[Load Judge Data] Submissions error details:", {
+              message: submissionsError.message,
+              details: submissionsError.details,
+              hint: submissionsError.hint,
+              code: submissionsError.code,
             })
           } else {
-            projectsData = data
-            console.log("[Load Judge Data] Loaded projects:", projectsData)
+            submissionsData = data
+            console.log("[Load Judge Data] Loaded submissions:", submissionsData)
           }
         } else {
-          console.log("[Load Judge Data] No assigned projects found for this judge")
+          console.log("[Load Judge Data] No assigned submission IDs found for this judge")
         }
 
-        // Load investments from Supabase
+        // Load investments from Supabase (using submission_id)
         console.log("[Load Judge Data] Loading investments for judge_id:", judgeData.id)
         const { data: investmentsData, error: investmentsError } = await supabase
           .from("judge_investments")
-          .select("project_id, amount")
+          .select("submission_id, amount")
           .eq("judge_id", judgeData.id)
 
         console.log("[Load Judge Data] Investments query result:", { investmentsData, investmentsError })
@@ -383,27 +384,29 @@ export default function JudgesPage() {
           console.log("[Load Judge Data] Loaded investments:", investmentsData)
         }
 
-        // Build investments map
+        // Build investments map using submission IDs
         const investmentsMap: Record<string, number> = {}
         investmentsData?.forEach(inv => {
-          investmentsMap[inv.project_id] = parseFloat(String(inv.amount)) || 0
+          investmentsMap[inv.submission_id] = parseFloat(String(inv.amount)) || 0
         })
         console.log("[Load Judge Data] Investments map:", investmentsMap)
 
-        if (projectsData && projectsData.length > 0) {
-          const judgeProjects: JudgeProject[] = projectsData.map((project: any) => ({
-            id: project.id,
-            name: project.name,
-            track: project.track || "General",
-            investment: investmentsMap[project.id] || 0,
+        if (submissionsData && submissionsData.length > 0) {
+          const judgeSubmissions: JudgeSubmission[] = submissionsData.map((submission: any) => ({
+            id: submission.id,
+            project_name: submission.project_name,
+            tracks: submission.tracks || [],
+            investment: investmentsMap[submission.id] || 0,
+            team_name: submission.team_name,
+            devpost_link: submission.devpost_link,
           }))
 
-          console.log("[Load Judge Data] Final judge projects:", judgeProjects)
-          setProjects(judgeProjects)
+          console.log("[Load Judge Data] Final judge submissions:", judgeSubmissions)
+          setSubmissions(judgeSubmissions)
           setInvestments(investmentsMap)
         } else {
-          console.log("[Load Judge Data] No projects to display")
-          setProjects([])
+          console.log("[Load Judge Data] No submissions to display")
+          setSubmissions([])
           setInvestments({})
         }
         
@@ -421,19 +424,19 @@ export default function JudgesPage() {
     void loadJudgeData()
   }, [judgeName])
 
-  const handleInvestmentChange = (projectId: string, value: string) => {
+  const handleInvestmentChange = (submissionId: string, value: string) => {
     setInvestmentInput(value)
     const numValue = parseFloat(value)
     if (!isNaN(numValue) && numValue >= 0) {
       setInvestments(prev => ({
         ...prev,
-        [projectId]: numValue,
+        [submissionId]: numValue,
       }))
     }
   }
 
-  const handleSaveInvestment = async (projectId: string) => {
-    const investment = investments[projectId] || 0
+  const handleSaveInvestment = async (submissionId: string) => {
+    const investment = investments[submissionId] || 0
 
     if (!judge) {
       toast.error("Judge not loaded")
@@ -446,11 +449,11 @@ export default function JudgesPage() {
         .from("judge_investments")
         .upsert({
           judge_id: judge.id,
-          project_id: projectId,
+          submission_id: submissionId,
           amount: investment,
           updated_at: new Date().toISOString(),
         }, {
-          onConflict: "judge_id,project_id"
+          onConflict: "judge_id,submission_id"
         })
 
       if (investmentError) {
@@ -458,12 +461,12 @@ export default function JudgesPage() {
       }
 
       // Calculate and update judge's total invested
-      const updatedInvestments = { ...investments, [projectId]: investment }
+      const updatedInvestments = { ...investments, [submissionId]: investment }
       const updatedTotal = Object.values(updatedInvestments).reduce((sum, inv) => sum + inv, 0)
       
       const { error: judgeUpdateError } = await supabase
         .from("judges")
-        .update({ totalInvested: updatedTotal })
+        .update({ total_invested: updatedTotal })
         .eq("id", judge.id)
 
       if (judgeUpdateError) {
@@ -477,7 +480,7 @@ export default function JudgesPage() {
       setEditingInvestment(null)
       setInvestmentInput("")
       toast.success("Investment saved!", {
-        description: `Allocated $${investment.toLocaleString()} to ${projects.find(p => p.id === projectId)?.name}`,
+        description: `Allocated $${investment.toLocaleString()} to ${submissions.find(s => s.id === submissionId)?.project_name}`,
       })
     } catch (error) {
       toast.error("Failed to save investment", {
@@ -486,8 +489,8 @@ export default function JudgesPage() {
     }
   }
 
-  const handleEditInvestment = (projectId: string, currentValue: number) => {
-    setEditingInvestment(projectId)
+  const handleEditInvestment = (submissionId: string, currentValue: number) => {
+    setEditingInvestment(submissionId)
     setInvestmentInput(currentValue.toString())
   }
 
@@ -577,7 +580,7 @@ export default function JudgesPage() {
                         <div>
                           <CardTitle>Welcome, {judge.name}</CardTitle>
                           <CardDescription>
-                            View and allocate funding to your assigned projects
+                            View and allocate funding to your assigned submissions
                           </CardDescription>
                         </div>
                         <Button
@@ -621,54 +624,68 @@ export default function JudgesPage() {
                 <div className="px-4 lg:px-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Assigned Projects</CardTitle>
+                      <CardTitle>Assigned Submissions</CardTitle>
                       <CardDescription>
-                        Allocate your investment funds to each project
+                        Allocate your investment funds to each submission
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       {loading ? (
                         <div className="text-center py-8 text-muted-foreground">
-                          Loading projects...
+                          Loading submissions...
                         </div>
-                      ) : projects.length === 0 ? (
+                      ) : submissions.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
-                          No projects assigned yet. Please contact admin.
+                          No submissions assigned yet. Please contact admin.
                         </div>
                       ) : (
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead>Project Name</TableHead>
-                              <TableHead>Track</TableHead>
+                              <TableHead>Team</TableHead>
+                              <TableHead>Tracks</TableHead>
                               <TableHead>Investment</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {projects.map((project) => (
-                              <TableRow key={project.id}>
-                                <TableCell className="font-medium">{project.name}</TableCell>
+                            {submissions.map((submission) => (
+                              <TableRow key={submission.id}>
+                                <TableCell className="font-medium">{submission.project_name}</TableCell>
                                 <TableCell>
-                                  <Badge variant="outline">{project.track}</Badge>
+                                  {submission.team_name && (
+                                    <span className="text-sm text-muted-foreground">{submission.team_name}</span>
+                                  )}
                                 </TableCell>
                                 <TableCell>
-                                  {editingInvestment === project.id ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {submission.tracks && submission.tracks.length > 0 ? (
+                                      submission.tracks.map((track) => (
+                                        <Badge key={track} variant="outline">{track}</Badge>
+                                      ))
+                                    ) : (
+                                      <Badge variant="outline">General</Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  {editingInvestment === submission.id ? (
                                     <div className="flex items-center gap-2">
                                       <Input
                                         type="number"
                                         min="0"
                                         step="0.01"
                                         value={investmentInput}
-                                        onChange={(e) =>
-                                          handleInvestmentChange(project.id, e.target.value)
-                                        }
+                                        onChange={(e) => {
+                                          handleInvestmentChange(submission.id, e.target.value)
+                                        }}
                                         className="w-32"
                                         autoFocus
                                       />
                                       <Button
                                         size="sm"
-                                        onClick={() => handleSaveInvestment(project.id)}
+                                        onClick={() => handleSaveInvestment(submission.id)}
                                       >
                                         Save
                                       </Button>
@@ -687,21 +704,21 @@ export default function JudgesPage() {
                                     <div className="flex items-center gap-2">
                                       <IconCurrencyDollar className="h-4 w-4" />
                                       <span className="font-medium">
-                                        ${investments[project.id]?.toLocaleString() || "0"}
+                                        ${investments[submission.id]?.toLocaleString() || "0"}
                                       </span>
                                     </div>
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {editingInvestment !== project.id && (
+                                  {editingInvestment !== submission.id && (
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       onClick={() =>
-                                        handleEditInvestment(project.id, investments[project.id] || 0)
+                                        handleEditInvestment(submission.id, investments[submission.id] || 0)
                                       }
                                     >
-                                      {investments[project.id] > 0 ? "Edit" : "Allocate"}
+                                      {investments[submission.id] > 0 ? "Edit" : "Allocate"}
                                     </Button>
                                   )}
                                 </TableCell>
