@@ -31,6 +31,8 @@ export default function HackersPage() {
   const [loadingSchedule, setLoadingSchedule] = React.useState(false)
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [viewAllSchedules, setViewAllSchedules] = React.useState(false)
+  const [scheduleProjects, setScheduleProjects] = React.useState<{ id: string; name: string }[]>([])
+  const [currentProjectIndex, setCurrentProjectIndex] = React.useState(0)
   const [formData, setFormData] = React.useState({
     name: "",
     teamName: "",
@@ -86,7 +88,7 @@ export default function HackersPage() {
   }, [])
 
   const loadScheduleForSubmission = React.useCallback(
-    async (submissionId: string) => {
+    async (submissionId: string, projectName?: string) => {
       try {
         setLoadingSchedule(true)
         const { data, error } = await supabase
@@ -110,6 +112,17 @@ export default function HackersPage() {
 
         if (slots.length > 0) {
           setCurrentStep(3)
+          // For single-submission view, track just this project in the navigator
+          if (projectName) {
+            setScheduleProjects([{ id: submissionId, name: projectName }])
+            setCurrentProjectIndex(0)
+          }
+        } else {
+          // No slots yet – keep step 2 (pending) but remember the project
+          if (projectName) {
+            setScheduleProjects([{ id: submissionId, name: projectName }])
+            setCurrentProjectIndex(0)
+          }
         }
       } catch (error) {
         console.error("[Hackers] Unexpected error loading schedule:", error)
@@ -147,10 +160,16 @@ export default function HackersPage() {
       }
 
       const slots =
-        (slotsData as { id: string; date: string; start_time: string; end_time: string; room_id: number; submission_id?: string | null }[]) ||
-        []
+        (slotsData as {
+          id: string
+          date: string
+          start_time: string
+          end_time: string
+          room_id: number
+          submission_id?: string | null
+        }[]) || []
 
-      // Optionally enrich slots with project names via a map (used only in UI labels)
+      // Build project list for navigator from submissions that actually have slots
       const projectNameMap = new Map<string, string>()
       if (submissionsData && !submissionsError) {
         ;(submissionsData as { id: string; project_name: string }[]).forEach((sub) => {
@@ -158,7 +177,19 @@ export default function HackersPage() {
         })
       }
 
-      // Store slots; project names will be looked up on the fly from the map when rendering
+      const projectIdsWithSlots = Array.from(
+        new Set(slots.map((s) => s.submission_id).filter((id): id is string => !!id)),
+      )
+
+      const projectsForNavigator = projectIdsWithSlots.map((id) => ({
+        id,
+        name: projectNameMap.get(id) ?? "Untitled Project",
+      }))
+
+      setScheduleProjects(projectsForNavigator)
+      setCurrentProjectIndex(0)
+
+      // Store all slots; filtering per project happens in a memoized selector
       setScheduleSlots(slots)
       if (slots.length > 0) {
         setCurrentStep(3)
@@ -320,12 +351,29 @@ export default function HackersPage() {
     return `${format(start)} – ${format(end)}`
   }
 
+  // Determine which project's schedule to show in the calendar section
+  const currentProjectId = React.useMemo(() => {
+    if (viewAllSchedules) {
+      const current = scheduleProjects[currentProjectIndex]
+      return current?.id ?? null
+    }
+    return createdSubmissionId
+  }, [viewAllSchedules, scheduleProjects, currentProjectIndex, createdSubmissionId])
+
+  const slotsForCurrentProject = React.useMemo(() => {
+    if (!viewAllSchedules || !currentProjectId) {
+      // In single-submission mode, scheduleSlots are already filtered to that submission
+      return scheduleSlots
+    }
+    return scheduleSlots.filter((slot) => slot.submission_id === currentProjectId)
+  }, [viewAllSchedules, currentProjectId, scheduleSlots])
+
   const groupSlotsByDate = React.useMemo(() => {
     const map = new Map<
       string,
       { id: string; date: string; start_time: string; end_time: string; room_id: number; submission_id?: string | null }[]
     >()
-    scheduleSlots.forEach((slot) => {
+    slotsForCurrentProject.forEach((slot) => {
       const key = slot.date
       if (!map.has(key)) {
         map.set(key, [])
@@ -336,7 +384,7 @@ export default function HackersPage() {
       slots.sort((a, b) => a.start_time.localeCompare(b.start_time))
     })
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [scheduleSlots])
+  }, [slotsForCurrentProject])
 
   if (!hasAccess) {
     return null
@@ -544,7 +592,11 @@ export default function HackersPage() {
                                 onClick={() =>
                                   viewAllSchedules
                                     ? loadAllSchedules()
-                                    : createdSubmissionId && loadScheduleForSubmission(createdSubmissionId)
+                                    : createdSubmissionId &&
+                                      loadScheduleForSubmission(
+                                        createdSubmissionId,
+                                        scheduleProjects[0]?.name ?? "Your Project"
+                                      )
                                 }
                                 disabled={loadingSchedule}
                               >
@@ -560,7 +612,10 @@ export default function HackersPage() {
                                     if (value) {
                                       void loadAllSchedules()
                                     } else if (createdSubmissionId) {
-                                      void loadScheduleForSubmission(createdSubmissionId)
+                                      void loadScheduleForSubmission(
+                                        createdSubmissionId,
+                                        scheduleProjects[0]?.name ?? "Your Project"
+                                      )
                                     }
                                   }}
                                 />
@@ -573,8 +628,45 @@ export default function HackersPage() {
 
                           {/* Calendar-style schedule view */}
                           <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={!viewAllSchedules && scheduleProjects.length <= 1}
+                                onClick={() =>
+                                  setCurrentProjectIndex((prev) => (prev > 0 ? prev - 1 : prev))
+                                }
+                              >
+                                ‹
+                              </Button>
+                              <div className="flex-1 text-center text-sm font-medium truncate">
+                                {viewAllSchedules
+                                  ? scheduleProjects[currentProjectIndex]?.name ?? "Select a project"
+                                  : scheduleProjects[0]?.name ?? "Your Project"}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={
+                                  !viewAllSchedules ||
+                                  scheduleProjects.length === 0 ||
+                                  currentProjectIndex >= scheduleProjects.length - 1
+                                }
+                                onClick={() =>
+                                  setCurrentProjectIndex((prev) =>
+                                    prev < scheduleProjects.length - 1 ? prev + 1 : prev
+                                  )
+                                }
+                              >
+                                ›
+                              </Button>
+                            </div>
                             <h3 className="text-base font-semibold">
-                              {viewAllSchedules ? "All judging schedules (testing)" : "Your judging schedule"}
+                              {viewAllSchedules ? "Judging schedule (testing view)" : "Your judging schedule"}
                             </h3>
                             {scheduleSlots.length === 0 ? (
                               <p className="text-sm text-muted-foreground">
@@ -608,7 +700,6 @@ export default function HackersPage() {
                                               </p>
                                               <p className="text-xs text-muted-foreground">
                                                 Room: {room?.name ?? `Room ${slot.room_id}`}
-                                                {viewAllSchedules && slot.submission_id && " • Submission ID: " + slot.submission_id}
                                               </p>
                                             </div>
                                           </div>
