@@ -1268,13 +1268,7 @@ export default function AdminPage() {
                             onChange={(e) => {
                               const newValue = parseInt(e.target.value) || 2
                               setJudgesPerProject(newValue)
-                              // Auto-reassign when value changes
-                              setTimeout(() => {
-                                const updatedProjects = projectsList.map(p => ({ ...p, assignedJudges: [] }))
-                                setProjectsList(updatedProjects)
-                                autoAssignJudges(true) // Show toast when manually changed
-                                setAssignmentsModified(true) // Mark as modified
-                              }, 100)
+                              // Do not auto-assign or save here; user must click the button
                             }}
                           />
                           <p className="text-xs text-muted-foreground mt-1">
