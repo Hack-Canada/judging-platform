@@ -208,6 +208,18 @@ export default function AdminPage() {
         console.error("[Load Track Stats] Error:", error)
       }
     }, [])
+  
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const stored = localStorage.getItem(ACCESS_CODE_KEY)
+    if (stored === ACCESS_CODE) {
+      setHasAccess(true)
+    } else {
+      setHasAccess(false)
+      router.push("/")
+      return
+    }
 
     const loadFromSupabase = async () => {
       // Load admin settings from Supabase
