@@ -1,11 +1,11 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import {
   IconGavel,
   IconFolder,
   IconChartBar,
-  IconInnerShadowTop,
   IconSettings,
   IconCalendar,
   IconUser,
@@ -67,8 +67,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="#">
-                <IconInnerShadowTop className="!size-5" />
+              <a href="#" className="flex items-center gap-2">
+                <Image
+                  src="/hackcanada-logo.svg"
+                  alt="HackCanada Logo"
+                  width={20}
+                  height={20}
+                  className="flex-shrink-0"
+                />
                 <span className="text-base font-semibold">hackcanada</span>
               </a>
             </SidebarMenuButton>
