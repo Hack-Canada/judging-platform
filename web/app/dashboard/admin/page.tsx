@@ -1045,51 +1045,6 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Projects Investment Stats */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Projects Investment Overview</CardTitle>
-                      <CardDescription>
-                        Live tracking of investments per project
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Project Name</TableHead>
-                            <TableHead>Track</TableHead>
-                            <TableHead>Assigned Judges</TableHead>
-                            <TableHead>Total Investment</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {projectsList.map((project) => (
-                            <TableRow key={project.id}>
-                              <TableCell className="font-medium">{project.name}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline">{project.track || "General"}</Badge>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex flex-wrap gap-1">
-                                  {project.assignedJudges.length > 0 ? (
-                                    project.assignedJudges.map((judge, idx) => (
-                                      <Badge key={idx} variant="outline">{judge}</Badge>
-                                    ))
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm">None</span>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="font-medium">
-                                ${project.totalInvestment.toLocaleString()}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
                 </div>
               </div>
             </div>
