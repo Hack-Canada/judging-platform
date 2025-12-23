@@ -1344,7 +1344,7 @@ export default function AdminPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-destructive"
-                                  onClick={() => {
+                                  onClick={async () => {
                                     if (roomsList.length <= 1) {
                                       toast.error("Cannot delete", {
                                         description: "At least one room is required",
