@@ -4,7 +4,7 @@ export type TimeSlot = {
   endTime: string // Format: "HH:MM" (e.g., "09:05")
   projectId: string // Submission ID (UUID)
   projectName: string
-  judgeIds: number[]
+  judgeIds: (number | string)[] // Can be numbers (legacy) or UUID strings from Supabase
   judgeNames: string[]
   roomId: number
   roomName: string

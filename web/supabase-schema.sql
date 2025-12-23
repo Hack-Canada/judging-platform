@@ -72,7 +72,7 @@ CREATE TABLE public.calendar_schedule_slots (
   end_time text NOT NULL,
   submission_id uuid NOT NULL,
   room_id integer NOT NULL,
-  judge_ids integer[] NOT NULL DEFAULT ARRAY[]::integer[],
+  judge_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT calendar_schedule_slots_pkey PRIMARY KEY (id),

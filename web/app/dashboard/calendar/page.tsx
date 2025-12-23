@@ -76,7 +76,7 @@ export default function CalendarPage() {
   const [formData, setFormData] = React.useState({
     startTime: "09:00",
     projectId: "",
-    judgeIds: [] as number[],
+    judgeIds: [] as (number | string)[],
     roomId: "",
   })
 
@@ -252,7 +252,7 @@ export default function CalendarPage() {
     const selectedRoom = rooms.find(r => r.id === parseInt(formData.roomId))
     if (!selectedRoom) return
 
-    const selectedJudges = judges.filter(j => formData.judgeIds.includes(j.id))
+    const selectedJudges = judges.filter(j => formData.judgeIds.includes(String(j.id)) || formData.judgeIds.includes(j.id as any))
     
     const slotData: TimeSlot = {
       id: editingSlot?.id || `${selectedDate}-${formData.startTime}`,
@@ -294,12 +294,18 @@ export default function CalendarPage() {
       const overlappingJudges: string[] = []
       
       for (const existingSlot of slotsAtSameTime) {
-        const judgeOverlap = formData.judgeIds.filter(judgeId => 
-          existingSlot.judgeIds.includes(judgeId)
-        )
+        const judgeOverlap = formData.judgeIds.filter(judgeId => {
+          // Compare both as strings and numbers for compatibility
+          return existingSlot.judgeIds.some(id => 
+            id === judgeId || String(id) === String(judgeId) || id === String(judgeId) || String(id) === judgeId
+          )
+        })
         if (judgeOverlap.length > 0) {
           const overlappingJudgeNames = judges
-            .filter(j => judgeOverlap.includes(j.id))
+            .filter(j => {
+              const judgeIdStr = String(j.id)
+              return judgeOverlap.some(id => String(id) === judgeIdStr || id === j.id)
+            })
             .map(j => j.name)
           overlappingJudges.push(...overlappingJudgeNames)
         }
@@ -409,13 +415,20 @@ export default function CalendarPage() {
           if (eligibleJudges.length === 0) continue
 
           // Get judges already used at this time across all rooms
-          const usedJudgeIdsAtTime = new Set<number>()
+          // Note: Judge IDs are UUIDs (strings) from Supabase, but TimeSlot expects string[]
+          const usedJudgeIdsAtTime = new Set<string>()
           newSlots
             .filter(s => s.startTime === currentTime)
-            .forEach(s => s.judgeIds.forEach(id => usedJudgeIdsAtTime.add(id)))
+            .forEach(s => {
+              // Convert judgeIds to strings if they're not already
+              s.judgeIds.forEach(id => usedJudgeIdsAtTime.add(String(id)))
+            })
 
           // Filter eligible judges that are free at this time
-          const availableEligibleJudges = eligibleJudges.filter(judge => !usedJudgeIdsAtTime.has(judge.id))
+          const availableEligibleJudges = eligibleJudges.filter(judge => {
+            const judgeIdStr = String(judge.id)
+            return !usedJudgeIdsAtTime.has(judgeIdStr)
+          })
           
           if (availableEligibleJudges.length < judgesPerProject) {
             // Not enough free judges to schedule this submission at this time
@@ -423,16 +436,18 @@ export default function CalendarPage() {
           }
           
           // Select judges for this submission from available pool
-          const submissionJudges: number[] = []
+          // Store as strings since judge IDs from Supabase are UUIDs
+          const submissionJudges: string[] = []
           for (let j = 0; j < judgesPerProject; j++) {
             const judge = availableEligibleJudges[j % availableEligibleJudges.length]
-            if (!submissionJudges.includes(judge.id)) {
-              submissionJudges.push(judge.id)
+            const judgeIdStr = String(judge.id)
+            if (!submissionJudges.includes(judgeIdStr)) {
+              submissionJudges.push(judgeIdStr)
             }
           }
 
           // Assign this submission to this room at this time
-          const selectedJudgesList = judges.filter(j => submissionJudges.includes(j.id))
+          const selectedJudgesList = judges.filter(j => submissionJudges.includes(String(j.id)))
           
           newSlots.push({
             id: `${selectedDate}-${currentTime}-${submission.id}-${room.id}`,
@@ -440,7 +455,7 @@ export default function CalendarPage() {
             endTime: getEndTime(currentTime, slotDuration),
             projectId: submission.id,
             projectName: submission.project_name,
-            judgeIds: submissionJudges,
+            judgeIds: submissionJudges as any, // Store as string array (UUIDs)
             judgeNames: selectedJudgesList.map(j => j.name),
             roomId: room.id,
             roomName: room.name,
@@ -492,40 +507,102 @@ export default function CalendarPage() {
     try {
       setSaving(true)
       
-      // First, delete existing schedule slots for this date
+      // First, delete existing schedule slots for this date (ignore if table doesn't exist)
       const { error: deleteError } = await supabase
         .from("calendar_schedule_slots")
         .delete()
         .eq("date", selectedDate)
 
-      if (deleteError) {
-        console.error("Error deleting existing schedule:", deleteError)
-        toast.error("Failed to save schedule", {
-          description: deleteError.message,
-        })
-        return
+      if (deleteError && !deleteError.message.includes("does not exist") && !deleteError.message.includes("relation")) {
+        console.error("[Save Schedule] Error deleting existing schedule:", deleteError)
+        // Continue anyway - the table might not exist yet
       }
 
-      // Prepare slots for insertion - convert judge IDs from numbers to the format needed
-      const slotsToInsert = slots.map(slot => ({
-        date: selectedDate,
-        start_time: slot.startTime, // Format: "HH:MM" as string, PostgreSQL will convert
-        end_time: slot.endTime, // Format: "HH:MM" as string
-        submission_id: slot.projectId, // UUID string
-        room_id: slot.roomId, // integer
-        judge_ids: slot.judgeIds, // integer array
-      }))
+      // Prepare slots for insertion
+      // Convert judge IDs to UUID strings (they may be numbers or strings)
+      const slotsToInsert = slots.map((slot, index) => {
+        console.log(`[Save Schedule] Preparing slot ${index + 1}:`, {
+          slot,
+          judgeIds: slot.judgeIds,
+          judgeIdsType: typeof slot.judgeIds,
+          judgeIdsLength: slot.judgeIds?.length,
+        })
+        
+        // Convert judge IDs to UUID strings
+        // Judge IDs from Supabase are UUIDs, but they might be stored as numbers in legacy data
+        const judgeIdUuids = (slot.judgeIds || []).map(id => {
+          // Convert to string - judge IDs from Supabase are UUIDs
+          const idStr = String(id)
+          // Validate it looks like a UUID (basic check)
+          if (idStr.length < 30) {
+            console.warn(`[Save Schedule] Judge ID "${idStr}" doesn't look like a UUID - may need conversion`)
+          }
+          return idStr
+        })
+        
+        const slotData = {
+          date: selectedDate,
+          start_time: slot.startTime, // Format: "HH:MM" as string
+          end_time: slot.endTime, // Format: "HH:MM" as string
+          submission_id: slot.projectId, // UUID string
+          room_id: slot.roomId, // integer
+          judge_ids: judgeIdUuids, // UUID array
+        }
+        
+        console.log(`[Save Schedule] Slot ${index + 1} prepared:`, slotData)
+        return slotData
+      })
+
+      console.log("[Save Schedule] Prepared slots to insert:", JSON.stringify(slotsToInsert, null, 2))
+      console.log("[Save Schedule] Number of slots:", slotsToInsert.length)
+      console.log("[Save Schedule] First slot sample:", slotsToInsert[0])
 
       // Insert new schedule slots
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("calendar_schedule_slots")
         .insert(slotsToInsert)
+        .select()
+
+      console.log("[Save Schedule] Insert response - data:", data)
+      console.log("[Save Schedule] Insert response - error:", error)
 
       if (error) {
-        console.error("Error saving schedule to Supabase:", error)
-        console.error("Error details:", JSON.stringify(error, null, 2))
+        console.error("[Save Schedule] Error saving schedule to Supabase:", error)
+        console.error("[Save Schedule] Error type:", typeof error)
+        console.error("[Save Schedule] Error constructor:", error?.constructor?.name)
+        
+        // Try multiple ways to extract error information
+        if (error instanceof Error) {
+          console.error("[Save Schedule] Error message:", error.message)
+          console.error("[Save Schedule] Error stack:", error.stack)
+        }
+        
+        // Try to stringify with replacer
+        try {
+          console.error("[Save Schedule] Error JSON:", JSON.stringify(error, (key, value) => {
+            if (value instanceof Error) {
+              return {
+                name: value.name,
+                message: value.message,
+                stack: value.stack,
+              }
+            }
+            return value
+          }, 2))
+        } catch (e) {
+          console.error("[Save Schedule] Could not stringify error:", e)
+        }
+        
+        // Iterate over error properties
+        if (error && typeof error === 'object') {
+          console.error("[Save Schedule] Error properties:")
+          for (const key in error) {
+            console.error(`  ${key}:`, (error as any)[key])
+          }
+        }
+        
         toast.error("Failed to save schedule", {
-          description: error.message,
+          description: error?.message || error?.toString() || "Unknown error occurred",
         })
         return
       }
@@ -548,11 +625,11 @@ export default function CalendarPage() {
     }
   }
 
-  const handleJudgeToggle = (judgeId: number) => {
+  const handleJudgeToggle = (judgeId: number | string) => {
     setFormData(prev => ({
       ...prev,
-      judgeIds: prev.judgeIds.includes(judgeId)
-        ? prev.judgeIds.filter(id => id !== judgeId)
+      judgeIds: prev.judgeIds.includes(judgeId) || prev.judgeIds.includes(String(judgeId))
+        ? prev.judgeIds.filter(id => id !== judgeId && id !== String(judgeId))
         : [...prev.judgeIds, judgeId],
     }))
   }
@@ -1009,8 +1086,8 @@ export default function CalendarPage() {
                           <input
                             type="checkbox"
                             id={`judge-${judge.id}`}
-                            checked={formData.judgeIds.includes(judge.id)}
-                            onChange={() => handleJudgeToggle(judge.id)}
+                            checked={formData.judgeIds.includes(judge.id) || formData.judgeIds.includes(String(judge.id))}
+                            onChange={() => handleJudgeToggle(String(judge.id))}
                             className="rounded border-gray-300"
                           />
                           <Label
