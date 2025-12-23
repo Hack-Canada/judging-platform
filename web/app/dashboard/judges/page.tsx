@@ -342,12 +342,32 @@ export default function JudgesPage() {
         // Filter slots where judge_ids array contains the current judge's ID
         // Convert judge ID to string for comparison (it might be UUID or string)
         const judgeIdStr = String(judgeData.id)
-        const assignedSlots = calendarSlotsData?.filter(slot => {
+        console.log("[Load Judge Data] Looking for judge ID in slots:", judgeIdStr)
+        
+        const assignedSlots = (calendarSlotsData || []).filter(slot => {
           const judgeIds = slot.judge_ids || []
-          // Check if judge's ID is in the judge_ids array
-          // Handle both string and UUID formats
-          return judgeIds.some((id: any) => String(id) === judgeIdStr)
-        }) || []
+          console.log("[Load Judge Data] Checking slot - submission_id:", slot.submission_id, "judge_ids:", judgeIds)
+          
+          // Loop through judge_ids array to check if current judge's ID exists
+          if (!Array.isArray(judgeIds)) {
+            console.warn("[Load Judge Data] judge_ids is not an array:", judgeIds)
+            return false
+          }
+          
+          // Loop through each ID in the array and compare
+          for (let i = 0; i < judgeIds.length; i++) {
+            const slotJudgeId = judgeIds[i]
+            const slotJudgeIdStr = String(slotJudgeId)
+            console.log(`[Load Judge Data] Comparing slot judge ID [${i}]: "${slotJudgeIdStr}" with judge ID: "${judgeIdStr}"`)
+            
+            if (slotJudgeIdStr === judgeIdStr) {
+              console.log("[Load Judge Data] Match found! Judge is assigned to this slot")
+              return true
+            }
+          }
+          
+          return false
+        })
 
         console.log("[Load Judge Data] Filtered calendar slots for this judge:", assignedSlots)
 
