@@ -40,29 +40,29 @@ export default function Page() {
     <div suppressHydrationWarning className="relative">
       {/* Animated Grid Background */}
       <div className="animated-grid fixed inset-0 z-0" />
-      <SidebarProvider
-        style={
-          {
-            "--sidebar-width": "calc(var(--spacing) * 72)",
-            "--header-height": "calc(var(--spacing) * 12)",
-          } as React.CSSProperties
-        }
-      >
-        <AppSidebar variant="inset" />
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar variant="inset" />
         <SidebarInset className="relative z-10">
-          <SiteHeader />
-          <div className="flex flex-1 flex-col">
-            <div className="@container/main flex flex-1 flex-col gap-2">
-              <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+        <SiteHeader />
+        <div className="flex flex-1 flex-col">
+          <div className="@container/main flex flex-1 flex-col gap-2">
+            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
                 {/* <div className="px-4 lg:px-6">
-                  <ChartAreaInteractive />
+                <ChartAreaInteractive />
                 </div> */}
                 <DataTable data={dashboardEntries} />
-              </div>
             </div>
           </div>
-        </SidebarInset>
-      </SidebarProvider>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
     </div>
   )
 }
