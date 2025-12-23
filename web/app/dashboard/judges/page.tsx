@@ -541,12 +541,25 @@ export default function JudgesPage() {
             const timeRoomInfo = scheduleSlots.length > 0
               ? scheduleSlots.map(slot => {
                   const roomName = roomsMap.get(slot.room_id) || `Room ${slot.room_id}`
-                  // Format time (handle both time and text formats)
-                  const startTime = typeof slot.start_time === 'string' && slot.start_time.includes(':')
-                    ? slot.start_time.substring(0, 5) // Extract HH:MM if it's a time string
-                    : slot.start_time
-                  return `${startTime} (${roomName})`
-                }).join(", ")
+                  // Format time - handle both time type and text format
+                  let startTime = slot.start_time
+                  if (typeof startTime === 'string') {
+                    // If it's a full time string like "13:00:00", extract just "13:00"
+                    if (startTime.includes(':') && startTime.split(':').length >= 2) {
+                      startTime = startTime.substring(0, 5)
+                    }
+                  }
+                  
+                  // Format end time similarly
+                  let endTime = slot.end_time
+                  if (typeof endTime === 'string') {
+                    if (endTime.includes(':') && endTime.split(':').length >= 2) {
+                      endTime = endTime.substring(0, 5)
+                    }
+                  }
+                  
+                  return `${startTime} - ${endTime} (${roomName})`
+                }).join("; ")
               : "Not scheduled"
             
             const investment = investmentsMap[submission.id] || 0
@@ -674,9 +687,17 @@ export default function JudgesPage() {
         [submissionId]: investment,
       }))
       
-      // Update dashboard entries status
+      // Update dashboard entries status and investment
       setDashboardEntries(prev => prev.map(entry => {
         if ((entry as any).submissionId === submissionId) {
+          // Calculate new total invested for all entries
+          const newTotalInvested = prev.reduce((sum, e) => {
+            if ((e as any).submissionId === submissionId) {
+              return sum + investment
+            }
+            return sum + parseFloat(e.investment || "0")
+          }, 0)
+          
           return {
             ...entry,
             investment: investment.toString(),
