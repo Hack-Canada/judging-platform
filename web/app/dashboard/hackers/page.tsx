@@ -4,10 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { defaultTracks } from "@/lib/tracks-data"
+import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { supabase } from "@/lib/supabase-client"
 
 const ACCESS_CODE = "111-111"
@@ -24,6 +22,13 @@ export default function HackersPage() {
   const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
+  const [currentStep, setCurrentStep] = React.useState<1 | 2 | 3>(1)
+  const [createdSubmissionId, setCreatedSubmissionId] = React.useState<string | null>(null)
+  const [scheduleSlots, setScheduleSlots] = React.useState<
+    { id: string; date: string; start_time: string; end_time: string; room_id: number }[]
+  >([])
+  const [loadingSchedule, setLoadingSchedule] = React.useState(false)
+  const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [formData, setFormData] = React.useState({
     name: "",
     teamName: "",
@@ -44,6 +49,77 @@ export default function HackersPage() {
       }
     }
   }, [router])
+
+  // Load rooms from admin settings so names match the main calendar
+  React.useEffect(() => {
+    const loadRooms = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("admin_settings")
+          .select("setting_key, setting_value")
+          .eq("setting_key", "rooms_data")
+
+        if (error) {
+          console.error("[Hackers] Error loading rooms_data:", error)
+          return
+        }
+
+        if (data && data.length > 0) {
+          const value = data[0].setting_value
+          try {
+            const parsed = JSON.parse(value)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setRooms(parsed)
+            }
+          } catch (e) {
+            console.error("[Hackers] Failed to parse rooms_data:", e)
+          }
+        }
+      } catch (error) {
+        console.error("[Hackers] Failed to load rooms from admin_settings:", error)
+      }
+    }
+
+    void loadRooms()
+  }, [])
+
+  const loadScheduleForSubmission = React.useCallback(
+    async (submissionId: string) => {
+      try {
+        setLoadingSchedule(true)
+        const { data, error } = await supabase
+          .from("calendar_schedule_slots")
+          .select("id, date, start_time, end_time, room_id")
+          .eq("submission_id", submissionId)
+          .order("date", { ascending: true })
+          .order("start_time", { ascending: true })
+
+        if (error) {
+          console.error("[Hackers] Error loading schedule for submission:", error)
+          toast.error("Failed to load schedule", {
+            description: error.message,
+          })
+          return
+        }
+
+        const slots =
+          (data as { id: string; date: string; start_time: string; end_time: string; room_id: number }[]) || []
+        setScheduleSlots(slots)
+
+        if (slots.length > 0) {
+          setCurrentStep(3)
+        }
+      } catch (error) {
+        console.error("[Hackers] Unexpected error loading schedule:", error)
+        toast.error("Failed to load schedule", {
+          description: error instanceof Error ? error.message : "Unknown error",
+        })
+      } finally {
+        setLoadingSchedule(false)
+      }
+    },
+    []
+  )
 
   const handleMemberChange = (index: number, value: string) => {
     const newMembers = [...formData.members]
@@ -121,10 +197,9 @@ export default function HackersPage() {
       setSubmitting(true)
 
       // Filter out empty members
-      const validMembers = formData.members.filter(m => m.trim() !== "")
+      const validMembers = formData.members.filter((m) => m.trim() !== "")
 
-      // Create submission in Supabase (assuming a submissions table exists)
-      // For now, we'll store in a submissions table or projects table
+      // Create submission in Supabase
       const submissionData = {
         name: formData.name.trim(),
         team_name: formData.teamName.trim(),
@@ -135,31 +210,19 @@ export default function HackersPage() {
         submitted_at: new Date().toISOString(),
       }
 
-      // Try to insert into a submissions table (create if doesn't exist)
-      // For MVP, we'll also create the project if it doesn't exist
-      const { error: submissionError } = await supabase
+      const { data: inserted, error: submissionError } = await supabase
         .from("submissions")
         .insert([submissionData])
+        .select()
+        .single()
 
-      if (submissionError) {
-        // If submissions table doesn't exist, we'll create a project instead
-        // This is a fallback for MVP
-        console.warn("Submissions table not found, creating project instead:", submissionError)
-
-        // Create project for each selected track
-        for (const track of formData.tracks) {
-          const { error: projectError } = await supabase
-            .from("projects")
-            .insert([{
-              name: formData.projectName.trim(),
-              track: track,
-            }])
-
-          if (projectError && !projectError.message.includes("duplicate")) {
-            throw projectError
-          }
-        }
+      if (submissionError || !inserted) {
+        throw submissionError || new Error("Failed to create submission")
       }
+
+      // Move to step 2 (pending schedule) and track this submission
+      setCreatedSubmissionId(inserted.id as string)
+      setCurrentStep(2)
 
       toast.success("Submission received!", {
         description: "Your project has been recorded and is pending schedule.",
@@ -174,6 +237,9 @@ export default function HackersPage() {
         projectName: "",
         tracks: [],
       })
+
+      // Try to load schedule immediately in case it's already set
+      void loadScheduleForSubmission(inserted.id as string)
     } catch (error) {
       console.error("Submission error:", error)
       toast.error("Failed to submit", {
@@ -187,6 +253,29 @@ export default function HackersPage() {
   if (!hasAccess) {
     return null
   }
+
+  const formatTimeRange = (start: string, end: string) => {
+    const format = (t: string) => {
+      const [h, m] = t.split(":")
+      return `${h?.padStart(2, "0")}:${m?.padStart(2, "0")}`
+    }
+    return `${format(start)} – ${format(end)}`
+  }
+
+  const groupSlotsByDate = React.useMemo(() => {
+    const map = new Map<string, { id: string; date: string; start_time: string; end_time: string; room_id: number }[]>()
+    scheduleSlots.forEach((slot) => {
+      const key = slot.date
+      if (!map.has(key)) {
+        map.set(key, [])
+      }
+      map.get(key)!.push(slot)
+    })
+    map.forEach((slots) => {
+      slots.sort((a, b) => a.start_time.localeCompare(b.start_time))
+    })
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  }, [scheduleSlots])
 
   return (
     <div suppressHydrationWarning className="relative">
@@ -210,11 +299,27 @@ export default function HackersPage() {
                     <CardHeader>
                       <CardTitle>Project Submission</CardTitle>
                       <CardDescription>
-                        Submit your hackathon project for judging
+                        Submit your hackathon project and then see when it will be judged.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <form onSubmit={handleSubmit} className="space-y-6">
+                      {/* 3-step indicator */}
+                      <div className="mb-6 flex flex-col gap-2 text-sm">
+                        <div className="flex items-center gap-4">
+                          <span className={currentStep >= 1 ? "font-semibold" : "text-muted-foreground"}>
+                            1. Submit project
+                          </span>
+                          <span className={currentStep >= 2 ? "font-semibold" : "text-muted-foreground"}>
+                            2. Pending schedule
+                          </span>
+                          <span className={currentStep >= 3 ? "font-semibold" : "text-muted-foreground"}>
+                            3. Judging time
+                          </span>
+                        </div>
+                      </div>
+
+                      {!createdSubmissionId ? (
+                        <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label htmlFor="name">
@@ -357,6 +462,72 @@ export default function HackersPage() {
                           </Button>
                         </div>
                       </form>
+                      ) : (
+                        <div className="space-y-6">
+                          <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground">
+                              Your submission has been received and is currently{" "}
+                              <span className="font-semibold">pending schedule</span>. Once organizers schedule your
+                              judging slot, it will appear below.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => createdSubmissionId && loadScheduleForSubmission(createdSubmissionId)}
+                              disabled={loadingSchedule}
+                            >
+                              {loadingSchedule ? "Checking schedule..." : "Refresh schedule"}
+                            </Button>
+                          </div>
+
+                          <div className="space-y-3">
+                            <h3 className="text-base font-semibold">Your judging schedule</h3>
+                            {scheduleSlots.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">
+                                No schedule has been set yet. Please check back later or use the refresh button above.
+                              </p>
+                            ) : (
+                              <div className="space-y-4">
+                                {groupSlotsByDate.map(([date, slots]) => (
+                                  <Card key={date} className="border-dashed">
+                                    <CardHeader>
+                                      <CardTitle className="text-sm">
+                                        {new Date(date).toLocaleDateString(undefined, {
+                                          weekday: "short",
+                                          year: "numeric",
+                                          month: "short",
+                                          day: "numeric",
+                                        })}
+                                      </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-2">
+                                      {slots.map((slot) => {
+                                        const room = rooms.find((r) => r.id === slot.room_id)
+                                        return (
+                                          <div
+                                            key={slot.id}
+                                            className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                                          >
+                                            <div>
+                                              <p className="font-medium">
+                                                {formatTimeRange(slot.start_time, slot.end_time)}
+                                              </p>
+                                              <p className="text-xs text-muted-foreground">
+                                                Room: {room?.name ?? `Room ${slot.room_id}`}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
