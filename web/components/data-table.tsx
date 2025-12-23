@@ -187,56 +187,56 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
       
       if (!investment || investment === "") {
         return (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
                 loading: `Saving investment for ${row.original.entry}`,
-                success: "Done",
-                error: "Error",
-              })
-            }}
-          >
+            success: "Done",
+            error: "Error",
+          })
+        }}
+      >
             <Label htmlFor={`${row.original.id}-investment`} className="sr-only">
               Investment
-            </Label>
+        </Label>
             <div className="flex items-center justify-end gap-1">
               <span className="text-muted-foreground text-sm">$</span>
-              <Input
+        <Input
                 className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-20 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
                 placeholder="0"
                 type="number"
                 id={`${row.original.id}-investment`}
-              />
+        />
             </div>
-          </form>
+      </form>
         )
       }
       
       return (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
               loading: `Saving investment for ${row.original.entry}`,
-              success: "Done",
-              error: "Error",
-            })
-          }}
-        >
+            success: "Done",
+            error: "Error",
+          })
+        }}
+      >
           <Label htmlFor={`${row.original.id}-investment`} className="sr-only">
             Investment
-          </Label>
+        </Label>
           <div className="flex items-center justify-end gap-1">
             <span className="text-muted-foreground text-sm">$</span>
-            <Input
+        <Input
               className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-20 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
               defaultValue={investment}
               id={`${row.original.id}-investment`}
               type="number"
-            />
+        />
           </div>
-        </form>
+      </form>
       )
     },
   },
@@ -701,21 +701,21 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
             <div className="flex flex-col gap-3">
               <Label htmlFor="entry">Entry Name</Label>
               <Input id="entry" defaultValue={item.entry} />
-            </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="status">Status</Label>
-              <Select defaultValue={item.status}>
-                <SelectTrigger id="status" className="w-full">
-                  <SelectValue placeholder="Select a status" />
-                </SelectTrigger>
-                <SelectContent>
+              </div>
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="status">Status</Label>
+                <Select defaultValue={item.status}>
+                  <SelectTrigger id="status" className="w-full">
+                    <SelectValue placeholder="Select a status" />
+                  </SelectTrigger>
+                  <SelectContent>
                   <SelectItem value="Invested">Invested</SelectItem>
                   <SelectItem value="Under Review">Under Review</SelectItem>
                   <SelectItem value="Pending">Pending</SelectItem>
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
             </div>
-            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3">
               <Label htmlFor="investment">Investment Amount</Label>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">$</span>
