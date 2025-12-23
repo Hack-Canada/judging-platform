@@ -30,14 +30,14 @@ export function NavMain({
           {items.map((item) => {
             const isActive = pathname === item.url
             return (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton tooltip={item.title} asChild isActive={isActive}>
+            <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton tooltip={item.title} asChild isActive={isActive} size="lg">
                   <Link href={item.url}>
-                    {item.icon && <item.icon />}
-                    <span>{item.title}</span>
+                {item.icon && <item.icon />}
+                <span>{item.title}</span>
                   </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             )
           })}
         </SidebarMenu>

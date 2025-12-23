@@ -1,13 +1,14 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import {
   IconGavel,
   IconFolder,
-  IconChartBar,
-  IconInnerShadowTop,
   IconSettings,
   IconCalendar,
+  IconUser,
+  IconUsers,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -23,24 +24,24 @@ import {
 const data = {
   navMain: [
     {
-      title: "Judges",
-      url: "/dashboard",
+      title: "Judges View",
+      url: "/dashboard/judges",
       icon: IconGavel,
     },
     {
-      title: "Projects",
-      url: "/dashboard/projects",
+      title: "Hackers Submission",
+      url: "/dashboard/hackers",
+      icon: IconUsers,
+    },
+    {
+      title: "Submissions",
+      url: "/dashboard/submissions",
       icon: IconFolder,
     },
     {
       title: "Calendar",
       url: "/dashboard/calendar",
       icon: IconCalendar,
-    },
-    {
-      title: "Scoring System",
-      url: "/dashboard/scoring-system",
-      icon: IconChartBar,
     },
     {
       title: "Admin",
@@ -58,11 +59,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="data-[slot=sidebar-menu-button]:!p-1.5"
+              size="lg"
+              className="data-[slot=sidebar-menu-button]:!p-3"
             >
-              <a href="#">
-                <IconInnerShadowTop className="!size-5" />
-                <span className="text-base font-semibold">hackcanada</span>
+              <a href="#" className="flex items-center gap-2">
+                <Image
+                  src="/hackcanada-logo.svg"
+                  alt="HackCanada Logo"
+                  width={24}
+                  height={24}
+                  className="flex-shrink-0"
+                />
+                <span className="text-base font-semibold">HackCanada 2026</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
