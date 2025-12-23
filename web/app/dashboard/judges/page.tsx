@@ -13,15 +13,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { IconCurrencyDollar } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase-client"
 import type { Judge } from "@/lib/judges-data"
@@ -33,6 +24,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { JudgesDataTable } from "@/components/judges-data-table"
+import type { DashboardEntry } from "@/lib/dashboard-entries-data"
 
 const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
@@ -44,6 +37,14 @@ type JudgeSubmission = {
   investment: number
   team_name?: string
   devpost_link?: string
+}
+
+type ScheduleSlotInfo = {
+  submission_id: string
+  date: string
+  start_time: string
+  end_time: string
+  room_id: number
 }
 
 export default function JudgesPage() {
@@ -68,6 +69,15 @@ export default function JudgesPage() {
   const [totalInvestmentFund, setTotalInvestmentFund] = React.useState(0)
   const [totalJudgesCount, setTotalJudgesCount] = React.useState(0)
   const [judgeAllocation, setJudgeAllocation] = React.useState(0)
+  
+  // Schedule slots mapping (submission_id -> schedule info)
+  const [scheduleSlotsMap, setScheduleSlotsMap] = React.useState<Map<string, ScheduleSlotInfo[]>>(new Map())
+  
+  // Rooms data for display
+  const [roomsMap, setRoomsMap] = React.useState<Map<number, string>>(new Map())
+  
+  // Dashboard entries for DataTable
+  const [dashboardEntries, setDashboardEntries] = React.useState<DashboardEntry[]>([])
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
@@ -323,11 +333,37 @@ export default function JudgesPage() {
         })
         setJudge(judgeData)
 
-        // Load total investment fund from localStorage (set by admin)
-        const savedFund = typeof window !== "undefined" ? localStorage.getItem("admin_investment_fund") : null
-        const totalFund = savedFund ? parseFloat(savedFund) : 10000 // Default 10k if not set
+        // Load total investment fund from Supabase admin_settings
+        const { data: fundSetting } = await supabase
+          .from("admin_settings")
+          .select("setting_value")
+          .eq("setting_key", "investment_fund")
+          .single()
+        
+        const totalFund = fundSetting?.setting_value ? parseFloat(fundSetting.setting_value) : 10000
         setTotalInvestmentFund(totalFund)
         console.log("[Load Judge Data] Total investment fund:", totalFund)
+        
+        // Load rooms data for room name mapping
+        const { data: roomsSetting } = await supabase
+          .from("admin_settings")
+          .select("setting_value")
+          .eq("setting_key", "rooms_data")
+          .single()
+        
+        if (roomsSetting?.setting_value) {
+          try {
+            const rooms = JSON.parse(roomsSetting.setting_value)
+            const roomsMapData = new Map<number, string>()
+            rooms.forEach((room: any) => {
+              roomsMapData.set(room.id, room.name)
+            })
+            setRoomsMap(roomsMapData)
+            console.log("[Load Judge Data] Loaded rooms map:", roomsMapData)
+          } catch (e) {
+            console.error("[Load Judge Data] Error parsing rooms:", e)
+          }
+        }
 
         // Count total number of judges
         const { count: judgesCount, error: countError } = await supabase
@@ -351,10 +387,12 @@ export default function JudgesPage() {
         // Filter calendar slots where judge_ids array contains this judge's ID
         console.log("[Load Judge Data] Loading assigned submissions from calendar_schedule_slots for judge_id:", judgeData.id)
         
-        // Fetch all calendar slots and filter for ones that contain this judge's ID
+        // Fetch all calendar slots with full schedule info and filter for ones that contain this judge's ID
         const { data: calendarSlotsData, error: calendarSlotsError } = await supabase
           .from("calendar_schedule_slots")
-          .select("submission_id, judge_ids")
+          .select("submission_id, judge_ids, date, start_time, end_time, room_id")
+          .order("date", { ascending: true })
+          .order("start_time", { ascending: true })
 
         console.log("[Load Judge Data] Calendar slots query result:", { calendarSlotsData, calendarSlotsError })
 
@@ -407,6 +445,24 @@ export default function JudgesPage() {
         
         console.log("[Load Judge Data] Assigned submission IDs from calendar:", assignedSubmissionIds)
         setAssignedSubmissionIds(assignedSubmissionIds)
+        
+        // Build schedule slots map (submission_id -> schedule info array)
+        const slotsMap = new Map<string, ScheduleSlotInfo[]>()
+        assignedSlots.forEach((slot: any) => {
+          const submissionId = slot.submission_id
+          if (!slotsMap.has(submissionId)) {
+            slotsMap.set(submissionId, [])
+          }
+          slotsMap.get(submissionId)!.push({
+            submission_id: submissionId,
+            date: slot.date,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            room_id: slot.room_id,
+          })
+        })
+        setScheduleSlotsMap(slotsMap)
+        console.log("[Load Judge Data] Schedule slots map:", slotsMap)
 
         // Load submission details from Supabase (only assigned ones)
         let submissionsData: any[] | null = null
@@ -477,10 +533,47 @@ export default function JudgesPage() {
           console.log("[Load Judge Data] Final judge submissions:", judgeSubmissions)
           setSubmissions(judgeSubmissions)
           setInvestments(investmentsMap)
+          
+          // Build dashboard entries for DataTable
+          const entries: DashboardEntry[] = judgeSubmissions.map((submission, index) => {
+            const scheduleSlots = slotsMap.get(submission.id) || []
+            // Get the first schedule slot's time and room (or combine multiple)
+            const timeRoomInfo = scheduleSlots.length > 0
+              ? scheduleSlots.map(slot => {
+                  const roomName = roomsMap.get(slot.room_id) || `Room ${slot.room_id}`
+                  // Format time (handle both time and text formats)
+                  const startTime = typeof slot.start_time === 'string' && slot.start_time.includes(':')
+                    ? slot.start_time.substring(0, 5) // Extract HH:MM if it's a time string
+                    : slot.start_time
+                  return `${startTime} (${roomName})`
+                }).join(", ")
+              : "Not scheduled"
+            
+            const investment = investmentsMap[submission.id] || 0
+            let status = "Pending"
+            if (investment > 0) {
+              status = "Invested"
+            } else if (scheduleSlots.length > 0) {
+              status = "Under Review"
+            }
+            
+            return {
+              id: index + 1,
+              entry: submission.project_name,
+              status: status,
+              investment: investment > 0 ? investment.toString() : "",
+              judge: judgeData.name,
+              timeRoom: timeRoomInfo, // Custom field for time/room
+              submissionId: submission.id, // Store submission ID for updates
+            } as DashboardEntry & { timeRoom?: string; submissionId?: string }
+          })
+          
+          setDashboardEntries(entries as DashboardEntry[])
         } else {
           console.log("[Load Judge Data] No submissions to display")
           setSubmissions([])
           setInvestments({})
+          setDashboardEntries([])
         }
         
         console.log("[Load Judge Data] Judge data loading completed successfully")
@@ -519,8 +612,8 @@ export default function JudgesPage() {
     }
   }
 
-  const handleSaveInvestment = async (submissionId: string) => {
-    const investment = investments[submissionId] || 0
+  const handleSaveInvestment = async (submissionId: string, investmentAmount?: number) => {
+    const investment = investmentAmount !== undefined ? investmentAmount : (investments[submissionId] || 0)
 
     if (!judge) {
       toast.error("Judge not loaded")
@@ -575,11 +668,26 @@ export default function JudgesPage() {
       // Update local judge state
       setJudge(prev => prev ? { ...prev, totalInvested: updatedTotal } : null)
 
+      // Update investments map
+      setInvestments(prev => ({
+        ...prev,
+        [submissionId]: investment,
+      }))
+      
+      // Update dashboard entries status
+      setDashboardEntries(prev => prev.map(entry => {
+        if ((entry as any).submissionId === submissionId) {
+          return {
+            ...entry,
+            investment: investment.toString(),
+            status: investment > 0 ? "Invested" : "Under Review",
+          }
+        }
+        return entry
+      }))
+
       setEditingInvestment(null)
       setInvestmentInput("")
-      toast.success("Investment saved!", {
-        description: `Allocated $${investment.toLocaleString()} to ${submissions.find(s => s.id === submissionId)?.project_name}`,
-      })
     } catch (error) {
       toast.error("Failed to save investment", {
         description: error instanceof Error ? error.message : "Unknown error",
@@ -738,113 +846,39 @@ export default function JudgesPage() {
                 </div>
 
                 <div className="px-4 lg:px-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Assigned Submissions</CardTitle>
-                      <CardDescription>
-                        Allocate your investment funds to each submission scheduled for you
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {loading ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          Loading submissions...
-                        </div>
-                      ) : submissions.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          No submissions assigned yet. Please contact admin.
-                        </div>
-                      ) : (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Project Name</TableHead>
-                              <TableHead>Team</TableHead>
-                              <TableHead>Tracks</TableHead>
-                              <TableHead>Investment</TableHead>
-                              <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {submissions.map((submission) => (
-                              <TableRow key={submission.id}>
-                                <TableCell className="font-medium">{submission.project_name}</TableCell>
-                                <TableCell>
-                                  {submission.team_name && (
-                                    <span className="text-sm text-muted-foreground">{submission.team_name}</span>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex flex-wrap gap-1">
-                                    {submission.tracks && submission.tracks.length > 0 ? (
-                                      submission.tracks.map((track) => (
-                                        <Badge key={track} variant="outline">{track}</Badge>
-                                      ))
-                                    ) : (
-                                      <Badge variant="outline">General</Badge>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  {editingInvestment === submission.id ? (
-                                    <div className="flex items-center gap-2">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={investmentInput}
-                                        onChange={(e) => {
-                                          handleInvestmentChange(submission.id, e.target.value)
-                                        }}
-                                        className="w-32"
-                                        autoFocus
-                                      />
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleSaveInvestment(submission.id)}
-                                      >
-                                        Save
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                          setEditingInvestment(null)
-                                          setInvestmentInput("")
-                                        }}
-                                      >
-                                        Cancel
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-2">
-                                      <IconCurrencyDollar className="h-4 w-4" />
-                                      <span className="font-medium">
-                                        ${investments[submission.id]?.toLocaleString() || "0"}
-                                      </span>
-                                    </div>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {editingInvestment !== submission.id && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleEditInvestment(submission.id, investments[submission.id] || 0)
-                                      }
-                                    >
-                                      {investments[submission.id] > 0 ? "Edit" : "Allocate"}
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      )}
-                    </CardContent>
-                  </Card>
+                  {loading ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Loading submissions...
+                    </div>
+                  ) : dashboardEntries.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No submissions assigned yet. Please contact admin.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Assigned Submissions</CardTitle>
+                          <CardDescription>
+                            Allocate your investment funds to each submission scheduled for you
+                          </CardDescription>
+                        </CardHeader>
+                      </Card>
+                      <JudgesDataTable 
+                        data={dashboardEntries}
+                        onInvestmentChange={async (entryId: number, investment: number) => {
+                          // Find the entry and get submission ID
+                          const entry = dashboardEntries.find(e => e.id === entryId)
+                          if (!entry || !(entry as any).submissionId) return
+                          
+                          const submissionId = (entry as any).submissionId
+                          await handleSaveInvestment(submissionId, investment)
+                        }}
+                        remainingAllocation={judgeAllocation - judge.totalInvested}
+                        totalInvested={judge.totalInvested}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
