@@ -388,11 +388,10 @@ export default function JudgesPage() {
         console.log("[Load Judge Data] Loading assigned submissions from calendar_schedule_slots for judge_id:", judgeData.id)
         
         // Fetch all calendar slots with full schedule info and filter for ones that contain this judge's ID
+        // Note: We'll sort in JavaScript to ensure proper chronological order
         const { data: calendarSlotsData, error: calendarSlotsError } = await supabase
           .from("calendar_schedule_slots")
           .select("submission_id, judge_ids, date, start_time, end_time, room_id")
-          .order("date", { ascending: true })
-          .order("start_time", { ascending: true })
 
         console.log("[Load Judge Data] Calendar slots query result:", { calendarSlotsData, calendarSlotsError })
 
@@ -538,23 +537,35 @@ export default function JudgesPage() {
           const entries: DashboardEntry[] = judgeSubmissions.map((submission, index) => {
             const scheduleSlots = slotsMap.get(submission.id) || []
             // Sort schedule slots by start_time (early to late)
+            // Convert times to seconds for accurate numeric comparison
             const sortedSlots = [...scheduleSlots].sort((a, b) => {
-              // Convert time to comparable format
-              const getTimeInSeconds = (time: any): number => {
-                const timeStr = typeof time === 'string' ? time : String(time)
-                // Handle different time formats: "HH:MM:SS", "HH:MM", or just "HH:MM"
-                const parts = timeStr.split(':')
-                const hours = parseInt(parts[0] || '0', 10)
-                const minutes = parseInt(parts[1] || '0', 10)
-                const seconds = parseInt(parts[2] || '0', 10)
-                return hours * 3600 + minutes * 60 + seconds
+              // Helper function to convert time string to total seconds
+              const timeToSeconds = (time: any): number => {
+                if (!time) return 0
+                const timeStr = typeof time === 'string' ? time.trim() : String(time).trim()
+                
+                // Handle empty or invalid strings
+                if (!timeStr || timeStr === '') return 0
+                
+                // Split by colon to get hours, minutes, seconds
+                const parts = timeStr.split(':').map(p => parseInt(p.trim() || '0', 10))
+                
+                if (parts.length === 0) return 0
+                if (parts.length === 1) return parts[0] * 3600 // Just hours
+                if (parts.length === 2) return parts[0] * 3600 + parts[1] * 60 // Hours:Minutes
+                // Hours:Minutes:Seconds
+                return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0)
               }
               
-              const timeA = getTimeInSeconds(a.start_time)
-              const timeB = getTimeInSeconds(b.start_time)
+              const timeA = timeToSeconds(a.start_time)
+              const timeB = timeToSeconds(b.start_time)
               
-              return timeA - timeB // Sort ascending (early to late)
+              // Sort ascending (early to late)
+              return timeA - timeB
             })
+            
+            console.log(`[Sort] Submission ${submission.id} - Before sort:`, scheduleSlots.map(s => s.start_time))
+            console.log(`[Sort] Submission ${submission.id} - After sort:`, sortedSlots.map(s => s.start_time))
             
             // Get sorted schedule slots' time and room (or combine multiple)
             const timeRoomInfo = sortedSlots.length > 0
