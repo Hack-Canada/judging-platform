@@ -98,117 +98,105 @@ export default function AdminPage() {
     judgeCount: number
   }>>(new Map())
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const stored = localStorage.getItem(ACCESS_CODE_KEY)
-    if (stored === ACCESS_CODE) {
-      setHasAccess(true)
-    } else {
-      setHasAccess(false)
-      router.push("/")
-      return
-    }
-
-    // Load track stats function (defined at component level for reuse)
-    const loadTrackStats = React.useCallback(async (submissionsData: any[], judgesData: any[]) => {
-      try {
-        // Get all submissions with their tracks
-        const submissionTracksMap = new Map<string, string[]>() // submission_id -> tracks[]
-        submissionsData.forEach((sub: any) => {
-          const tracks = sub.tracks && Array.isArray(sub.tracks) ? sub.tracks : ["General"]
-          submissionTracksMap.set(sub.id, tracks)
-        })
+  // Load track stats function (defined at component level for reuse)
+  const loadTrackStats = React.useCallback(async (submissionsData: any[], judgesData: any[]) => {
+    try {
+      // Get all submissions with their tracks
+      const submissionTracksMap = new Map<string, string[]>() // submission_id -> tracks[]
+      submissionsData.forEach((sub: any) => {
+        const tracks = sub.tracks && Array.isArray(sub.tracks) ? sub.tracks : ["General"]
+        submissionTracksMap.set(sub.id, tracks)
+      })
+      
+      // Get all investments
+      const { data: investmentsData, error: investmentsError } = await supabase
+        .from("judge_investments")
+        .select("submission_id, amount")
+      
+      if (investmentsError) {
+        console.error("[Load Track Stats] Error loading investments:", investmentsError)
+        return
+      }
+      
+      // Calculate investment per submission
+      const submissionInvestments = new Map<string, number>() // submission_id -> total investment
+      investmentsData?.forEach((inv: any) => {
+        const current = submissionInvestments.get(inv.submission_id) || 0
+        submissionInvestments.set(inv.submission_id, current + parseFloat(String(inv.amount || 0)))
+      })
+      
+      // Aggregate stats by track
+      const statsMap = new Map<string, {
+        submissionIds: Set<string>
+        totalInvestment: number
+        judgeIds: Set<string>
+      }>()
+      
+      // Process each submission
+      submissionsData.forEach((sub: any) => {
+        const tracks = submissionTracksMap.get(sub.id) || ["General"]
+        const investment = submissionInvestments.get(sub.id) || 0
         
-        // Get all investments
-        const { data: investmentsData, error: investmentsError } = await supabase
-          .from("judge_investments")
-          .select("submission_id, amount")
-        
-        if (investmentsError) {
-          console.error("[Load Track Stats] Error loading investments:", investmentsError)
-          return
-        }
-        
-        // Calculate investment per submission
-        const submissionInvestments = new Map<string, number>() // submission_id -> total investment
-        investmentsData?.forEach((inv: any) => {
-          const current = submissionInvestments.get(inv.submission_id) || 0
-          submissionInvestments.set(inv.submission_id, current + parseFloat(String(inv.amount || 0)))
-        })
-        
-        // Aggregate stats by track
-        const statsMap = new Map<string, {
-          submissionIds: Set<string>
-          totalInvestment: number
-          judgeIds: Set<string>
-        }>()
-        
-        // Process each submission
-        submissionsData.forEach((sub: any) => {
-          const tracks = submissionTracksMap.get(sub.id) || ["General"]
-          const investment = submissionInvestments.get(sub.id) || 0
+        tracks.forEach((track: string) => {
+          if (!statsMap.has(track)) {
+            statsMap.set(track, {
+              submissionIds: new Set(),
+              totalInvestment: 0,
+              judgeIds: new Set(),
+            })
+          }
           
-          tracks.forEach((track: string) => {
-            if (!statsMap.has(track)) {
-              statsMap.set(track, {
-                submissionIds: new Set(),
-                totalInvestment: 0,
-                judgeIds: new Set(),
-              })
-            }
-            
-            const stats = statsMap.get(track)!
-            stats.submissionIds.add(sub.id)
-            stats.totalInvestment += investment
-          })
+          const stats = statsMap.get(track)!
+          stats.submissionIds.add(sub.id)
+          stats.totalInvestment += investment
         })
-        
-        // Count judges per track
-        judgesData.forEach((judge: any) => {
-          const judgeTracks = judge.tracks && Array.isArray(judge.tracks) ? judge.tracks : ["General"]
-          judgeTracks.forEach((track: string) => {
-            if (statsMap.has(track)) {
-              statsMap.get(track)!.judgeIds.add(judge.id)
-            }
-          })
-          // All judges can judge General
-          if (statsMap.has("General")) {
-            statsMap.get("General")!.judgeIds.add(judge.id)
+      })
+      
+      // Count judges per track
+      judgesData.forEach((judge: any) => {
+        const judgeTracks = judge.tracks && Array.isArray(judge.tracks) ? judge.tracks : ["General"]
+        judgeTracks.forEach((track: string) => {
+          if (statsMap.has(track)) {
+            statsMap.get(track)!.judgeIds.add(judge.id)
           }
         })
+        // All judges can judge General
+        if (statsMap.has("General")) {
+          statsMap.get("General")!.judgeIds.add(judge.id)
+        }
+      })
+      
+      // Convert to final stats format
+      const finalStats = new Map<string, {
+        trackName: string
+        submissionCount: number
+        totalInvestment: number
+        averageInvestment: number
+        judgeCount: number
+      }>()
+      
+      statsMap.forEach((stats, trackName) => {
+        const submissionCount = stats.submissionIds.size
+        const totalInvestment = stats.totalInvestment
+        const averageInvestment = submissionCount > 0 ? totalInvestment / submissionCount : 0
+        const judgeCount = stats.judgeIds.size
         
-        // Convert to final stats format
-        const finalStats = new Map<string, {
-          trackName: string
-          submissionCount: number
-          totalInvestment: number
-          averageInvestment: number
-          judgeCount: number
-        }>()
-        
-        statsMap.forEach((stats, trackName) => {
-          const submissionCount = stats.submissionIds.size
-          const totalInvestment = stats.totalInvestment
-          const averageInvestment = submissionCount > 0 ? totalInvestment / submissionCount : 0
-          const judgeCount = stats.judgeIds.size
-          
-          finalStats.set(trackName, {
-            trackName,
-            submissionCount,
-            totalInvestment,
-            averageInvestment,
-            judgeCount,
-          })
+        finalStats.set(trackName, {
+          trackName,
+          submissionCount,
+          totalInvestment,
+          averageInvestment,
+          judgeCount,
         })
-        
-        setTrackStats(finalStats)
-        console.log("[Load Track Stats] Loaded stats for", finalStats.size, "tracks")
-      } catch (error) {
-        console.error("[Load Track Stats] Error:", error)
-      }
-    }, [])
-  
+      })
+      
+      setTrackStats(finalStats)
+      console.log("[Load Track Stats] Loaded stats for", finalStats.size, "tracks")
+    } catch (error) {
+      console.error("[Load Track Stats] Error:", error)
+    }
+  }, [])
+
   React.useEffect(() => {
     if (typeof window === "undefined") return
 
