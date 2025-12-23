@@ -537,9 +537,27 @@ export default function JudgesPage() {
           // Build dashboard entries for DataTable
           const entries: DashboardEntry[] = judgeSubmissions.map((submission, index) => {
             const scheduleSlots = slotsMap.get(submission.id) || []
-            // Get the first schedule slot's time and room (or combine multiple)
-            const timeRoomInfo = scheduleSlots.length > 0
-              ? scheduleSlots.map(slot => {
+            // Sort schedule slots by start_time (early to late)
+            const sortedSlots = [...scheduleSlots].sort((a, b) => {
+              // Convert time strings to comparable format (HH:MM:SS or HH:MM)
+              const timeA = typeof a.start_time === 'string' ? a.start_time : String(a.start_time)
+              const timeB = typeof b.start_time === 'string' ? b.start_time : String(b.start_time)
+              
+              // Normalize to HH:MM:SS format for comparison
+              const normalizeTime = (time: string) => {
+                const parts = time.split(':')
+                if (parts.length === 2) {
+                  return `${parts[0]}:${parts[1]}:00`
+                }
+                return time
+              }
+              
+              return normalizeTime(timeA).localeCompare(normalizeTime(timeB))
+            })
+            
+            // Get sorted schedule slots' time and room (or combine multiple)
+            const timeRoomInfo = sortedSlots.length > 0
+              ? sortedSlots.map(slot => {
                   const roomName = roomsMap.get(slot.room_id) || `Room ${slot.room_id}`
                   // Format time - handle both time type and text format
                   let startTime = slot.start_time
@@ -877,14 +895,6 @@ export default function JudgesPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Assigned Submissions</CardTitle>
-                          <CardDescription>
-                            Allocate your investment funds to each submission scheduled for you
-                          </CardDescription>
-                        </CardHeader>
-                      </Card>
                       <JudgesDataTable 
                         data={dashboardEntries}
                         onInvestmentChange={async (entryId: number, investment: number) => {
