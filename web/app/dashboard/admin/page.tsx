@@ -295,6 +295,7 @@ export default function AdminPage() {
           setTimeout(() => {
             console.log("[Load From Supabase] Running auto-assign now")
             autoAssignJudges(false)
+            // Don't mark as modified on initial load - only mark when user manually triggers
           }, 500) // Increased delay to ensure state is updated
         }
       } catch (error) {
