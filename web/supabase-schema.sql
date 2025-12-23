@@ -56,3 +56,11 @@ CREATE TABLE public.submissions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT submissions_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.admin_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  setting_key text NOT NULL UNIQUE,
+  setting_value text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT admin_settings_pkey PRIMARY KEY (id)
+);
