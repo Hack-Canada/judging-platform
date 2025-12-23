@@ -539,20 +539,21 @@ export default function JudgesPage() {
             const scheduleSlots = slotsMap.get(submission.id) || []
             // Sort schedule slots by start_time (early to late)
             const sortedSlots = [...scheduleSlots].sort((a, b) => {
-              // Convert time strings to comparable format (HH:MM:SS or HH:MM)
-              const timeA = typeof a.start_time === 'string' ? a.start_time : String(a.start_time)
-              const timeB = typeof b.start_time === 'string' ? b.start_time : String(b.start_time)
-              
-              // Normalize to HH:MM:SS format for comparison
-              const normalizeTime = (time: string) => {
-                const parts = time.split(':')
-                if (parts.length === 2) {
-                  return `${parts[0]}:${parts[1]}:00`
-                }
-                return time
+              // Convert time to comparable format
+              const getTimeInSeconds = (time: any): number => {
+                const timeStr = typeof time === 'string' ? time : String(time)
+                // Handle different time formats: "HH:MM:SS", "HH:MM", or just "HH:MM"
+                const parts = timeStr.split(':')
+                const hours = parseInt(parts[0] || '0', 10)
+                const minutes = parseInt(parts[1] || '0', 10)
+                const seconds = parseInt(parts[2] || '0', 10)
+                return hours * 3600 + minutes * 60 + seconds
               }
               
-              return normalizeTime(timeA).localeCompare(normalizeTime(timeB))
+              const timeA = getTimeInSeconds(a.start_time)
+              const timeB = getTimeInSeconds(b.start_time)
+              
+              return timeA - timeB // Sort ascending (early to late)
             })
             
             // Get sorted schedule slots' time and room (or combine multiple)
