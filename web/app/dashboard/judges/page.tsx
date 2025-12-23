@@ -567,30 +567,52 @@ export default function JudgesPage() {
             console.log(`[Sort] Submission ${submission.id} - Before sort:`, scheduleSlots.map(s => s.start_time))
             console.log(`[Sort] Submission ${submission.id} - After sort:`, sortedSlots.map(s => s.start_time))
             
-            // Get sorted schedule slots' time and room (or combine multiple)
-            const timeRoomInfo = sortedSlots.length > 0
+            // Get the first (earliest) schedule slot for sorting and display
+            const firstSlot = sortedSlots.length > 0 ? sortedSlots[0] : null
+            
+            // Format time range from first slot
+            let timeInfo = "Not scheduled"
+            let startTimeForSort = 0
+            if (firstSlot) {
+              // Format time - handle both time type and text format
+              let startTime = firstSlot.start_time
+              if (typeof startTime === 'string') {
+                // If it's a full time string like "13:00:00", extract just "13:00"
+                if (startTime.includes(':') && startTime.split(':').length >= 2) {
+                  startTime = startTime.substring(0, 5)
+                }
+              }
+              
+              // Format end time similarly
+              let endTime = firstSlot.end_time
+              if (typeof endTime === 'string') {
+                if (endTime.includes(':') && endTime.split(':').length >= 2) {
+                  endTime = endTime.substring(0, 5)
+                }
+              }
+              
+              timeInfo = `${startTime} - ${endTime}`
+              
+              // Calculate start time in seconds for sorting
+              const timeToSeconds = (time: any): number => {
+                if (!time) return 0
+                const timeStr = typeof time === 'string' ? time.trim() : String(time).trim()
+                if (!timeStr || timeStr === '') return 0
+                const parts = timeStr.split(':').map(p => parseInt(p.trim() || '0', 10))
+                if (parts.length === 0) return 0
+                if (parts.length === 1) return parts[0] * 3600
+                if (parts.length === 2) return parts[0] * 3600 + parts[1] * 60
+                return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0)
+              }
+              startTimeForSort = timeToSeconds(firstSlot.start_time)
+            }
+            
+            // Format room info (show all rooms if multiple)
+            const roomInfo = sortedSlots.length > 0
               ? sortedSlots.map(slot => {
-                  const roomName = roomsMap.get(slot.room_id) || `Room ${slot.room_id}`
-                  // Format time - handle both time type and text format
-                  let startTime = slot.start_time
-                  if (typeof startTime === 'string') {
-                    // If it's a full time string like "13:00:00", extract just "13:00"
-                    if (startTime.includes(':') && startTime.split(':').length >= 2) {
-                      startTime = startTime.substring(0, 5)
-                    }
-                  }
-                  
-                  // Format end time similarly
-                  let endTime = slot.end_time
-                  if (typeof endTime === 'string') {
-                    if (endTime.includes(':') && endTime.split(':').length >= 2) {
-                      endTime = endTime.substring(0, 5)
-                    }
-                  }
-                  
-                  return `${startTime} - ${endTime} (${roomName})`
-                }).join("; ")
-              : "Not scheduled"
+                  return roomsMap.get(slot.room_id) || `Room ${slot.room_id}`
+                }).join(", ")
+              : "-"
             
             const investment = investmentsMap[submission.id] || 0
             let status = "Pending"
@@ -606,12 +628,21 @@ export default function JudgesPage() {
               status: status,
               investment: investment > 0 ? investment.toString() : "",
               judge: judgeData.name,
-              timeRoom: timeRoomInfo, // Custom field for time/room
+              time: timeInfo, // Separate time field
+              room: roomInfo, // Separate room field
+              startTimeSort: startTimeForSort, // For sorting
               submissionId: submission.id, // Store submission ID for updates
-            } as DashboardEntry & { timeRoom?: string; submissionId?: string }
+            } as DashboardEntry & { time?: string; room?: string; startTimeSort?: number; submissionId?: string }
           })
           
-          setDashboardEntries(entries as DashboardEntry[])
+          // Sort entries by start time (early to late) before setting state
+          const sortedEntries = [...entries].sort((a, b) => {
+            const timeA = (a as any).startTimeSort || 999999 // Put unscheduled at end
+            const timeB = (b as any).startTimeSort || 999999
+            return timeA - timeB
+          })
+          
+          setDashboardEntries(sortedEntries as DashboardEntry[])
         } else {
           console.log("[Load Judge Data] No submissions to display")
           setSubmissions([])
@@ -718,16 +749,8 @@ export default function JudgesPage() {
       }))
       
       // Update dashboard entries status and investment
-      setDashboardEntries(prev => prev.map(entry => {
+      const updatedEntries = dashboardEntries.map(entry => {
         if ((entry as any).submissionId === submissionId) {
-          // Calculate new total invested for all entries
-          const newTotalInvested = prev.reduce((sum, e) => {
-            if ((e as any).submissionId === submissionId) {
-              return sum + investment
-            }
-            return sum + parseFloat(e.investment || "0")
-          }, 0)
-          
           return {
             ...entry,
             investment: investment.toString(),
@@ -735,7 +758,16 @@ export default function JudgesPage() {
           }
         }
         return entry
-      }))
+      })
+      
+      // Re-sort by start time after update
+      const reSortedEntries = [...updatedEntries].sort((a, b) => {
+        const timeA = (a as any).startTimeSort || 999999
+        const timeB = (b as any).startTimeSort || 999999
+        return timeA - timeB
+      })
+      
+      setDashboardEntries(reSortedEntries)
 
       setEditingInvestment(null)
       setInvestmentInput("")
@@ -919,9 +951,9 @@ export default function JudgesPage() {
                           // Save to Supabase - this will update judge.totalInvested
                           await handleSaveInvestment(submissionId, investment)
                           
-                          // Refresh entries to update status (wait for state to update)
+                          // Refresh entries to update status and re-sort
                           setTimeout(() => {
-                            setDashboardEntries(prev => prev.map(e => {
+                            const updatedEntries = dashboardEntries.map(e => {
                               if (e.id === entryId) {
                                 return {
                                   ...e,
@@ -930,7 +962,16 @@ export default function JudgesPage() {
                                 }
                               }
                               return e
-                            }))
+                            })
+                            
+                            // Re-sort by start time
+                            const reSortedEntries = [...updatedEntries].sort((a, b) => {
+                              const timeA = (a as any).startTimeSort || 999999
+                              const timeB = (b as any).startTimeSort || 999999
+                              return timeA - timeB
+                            })
+                            
+                            setDashboardEntries(reSortedEntries)
                           }, 100)
                         }}
                         remainingAllocation={Math.max(0, judgeAllocation - judge.totalInvested)}

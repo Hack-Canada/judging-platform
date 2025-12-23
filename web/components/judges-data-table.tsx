@@ -41,12 +41,14 @@ export const judgesSchema = z.object({
   status: z.string(),
   investment: z.string(),
   judge: z.string(),
-  timeRoom: z.string().optional(),
+  time: z.string().optional(),
+  room: z.string().optional(),
+  startTimeSort: z.number().optional(),
   submissionId: z.string().optional(),
 })
 
 type JudgesTableProps = {
-  data: (z.infer<typeof judgesSchema> & { timeRoom?: string; submissionId?: string })[]
+  data: (z.infer<typeof judgesSchema> & { time?: string; room?: string; startTimeSort?: number; submissionId?: string })[]
   onInvestmentChange: (entryId: number, investment: number) => Promise<void>
   remainingAllocation: number
   totalInvested: number
@@ -55,7 +57,7 @@ type JudgesTableProps = {
 const createColumns = (
   onInvestmentChange: (entryId: number, investment: number) => Promise<void>,
   remainingAllocation: number
-): ColumnDef<z.infer<typeof judgesSchema> & { timeRoom?: string; submissionId?: string }>[] => [
+): ColumnDef<z.infer<typeof judgesSchema> & { time?: string; room?: string; startTimeSort?: number; submissionId?: string }>[] => [
   {
     accessorKey: "entry",
     header: "Project Name",
@@ -65,13 +67,25 @@ const createColumns = (
     enableHiding: false,
   },
   {
-    accessorKey: "timeRoom",
-    header: "Time & Room",
+    accessorKey: "time",
+    header: "Time",
     cell: ({ row }) => {
-      const timeRoom = (row.original as any).timeRoom
+      const time = (row.original as any).time
       return (
         <div className="text-sm text-muted-foreground">
-          {timeRoom || "Not scheduled"}
+          {time || "Not scheduled"}
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: "room",
+    header: "Room",
+    cell: ({ row }) => {
+      const room = (row.original as any).room
+      return (
+        <div className="text-sm text-muted-foreground">
+          {room || "-"}
         </div>
       )
     },
