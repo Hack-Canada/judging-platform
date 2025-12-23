@@ -1,26 +1,6 @@
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
+-- Supabase Schema for Judging Platform
+-- This reflects the current database structure using submissions instead of projects
 
-CREATE TABLE public.judge_investments (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  judge_id uuid NOT NULL,
-  project_id uuid NOT NULL,
-  amount numeric NOT NULL DEFAULT 0,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT judge_investments_pkey PRIMARY KEY (id),
-  CONSTRAINT judge_investments_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
-  CONSTRAINT judge_investments_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id)
-);
-CREATE TABLE public.judge_project_assignments (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  judge_id uuid NOT NULL,
-  project_id uuid NOT NULL,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT judge_project_assignments_pkey PRIMARY KEY (id),
-  CONSTRAINT judge_project_assignments_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
-  CONSTRAINT judge_project_assignments_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id)
-);
 CREATE TABLE public.judges (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -31,14 +11,7 @@ CREATE TABLE public.judges (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT judges_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.projects (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  status text NOT NULL DEFAULT 'Active'::text,
-  track text NOT NULL DEFAULT 'General'::text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT projects_pkey PRIMARY KEY (id)
-);
+
 CREATE TABLE public.submissions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -51,3 +24,49 @@ CREATE TABLE public.submissions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT submissions_pkey PRIMARY KEY (id)
 );
+
+CREATE TABLE public.judge_project_assignments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  judge_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_project_assignments_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_project_assignments_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
+  CONSTRAINT judge_project_assignments_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id) ON DELETE CASCADE,
+  CONSTRAINT judge_project_assignments_judge_id_submission_id_key UNIQUE (judge_id, submission_id)
+);
+
+CREATE TABLE public.judge_investments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  judge_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  amount numeric NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_investments_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_investments_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
+  CONSTRAINT judge_investments_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id) ON DELETE CASCADE,
+  CONSTRAINT judge_investments_judge_id_submission_id_key UNIQUE (judge_id, submission_id)
+);
+
+-- Create indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_judges_name ON public.judges(name);
+CREATE INDEX IF NOT EXISTS idx_judges_email ON public.judges(email);
+CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at ON public.submissions(submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_project_name ON public.submissions(project_name);
+CREATE INDEX IF NOT EXISTS idx_judge_project_assignments_judge_id ON public.judge_project_assignments(judge_id);
+CREATE INDEX IF NOT EXISTS idx_judge_project_assignments_submission_id ON public.judge_project_assignments(submission_id);
+CREATE INDEX IF NOT EXISTS idx_judge_investments_judge_id ON public.judge_investments(judge_id);
+CREATE INDEX IF NOT EXISTS idx_judge_investments_submission_id ON public.judge_investments(submission_id);
+
+-- Enable Realtime for tables (optional, but recommended for live updates)
+ALTER PUBLICATION supabase_realtime ADD TABLE public.submissions;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.judges;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.judge_project_assignments;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.judge_investments;
+
+-- Add comments for documentation
+COMMENT ON TABLE public.judges IS 'Judges who evaluate submissions';
+COMMENT ON TABLE public.submissions IS 'Project submissions from hackers';
+COMMENT ON TABLE public.judge_project_assignments IS 'Assignments of judges to submissions';
+COMMENT ON TABLE public.judge_investments IS 'Investment amounts allocated by judges to submissions';
