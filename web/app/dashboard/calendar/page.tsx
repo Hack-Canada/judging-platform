@@ -508,14 +508,29 @@ export default function CalendarPage() {
       setSaving(true)
       
       // First, delete existing schedule slots for this date (ignore if table doesn't exist)
+      console.log("[Save Schedule] Deleting existing schedule for date:", selectedDate)
       const { error: deleteError } = await supabase
         .from("calendar_schedule_slots")
         .delete()
         .eq("date", selectedDate)
 
-      if (deleteError && !deleteError.message.includes("does not exist") && !deleteError.message.includes("relation")) {
-        console.error("[Save Schedule] Error deleting existing schedule:", deleteError)
-        // Continue anyway - the table might not exist yet
+      if (deleteError) {
+        const deleteErrorMsg = (deleteError as any)?.message || String(deleteError)
+        // Check if it's a "table doesn't exist" error
+        if (deleteErrorMsg.includes("does not exist") || 
+            deleteErrorMsg.includes("relation") ||
+            (deleteError as any)?.code === "42P01") {
+          console.warn("[Save Schedule] Table might not exist yet, will try to create:", deleteErrorMsg)
+        } else {
+          console.error("[Save Schedule] Error deleting existing schedule:", {
+            message: deleteErrorMsg,
+            code: (deleteError as any)?.code,
+            details: (deleteError as any)?.details,
+          })
+          // Continue anyway - we'll try to insert
+        }
+      } else {
+        console.log("[Save Schedule] Successfully deleted existing schedule")
       }
 
       // Prepare slots for insertion
@@ -556,8 +571,33 @@ export default function CalendarPage() {
       console.log("[Save Schedule] Prepared slots to insert:", JSON.stringify(slotsToInsert, null, 2))
       console.log("[Save Schedule] Number of slots:", slotsToInsert.length)
       console.log("[Save Schedule] First slot sample:", slotsToInsert[0])
+      
+      // Validate that we have slots to insert
+      if (slotsToInsert.length === 0) {
+        toast.error("No slots to save", {
+          description: "Please create a schedule first",
+        })
+        setSaving(false)
+        return
+      }
+      
+      // Validate first slot structure
+      const firstSlot = slotsToInsert[0]
+      console.log("[Save Schedule] First slot validation:", {
+        hasDate: !!firstSlot.date,
+        hasStartTime: !!firstSlot.start_time,
+        hasEndTime: !!firstSlot.end_time,
+        hasSubmissionId: !!firstSlot.submission_id,
+        submissionIdType: typeof firstSlot.submission_id,
+        submissionIdLength: firstSlot.submission_id?.length,
+        hasRoomId: typeof firstSlot.room_id === 'number',
+        hasJudgeIds: Array.isArray(firstSlot.judge_ids),
+        judgeIdsLength: firstSlot.judge_ids?.length,
+        judgeIdsSample: firstSlot.judge_ids?.slice(0, 2),
+      })
 
       // Insert new schedule slots
+      console.log("[Save Schedule] Calling Supabase insert...")
       const { data, error } = await supabase
         .from("calendar_schedule_slots")
         .insert(slotsToInsert)
@@ -567,42 +607,47 @@ export default function CalendarPage() {
       console.log("[Save Schedule] Insert response - error:", error)
 
       if (error) {
-        console.error("[Save Schedule] Error saving schedule to Supabase:", error)
-        console.error("[Save Schedule] Error type:", typeof error)
-        console.error("[Save Schedule] Error constructor:", error?.constructor?.name)
+        // Supabase errors typically have: message, details, hint, code
+        const errorMessage = (error as any)?.message || "Unknown error"
+        const errorDetails = (error as any)?.details || null
+        const errorHint = (error as any)?.hint || null
+        const errorCode = (error as any)?.code || null
         
-        // Try multiple ways to extract error information
-        if (error instanceof Error) {
-          console.error("[Save Schedule] Error message:", error.message)
-          console.error("[Save Schedule] Error stack:", error.stack)
-        }
+        console.error("[Save Schedule] Error saving schedule to Supabase")
+        console.error("[Save Schedule] Error object:", error)
+        console.error("[Save Schedule] Error message:", errorMessage)
+        console.error("[Save Schedule] Error code:", errorCode)
+        console.error("[Save Schedule] Error details:", errorDetails)
+        console.error("[Save Schedule] Error hint:", errorHint)
         
-        // Try to stringify with replacer
-        try {
-          console.error("[Save Schedule] Error JSON:", JSON.stringify(error, (key, value) => {
-            if (value instanceof Error) {
-              return {
-                name: value.name,
-                message: value.message,
-                stack: value.stack,
-              }
-            }
-            return value
-          }, 2))
-        } catch (e) {
-          console.error("[Save Schedule] Could not stringify error:", e)
-        }
-        
-        // Iterate over error properties
+        // Log all properties
         if (error && typeof error === 'object') {
-          console.error("[Save Schedule] Error properties:")
-          for (const key in error) {
+          console.error("[Save Schedule] All error properties:")
+          Object.keys(error).forEach(key => {
             console.error(`  ${key}:`, (error as any)[key])
-          }
+          })
+          // Also try Object.getOwnPropertyNames for non-enumerable
+          Object.getOwnPropertyNames(error).forEach(key => {
+            if (!Object.keys(error).includes(key)) {
+              console.error(`  [non-enumerable] ${key}:`, (error as any)[key])
+            }
+          })
+        }
+        
+        // Build a detailed error message
+        let errorDescription = errorMessage
+        if (errorCode) {
+          errorDescription += ` (Code: ${errorCode})`
+        }
+        if (errorDetails) {
+          errorDescription += ` - ${errorDetails}`
+        }
+        if (errorHint) {
+          errorDescription += ` Hint: ${errorHint}`
         }
         
         toast.error("Failed to save schedule", {
-          description: error?.message || error?.toString() || "Unknown error occurred",
+          description: errorDescription,
         })
         return
       }
