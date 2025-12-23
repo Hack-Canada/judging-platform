@@ -555,12 +555,22 @@ export default function CalendarPage() {
           return idStr
         })
         
+        // Ensure room_id is an integer (not a UUID)
+        const roomIdInt = typeof slot.roomId === 'number' 
+          ? slot.roomId 
+          : parseInt(String(slot.roomId), 10)
+        
+        if (isNaN(roomIdInt)) {
+          console.error(`[Save Schedule] Invalid room_id for slot ${index + 1}:`, slot.roomId)
+          throw new Error(`Invalid room ID: ${slot.roomId}`)
+        }
+        
         const slotData = {
           date: selectedDate,
           start_time: slot.startTime, // Format: "HH:MM" as string
           end_time: slot.endTime, // Format: "HH:MM" as string
           submission_id: slot.projectId, // UUID string
-          room_id: slot.roomId, // integer
+          room_id: roomIdInt, // integer (validated)
           judge_ids: judgeIdUuids, // UUID array
         }
         
