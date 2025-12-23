@@ -99,6 +99,11 @@ const createColumns = (
       const [inputValue, setInputValue] = React.useState(investment || "")
       const [isSaving, setIsSaving] = React.useState(false)
       
+      // Update input value when investment changes externally
+      React.useEffect(() => {
+        setInputValue(investment || "")
+      }, [investment])
+      
       const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         const numValue = parseFloat(inputValue)
@@ -122,9 +127,7 @@ const createColumns = (
         setIsSaving(true)
         try {
           await onInvestmentChange(entry.id, numValue)
-          toast.success("Investment saved!", {
-            description: `Allocated $${numValue.toLocaleString()} to ${entry.entry}`,
-          })
+          // Don't show success toast here - let the parent component handle it
         } catch (error) {
           toast.error("Failed to save investment", {
             description: error instanceof Error ? error.message : "Unknown error",
