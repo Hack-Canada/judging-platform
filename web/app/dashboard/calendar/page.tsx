@@ -93,16 +93,6 @@ export default function CalendarPage() {
       return
     }
 
-    // Load saved schedule
-    const savedSchedule = localStorage.getItem(`schedule_${selectedDate}`)
-    if (savedSchedule) {
-      try {
-        setSlots(JSON.parse(savedSchedule))
-      } catch {
-        // ignore parse errors
-      }
-    }
-
     const loadFromSupabase = async () => {
       try {
         // Load settings from Supabase admin_settings table
@@ -242,10 +232,8 @@ export default function CalendarPage() {
   }, [scheduleStartTime, scheduleEndTime, slotDuration, judgesPerProject])
 
   const saveSchedule = (newSlots: TimeSlot[]) => {
+    // Update local state; persistence is handled via Supabase save action
     setSlots(newSlots)
-    if (typeof window !== "undefined") {
-      localStorage.setItem(`schedule_${selectedDate}`, JSON.stringify(newSlots))
-    }
   }
 
   // Generate time slots dynamically based on the configured time range
