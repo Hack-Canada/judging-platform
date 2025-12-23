@@ -5,7 +5,6 @@ import Image from "next/image"
 import {
   IconGavel,
   IconFolder,
-  IconChartBar,
   IconSettings,
   IconCalendar,
   IconUser,
@@ -43,11 +42,6 @@ const data = {
       title: "Calendar",
       url: "/dashboard/calendar",
       icon: IconCalendar,
-    },
-    {
-      title: "Scoring System",
-      url: "/dashboard/scoring-system",
-      icon: IconChartBar,
     },
     {
       title: "Admin",
