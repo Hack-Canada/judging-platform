@@ -947,44 +947,23 @@ export default function AdminPage() {
       return sponsorTracks.some((track) => judge.tracks?.includes(track))
     }
 
-    // Track how many projects each judge has been assigned to so far
-    const judgeAssignmentCounts = new Map<string, number>() // judge name -> count
-    judgesList.forEach((judge) => {
-      judgeAssignmentCounts.set(judge.name, 0)
-    })
-
-    // Assign judges to active projects respecting track restrictions,
-    // distributing load as evenly as possible across eligible judges.
+    // Assign judges to active projects respecting track restrictions
     activeProjects.forEach((project) => {
-      const projectInList = updatedProjects.find((p) => p.id === project.id)
-      if (!projectInList) return
-
-      const projectTracks = getProjectTracks(project)
-
-      // Filter judges who can judge this submission based on its tracks
-      const eligibleJudges = judgesList.filter((judge) => canJudgeSubmission(judge, projectTracks))
-
-      if (eligibleJudges.length === 0) {
-        return
-      }
-
-      // For this project, pick judges with the lowest current assignment counts
-      const sortedByLoad = [...eligibleJudges].sort((a, b) => {
-        const countA = judgeAssignmentCounts.get(a.name) ?? 0
-        const countB = judgeAssignmentCounts.get(b.name) ?? 0
-        if (countA !== countB) return countA - countB
-        // Stable-ish fallback: alphabetical by name
-        return a.name.localeCompare(b.name)
-      })
-
-      let assignedForProject = 0
-      for (const judge of sortedByLoad) {
-        if (assignedForProject >= judgesPerProject) break
-        if (!projectInList.assignedJudges.includes(judge.name)) {
-          projectInList.assignedJudges.push(judge.name)
-          const prev = judgeAssignmentCounts.get(judge.name) ?? 0
-          judgeAssignmentCounts.set(judge.name, prev + 1)
-          assignedForProject++
+      const projectInList = updatedProjects.find(p => p.id === project.id)
+      if (projectInList) {
+        const projectTracks = getProjectTracks(project)
+        // Filter judges who can judge this submission based on its tracks
+        const eligibleJudges = judgesList.filter(judge =>
+          canJudgeSubmission(judge, projectTracks)
+        )
+        
+        // Assign judges using round-robin from eligible judges
+        for (let i = 0; i < judgesPerProject && eligibleJudges.length > 0; i++) {
+          const judgeIndex = i % eligibleJudges.length
+          const judge = eligibleJudges[judgeIndex]
+          if (!projectInList.assignedJudges.includes(judge.name)) {
+            projectInList.assignedJudges.push(judge.name)
+          }
         }
       }
     })
