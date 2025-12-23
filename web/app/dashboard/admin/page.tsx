@@ -805,85 +805,7 @@ export default function AdminPage() {
       })
       console.log("[Auto Assign] Updated judges count:", updatedJudges.length)
       
-      // Save assignments to Supabase (using the updated judges)
-      const saveAssignmentsToSupabase = async () => {
-        try {
-          // First, delete all existing assignments for these submissions
-          const submissionIds = updatedProjects
-            .filter(p => (p as any).submissionId && p.assignedJudges.length > 0)
-            .map(p => (p as any).submissionId)
-          
-          if (submissionIds.length > 0) {
-            // Delete existing assignments for these submissions
-            await supabase
-              .from("judge_project_assignments")
-              .delete()
-              .in("submission_id", submissionIds)
-          }
-          
-          // Create new assignments (with deduplication)
-          const assignmentsMap = new Map<string, { judge_id: string; submission_id: string }>()
-          
-          updatedProjects.forEach((project) => {
-            const submissionId = (project as any).submissionId
-            if (submissionId && project.assignedJudges.length > 0) {
-              // Remove duplicate judge names from assignedJudges
-              const uniqueJudgeNames = Array.from(new Set(project.assignedJudges))
-              
-              uniqueJudgeNames.forEach((judgeName) => {
-                const judge = updatedJudges.find((j: Judge) => j.name === judgeName)
-                if (judge) {
-                  // Convert judge.id to string (it's a UUID from Supabase)
-                  const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
-                  // Use composite key to prevent duplicates
-                  const assignmentKey = `${judgeId}:${submissionId}`
-                  
-                  if (!assignmentsMap.has(assignmentKey)) {
-                    assignmentsMap.set(assignmentKey, {
-                      judge_id: judgeId,
-                      submission_id: submissionId,
-                    })
-                  }
-                }
-              })
-            }
-          })
-          
-          const assignmentsToInsert = Array.from(assignmentsMap.values())
-          
-          if (assignmentsToInsert.length > 0) {
-            // Use upsert to handle any edge cases where duplicates might still exist
-            const { error: insertError } = await supabase
-              .from("judge_project_assignments")
-              .upsert(assignmentsToInsert, {
-                onConflict: "judge_id,submission_id",
-                ignoreDuplicates: false
-              })
-            
-            if (insertError) {
-              console.error("Failed to save assignments to Supabase:", insertError)
-              toast.error("Failed to save assignments", {
-                description: insertError.message,
-              })
-              return
-            }
-          }
-          
-          // Also update judge assigned_projects count in Supabase
-          for (const judge of updatedJudges) {
-            const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
-            await supabase
-              .from("judges")
-              .update({ assigned_projects: judge.assignedProjects })
-              .eq("id", judgeId)
-          }
-        } catch (error) {
-          console.error("Error saving assignments to Supabase:", error)
-        }
-      }
-      
-      // Save assignments asynchronously
-      void saveAssignmentsToSupabase()
+      // Don't save automatically - wait for user to press save button
       
       return updatedJudges
     })
@@ -1500,9 +1422,23 @@ export default function AdminPage() {
                             Review and manage project submissions from hackers
                           </CardDescription>
                         </div>
-                        <Button onClick={handleAutoAssignJudgesToProjects} size="sm">
+                        <Button onClick={() => {
+                          handleAutoAssignJudgesToProjects()
+                          setAssignmentsModified(true)
+                        }} size="sm">
                           Auto-Assign Judges
                         </Button>
+                        {assignmentsModified && (
+                          <Button 
+                            onClick={handleSaveAssignments}
+                            disabled={savingAssignments}
+                            variant="default"
+                            size="sm"
+                            className="ml-2"
+                          >
+                            {savingAssignments ? "Saving..." : "Save Assignments"}
+                          </Button>
+                        )}
                       </div>
                     </CardHeader>
                     <CardContent>
