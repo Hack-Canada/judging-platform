@@ -974,6 +974,52 @@ export default function CalendarPage() {
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Unscheduled Submissions */}
+                {unscheduledSubmissions.length > 0 && (
+                  <div className="px-4 lg:px-6">
+                    <Card className="border-orange-200 dark:border-orange-900">
+                      <CardHeader>
+                        <CardTitle className="text-orange-600 dark:text-orange-400">
+                          Unscheduled Submissions ({unscheduledSubmissions.length})
+                        </CardTitle>
+                        <CardDescription>
+                          The following submissions do not have any judging time scheduled for {selectedDate}. 
+                          Please schedule them using the calendar above.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                          {unscheduledSubmissions.map((submission) => (
+                            <div
+                              key={submission.id}
+                              className="p-3 border border-orange-200 dark:border-orange-800 rounded-lg bg-orange-50 dark:bg-orange-950/20"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">{submission.project_name}</p>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {submission.tracks && submission.tracks.length > 0 ? (
+                                      submission.tracks.map((track) => (
+                                        <Badge key={track} variant="outline" className="text-xs">
+                                          {track}
+                                        </Badge>
+                                      ))
+                                    ) : (
+                                      <Badge variant="outline" className="text-xs">
+                                        General
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
             </div>
           </div>
