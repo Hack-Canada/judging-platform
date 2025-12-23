@@ -207,9 +207,9 @@ export default function AdminPage() {
       } catch (error) {
         console.error("[Load Track Stats] Error:", error)
       }
-    }
+    }, [])
 
-    const loadFromSupabase = async () => {
+  const loadFromSupabase = async () => {
       // Load admin settings from Supabase
       const loadSettingsFromSupabase = async () => {
         try {
