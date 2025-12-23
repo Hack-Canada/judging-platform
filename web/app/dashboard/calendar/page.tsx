@@ -103,43 +103,78 @@ export default function CalendarPage() {
       }
     }
 
-    // Load settings from admin (read-only)
-    const savedJudgesPerProject = localStorage.getItem("calendar_judges_per_project")
-    if (savedJudgesPerProject) {
-      setJudgesPerProject(parseInt(savedJudgesPerProject) || 2)
-    }
-    const savedSlotDuration = localStorage.getItem("calendar_slot_duration")
-    if (savedSlotDuration) {
-      setSlotDuration(parseInt(savedSlotDuration) || 5)
-    }
-    const savedStartTime = localStorage.getItem("calendar_start_time")
-    if (savedStartTime) {
-      setScheduleStartTime(savedStartTime)
-    }
-    const savedEndTime = localStorage.getItem("calendar_end_time")
-    if (savedEndTime) {
-      setScheduleEndTime(savedEndTime)
-    }
-
-    // Load saved rooms (merge with defaults to ensure all rooms are present)
-    const savedRooms = localStorage.getItem("rooms_data")
-    if (savedRooms) {
-      try {
-        const parsedRooms = JSON.parse(savedRooms)
-        if (parsedRooms && Array.isArray(parsedRooms) && parsedRooms.length > 0) {
-          setRooms(parsedRooms)
-        } else {
-          setRooms(defaultRooms)
-        }
-      } catch {
-        setRooms(defaultRooms)
-      }
-    } else {
-      setRooms(defaultRooms)
-    }
-
     const loadFromSupabase = async () => {
       try {
+        // Load settings from Supabase admin_settings table
+        const loadSettingsFromSupabase = async () => {
+          try {
+            const { data: settingsData, error: settingsError } = await supabase
+              .from("admin_settings")
+              .select("setting_key, setting_value")
+
+            if (settingsError) {
+              console.error("[Calendar] Error loading settings:", settingsError)
+              return
+            }
+
+            if (settingsData) {
+              // Create a map of settings for easy lookup
+              const settingsMap = new Map<string, string>()
+              settingsData.forEach(setting => {
+                settingsMap.set(setting.setting_key, setting.setting_value)
+              })
+
+              // Load calendar settings
+              const slotDuration = settingsMap.get("calendar_slot_duration")
+              if (slotDuration) {
+                setSlotDuration(parseInt(slotDuration) || 5)
+              }
+
+              const judgesPerProject = settingsMap.get("calendar_judges_per_project")
+              if (judgesPerProject) {
+                setJudgesPerProject(parseInt(judgesPerProject) || 2)
+              }
+
+              const startTime = settingsMap.get("calendar_start_time")
+              if (startTime) {
+                setScheduleStartTime(startTime)
+              }
+
+              const endTime = settingsMap.get("calendar_end_time")
+              if (endTime) {
+                setScheduleEndTime(endTime)
+              }
+
+              // Load rooms data
+              const roomsData = settingsMap.get("rooms_data")
+              if (roomsData) {
+                try {
+                  const parsed = JSON.parse(roomsData)
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setRooms(parsed)
+                  } else {
+                    setRooms(defaultRooms)
+                  }
+                } catch (e) {
+                  console.error("[Calendar] Error parsing rooms_data:", e)
+                  setRooms(defaultRooms)
+                }
+              } else {
+                setRooms(defaultRooms)
+              }
+
+              console.log("[Calendar] Successfully loaded settings from Supabase")
+            }
+          } catch (error) {
+            console.error("[Calendar] Failed to load settings:", error)
+            // Fallback to defaults
+            setRooms(defaultRooms)
+          }
+        }
+
+        await loadSettingsFromSupabase()
+
+        // Load judges and submissions
         const [{ data: supabaseJudges, error: judgesError }, { data: supabaseSubmissions, error: submissionsError }] =
           await Promise.all([
             supabase.from("judges").select("id, name, email, tracks"),
@@ -176,12 +211,35 @@ export default function CalendarPage() {
     }
 
     void loadFromSupabase()
+
+    // Subscribe to settings changes for real-time updates
+    const settingsChannel = supabase
+      .channel("admin-settings-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "admin_settings",
+        },
+        (payload) => {
+          console.log("[Calendar] Settings changed:", payload)
+          // Reload settings when they change
+          void loadFromSupabase()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(settingsChannel)
+    }
   }, [selectedDate, router])
   
   // Update time slots when time range changes
   React.useEffect(() => {
-    // This will cause timeSlots to recalculate
-  }, [scheduleStartTime, scheduleEndTime])
+    // This will cause timeSlots to recalculate when settings change
+    console.log("[Calendar] Time range changed:", { scheduleStartTime, scheduleEndTime, slotDuration, judgesPerProject })
+  }, [scheduleStartTime, scheduleEndTime, slotDuration, judgesPerProject])
 
   const saveSchedule = (newSlots: TimeSlot[]) => {
     setSlots(newSlots)
@@ -815,8 +873,10 @@ export default function CalendarPage() {
                         </div>
                         <div className="p-3 bg-muted rounded-md">
                           <p className="text-sm text-muted-foreground">
-                            <strong>Current Settings:</strong> Schedule: {scheduleStartTime} - {scheduleEndTime}, Slot duration: {slotDuration} minutes, Judges per project: {judgesPerProject}. 
-                            These settings can be changed in the Admin page.
+                            <strong>Current Settings (from Admin):</strong> Schedule: {scheduleStartTime} - {scheduleEndTime}, Slot duration: {slotDuration} minutes, Judges per project: {judgesPerProject}. 
+                            <span className="text-xs block mt-1 text-blue-600 dark:text-blue-400">
+                              Settings update automatically when changed in Admin page.
+                            </span>
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Calendar displays from {(() => {
@@ -832,6 +892,9 @@ export default function CalendarPage() {
                               const displayMinute = totalMinutes % 60
                               return `${displayHour.toString().padStart(2, "0")}:${displayMinute.toString().padStart(2, "0")}`
                             })()} (30 min buffer before/after)
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Available rooms: {rooms.map(r => r.name).join(", ")}
                           </p>
                         </div>
                       </div>
