@@ -881,17 +881,17 @@ export default function CalendarPage() {
                           <p className="text-xs text-muted-foreground mt-1">
                             Calendar displays from {(() => {
                               const [hour, minute] = scheduleStartTime.split(":").map(Number)
-                              const totalMinutes = hour * 60 + minute - 30
+                              const totalMinutes = hour * 60 + minute - 10
                               const displayHour = Math.floor(totalMinutes / 60)
                               const displayMinute = totalMinutes % 60
                               return `${displayHour.toString().padStart(2, "0")}:${displayMinute.toString().padStart(2, "0")}`
                             })()} to {(() => {
                               const [hour, minute] = scheduleEndTime.split(":").map(Number)
-                              const totalMinutes = hour * 60 + minute + 30
+                              const totalMinutes = hour * 60 + minute + 10
                               const displayHour = Math.floor(totalMinutes / 60)
                               const displayMinute = totalMinutes % 60
                               return `${displayHour.toString().padStart(2, "0")}:${displayMinute.toString().padStart(2, "0")}`
-                            })()} (30 min buffer before/after)
+                            })()} (10 min buffer before/after)
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Available rooms: {rooms.map(r => r.name).join(", ")}
