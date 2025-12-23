@@ -749,8 +749,9 @@ export default function JudgesPage() {
         [submissionId]: investment,
       }))
       
-      // Update dashboard entries status and investment
-      const updatedEntries = dashboardEntries.map(entry => {
+      // Update dashboard entries status and investment in place
+      // Don't re-sort to avoid pagination reset - sorting is already done on initial load
+      setDashboardEntries(prev => prev.map(entry => {
         if ((entry as any).submissionId === submissionId) {
           return {
             ...entry,
@@ -759,16 +760,7 @@ export default function JudgesPage() {
           }
         }
         return entry
-      })
-      
-      // Re-sort by start time after update
-      const reSortedEntries = [...updatedEntries].sort((a, b) => {
-        const timeA = (a as any).startTimeSort || 999999
-        const timeB = (b as any).startTimeSort || 999999
-        return timeA - timeB
-      })
-      
-      setDashboardEntries(reSortedEntries)
+      }))
 
       setEditingInvestment(null)
       setInvestmentInput("")
@@ -952,28 +944,18 @@ export default function JudgesPage() {
                           // Save to Supabase - this will update judge.totalInvested
                           await handleSaveInvestment(submissionId, investment)
                           
-                          // Refresh entries to update status and re-sort
-                          setTimeout(() => {
-                            const updatedEntries = dashboardEntries.map(e => {
-                              if (e.id === entryId) {
-                                return {
-                                  ...e,
-                                  investment: investment.toString(),
-                                  status: investment > 0 ? "Invested" : "Under Review",
-                                }
+                          // Update entries in place to preserve pagination
+                          // Only update the specific entry that changed, don't re-sort to avoid pagination reset
+                          setDashboardEntries(prev => prev.map(e => {
+                            if (e.id === entryId) {
+                              return {
+                                ...e,
+                                investment: investment.toString(),
+                                status: investment > 0 ? "Invested" : "Under Review",
                               }
-                              return e
-                            })
-                            
-                            // Re-sort by start time
-                            const reSortedEntries = [...updatedEntries].sort((a, b) => {
-                              const timeA = (a as any).startTimeSort || 999999
-                              const timeB = (b as any).startTimeSort || 999999
-                              return timeA - timeB
-                            })
-                            
-                            setDashboardEntries(reSortedEntries)
-                          }, 100)
+                            }
+                            return e
+                          }))
                         }}
                         remainingAllocation={Math.max(0, judgeAllocation - judge.totalInvested)}
                         totalInvested={judge.totalInvested}

@@ -205,11 +205,35 @@ export function JudgesDataTable({
     pageIndex: 0,
     pageSize: 10,
   })
+  
+  // Track previous data length to detect if we should preserve pagination
+  const prevDataLengthRef = React.useRef(initialData.length)
+  const prevPageIndexRef = React.useRef(0)
 
-  // Update data when initialData changes
+  // Update data when initialData changes, but preserve pagination if only one entry changed
   React.useEffect(() => {
+    const currentDataLength = initialData.length
+    const dataLengthChanged = prevDataLengthRef.current !== currentDataLength
+    
+    // If data length hasn't changed and we're not on page 0, preserve the page
+    if (!dataLengthChanged && pagination.pageIndex > 0) {
+      // Check if it's just an update to existing entries (same IDs)
+      const isUpdateOnly = initialData.length === data.length && 
+        initialData.every((newEntry, idx) => {
+          const oldEntry = data[idx]
+          return oldEntry && (oldEntry as any).submissionId === (newEntry as any).submissionId
+        })
+      
+      if (isUpdateOnly) {
+        // Preserve current page when it's just a data update
+        setPagination(prev => ({ ...prev, pageIndex: prevPageIndexRef.current }))
+      }
+    }
+    
+    prevDataLengthRef.current = currentDataLength
+    prevPageIndexRef.current = pagination.pageIndex
     setData(initialData)
-  }, [initialData])
+  }, [initialData, data.length, pagination.pageIndex])
 
   const columns = React.useMemo(
     () => createColumns(onInvestmentChange, remainingAllocation),
@@ -235,7 +259,13 @@ export function JudgesDataTable({
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
     onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      setPagination((prev) => {
+        const newPagination = typeof updater === 'function' ? updater(prev) : updater
+        prevPageIndexRef.current = newPagination.pageIndex
+        return newPagination
+      })
+    },
   })
 
   return (
