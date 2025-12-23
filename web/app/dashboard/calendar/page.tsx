@@ -72,6 +72,7 @@ export default function CalendarPage() {
   const [scheduleStartTime, setScheduleStartTime] = React.useState("13:00")
   const [scheduleEndTime, setScheduleEndTime] = React.useState("16:00")
   const [saving, setSaving] = React.useState(false)
+  const [unscheduledSubmissions, setUnscheduledSubmissions] = React.useState<CalendarSubmission[]>([])
 
   const [formData, setFormData] = React.useState({
     startTime: "09:00",
@@ -167,6 +168,8 @@ export default function CalendarPage() {
           }))
           setSubmissions(mappedSubmissions)
         }
+
+        // Note: Scheduled slots will be loaded separately when date changes
       } catch (error) {
         console.error("Failed to load calendar data from Supabase", error)
       }
