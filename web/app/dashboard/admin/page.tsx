@@ -1284,7 +1284,7 @@ export default function AdminPage() {
                             Configure available rooms for calendar scheduling
                           </CardDescription>
                         </div>
-                        <Button onClick={() => {
+                        <Button onClick={async () => {
                           const newRoom: Room = {
                             id: Math.max(...roomsList.map(r => r.id), 0) + 1,
                             name: `Room ${String.fromCharCode(65 + roomsList.length)}`,
