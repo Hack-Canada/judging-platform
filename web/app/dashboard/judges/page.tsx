@@ -318,21 +318,45 @@ export default function JudgesPage() {
         })
         setJudge(judgeData)
 
-        // Load assigned submissions for this judge
-        console.log("[Load Judge Data] Loading assigned submissions for judge_id:", judgeData.id)
-        const { data: assignmentsData, error: assignmentsError } = await supabase
-          .from("judge_project_assignments")
-          .select("submission_id")
-          .eq("judge_id", judgeData.id)
+        // Load assigned submissions for this judge from calendar_schedule_slots
+        // Filter calendar slots where judge_ids array contains this judge's ID
+        console.log("[Load Judge Data] Loading assigned submissions from calendar_schedule_slots for judge_id:", judgeData.id)
+        
+        // Fetch all calendar slots and filter for ones that contain this judge's ID
+        const { data: calendarSlotsData, error: calendarSlotsError } = await supabase
+          .from("calendar_schedule_slots")
+          .select("submission_id, judge_ids")
 
-        console.log("[Load Judge Data] Assignments query result:", { assignmentsData, assignmentsError })
+        console.log("[Load Judge Data] Calendar slots query result:", { calendarSlotsData, calendarSlotsError })
 
-        if (assignmentsError) {
-          console.error("[Load Judge Data] Error loading assignments:", assignmentsError)
+        if (calendarSlotsError) {
+          console.error("[Load Judge Data] Error loading calendar slots:", calendarSlotsError)
+          console.error("[Load Judge Data] Calendar slots error details:", {
+            message: calendarSlotsError.message,
+            details: calendarSlotsError.details,
+            hint: calendarSlotsError.hint,
+            code: calendarSlotsError.code,
+          })
         }
 
-        const assignedSubmissionIds = assignmentsData?.map(a => a.submission_id) || []
-        console.log("[Load Judge Data] Assigned submission IDs:", assignedSubmissionIds)
+        // Filter slots where judge_ids array contains the current judge's ID
+        // Convert judge ID to string for comparison (it might be UUID or string)
+        const judgeIdStr = String(judgeData.id)
+        const assignedSlots = calendarSlotsData?.filter(slot => {
+          const judgeIds = slot.judge_ids || []
+          // Check if judge's ID is in the judge_ids array
+          // Handle both string and UUID formats
+          return judgeIds.some((id: any) => String(id) === judgeIdStr)
+        }) || []
+
+        console.log("[Load Judge Data] Filtered calendar slots for this judge:", assignedSlots)
+
+        // Extract unique submission IDs
+        const assignedSubmissionIds = Array.from(
+          new Set(assignedSlots.map(slot => slot.submission_id))
+        )
+        
+        console.log("[Load Judge Data] Assigned submission IDs from calendar:", assignedSubmissionIds)
         setAssignedSubmissionIds(assignedSubmissionIds)
 
         // Load submission details from Supabase (only assigned ones)
@@ -626,7 +650,7 @@ export default function JudgesPage() {
                     <CardHeader>
                       <CardTitle>Assigned Submissions</CardTitle>
                       <CardDescription>
-                        Allocate your investment funds to each submission
+                        Allocate your investment funds to each submission scheduled for you
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
