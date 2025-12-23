@@ -49,7 +49,6 @@ import type { Judge } from "@/lib/judges-data"
 import type { AdminProject } from "@/lib/admin-projects-data"
 import { defaultTracks, type Track } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
-import { SectionCards } from "@/components/section-cards"
 import { supabase } from "@/lib/supabase-client"
 
 const ACCESS_CODE = "111-111"
@@ -85,6 +84,10 @@ export default function AdminPage() {
   // Hacker submissions state
   const [submissions, setSubmissions] = React.useState<any[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = React.useState(false)
+  
+  // Track if assignments have been modified and need saving
+  const [assignmentsModified, setAssignmentsModified] = React.useState(false)
+  const [savingAssignments, setSavingAssignments] = React.useState(false)
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
@@ -899,6 +902,100 @@ export default function AdminPage() {
 
   const handleReassign = () => {
     autoAssignJudges(true)
+    setAssignmentsModified(true) // Mark as modified so user can save
+  }
+
+  const handleSaveAssignments = async () => {
+    if (projectsList.length === 0) {
+      toast.error("No assignments to save")
+      return
+    }
+
+    try {
+      setSavingAssignments(true)
+      
+      // Get all submission IDs that have assignments
+      const submissionIds = projectsList
+        .filter(p => (p as any).submissionId && p.assignedJudges.length > 0)
+        .map(p => (p as any).submissionId)
+      
+      if (submissionIds.length > 0) {
+        // Delete existing assignments for these submissions
+        const { error: deleteError } = await supabase
+          .from("judge_project_assignments")
+          .delete()
+          .in("submission_id", submissionIds)
+
+        if (deleteError) {
+          throw deleteError
+        }
+      }
+      
+      // Create new assignments (with deduplication)
+      const assignmentsMap = new Map<string, { judge_id: string; submission_id: string }>()
+      
+      projectsList.forEach((project) => {
+        const submissionId = (project as any).submissionId
+        if (submissionId && project.assignedJudges.length > 0) {
+          // Remove duplicate judge names from assignedJudges
+          const uniqueJudgeNames = Array.from(new Set(project.assignedJudges))
+          
+          uniqueJudgeNames.forEach((judgeName) => {
+            const judge = judgesList.find((j: Judge) => j.name === judgeName)
+            if (judge) {
+              // Convert judge.id to string (it's a UUID from Supabase)
+              const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
+              // Use composite key to prevent duplicates
+              const assignmentKey = `${judgeId}:${submissionId}`
+              
+              if (!assignmentsMap.has(assignmentKey)) {
+                assignmentsMap.set(assignmentKey, {
+                  judge_id: judgeId,
+                  submission_id: submissionId,
+                })
+              }
+            }
+          })
+        }
+      })
+      
+      const assignmentsToInsert = Array.from(assignmentsMap.values())
+      
+      if (assignmentsToInsert.length > 0) {
+        // Use upsert to handle any edge cases where duplicates might still exist
+        const { error: insertError } = await supabase
+          .from("judge_project_assignments")
+          .upsert(assignmentsToInsert, {
+            onConflict: "judge_id,submission_id",
+            ignoreDuplicates: false
+          })
+        
+        if (insertError) {
+          throw insertError
+        }
+      }
+      
+      // Update judge assigned_projects count in Supabase
+      for (const judge of judgesList) {
+        const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
+        await supabase
+          .from("judges")
+          .update({ assigned_projects: judge.assignedProjects })
+          .eq("id", judgeId)
+      }
+
+      setAssignmentsModified(false)
+      toast.success("Assignments saved!", {
+        description: `Saved ${assignmentsToInsert.length} judge assignment(s)`,
+      })
+    } catch (error) {
+      console.error("Failed to save assignments to Supabase:", error)
+      toast.error("Failed to save assignments", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setSavingAssignments(false)
+    }
   }
 
   // Calculate stats
@@ -934,11 +1031,6 @@ export default function AdminPage() {
                     <p className="text-muted-foreground">
                       Manage judges, projects, and investment funds
                     </p>
-                  </div>
-
-                  {/* Stats Cards */}
-                  <div className="mb-6">
-                    <SectionCards />
                   </div>
 
                   {/* Live Stats */}
@@ -1036,6 +1128,7 @@ export default function AdminPage() {
                                 const updatedProjects = projectsList.map(p => ({ ...p, assignedJudges: [] }))
                                 setProjectsList(updatedProjects)
                                 autoAssignJudges(true) // Show toast when manually changed
+                                setAssignmentsModified(true) // Mark as modified
                               }, 100)
                             }}
                           />
@@ -1047,6 +1140,15 @@ export default function AdminPage() {
                           <Button onClick={handleReassign}>
                             Auto Assign Judges
                           </Button>
+                          {assignmentsModified && (
+                            <Button 
+                              onClick={handleSaveAssignments}
+                              disabled={savingAssignments}
+                              variant="default"
+                            >
+                              {savingAssignments ? "Saving..." : "Save Assignments"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                       <div className="mt-4 p-3 bg-muted rounded-md">
