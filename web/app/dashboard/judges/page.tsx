@@ -63,6 +63,11 @@ export default function JudgesPage() {
   
   // Load assigned submissions for this judge
   const [assignedSubmissionIds, setAssignedSubmissionIds] = React.useState<string[]>([])
+  
+  // Investment fund allocation
+  const [totalInvestmentFund, setTotalInvestmentFund] = React.useState(0)
+  const [totalJudgesCount, setTotalJudgesCount] = React.useState(0)
+  const [judgeAllocation, setJudgeAllocation] = React.useState(0)
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
@@ -318,6 +323,30 @@ export default function JudgesPage() {
         })
         setJudge(judgeData)
 
+        // Load total investment fund from localStorage (set by admin)
+        const savedFund = typeof window !== "undefined" ? localStorage.getItem("admin_investment_fund") : null
+        const totalFund = savedFund ? parseFloat(savedFund) : 10000 // Default 10k if not set
+        setTotalInvestmentFund(totalFund)
+        console.log("[Load Judge Data] Total investment fund:", totalFund)
+
+        // Count total number of judges
+        const { count: judgesCount, error: countError } = await supabase
+          .from("judges")
+          .select("*", { count: "exact", head: true })
+
+        if (countError) {
+          console.error("[Load Judge Data] Error counting judges:", countError)
+        } else {
+          const count = judgesCount || 0
+          setTotalJudgesCount(count)
+          console.log("[Load Judge Data] Total judges count:", count)
+          
+          // Calculate per-judge allocation (equal distribution)
+          const allocation = count > 0 ? totalFund / count : 0
+          setJudgeAllocation(allocation)
+          console.log("[Load Judge Data] Judge allocation:", allocation)
+        }
+
         // Load assigned submissions for this judge from calendar_schedule_slots
         // Filter calendar slots where judge_ids array contains this judge's ID
         console.log("[Load Judge Data] Loading assigned submissions from calendar_schedule_slots for judge_id:", judgeData.id)
@@ -472,6 +501,17 @@ export default function JudgesPage() {
     setInvestmentInput(value)
     const numValue = parseFloat(value)
     if (!isNaN(numValue) && numValue >= 0) {
+      // Calculate what the new total would be
+      const currentTotal = Object.entries(investments).reduce((sum, [id, amount]) => {
+        return sum + (id === submissionId ? 0 : amount)
+      }, 0)
+      const newTotal = currentTotal + numValue
+      
+      // Warn if exceeding allocation (but allow input)
+      if (newTotal > judgeAllocation && judgeAllocation > 0) {
+        // Still allow input, but validation will happen on save
+      }
+      
       setInvestments(prev => ({
         ...prev,
         [submissionId]: numValue,
@@ -484,6 +524,20 @@ export default function JudgesPage() {
 
     if (!judge) {
       toast.error("Judge not loaded")
+      return
+    }
+
+    // Calculate current total invested (including this new investment)
+    const currentTotal = Object.entries(investments).reduce((sum, [id, amount]) => {
+      return sum + (id === submissionId ? investment : amount)
+    }, 0)
+
+    // Check if investment exceeds judge's allocation
+    if (currentTotal > judgeAllocation) {
+      const remaining = judgeAllocation - (currentTotal - investment)
+      toast.error("Investment limit exceeded", {
+        description: `You have $${remaining.toFixed(2)} remaining of your $${judgeAllocation.toLocaleString()} allocation.`,
+      })
       return
     }
 
@@ -637,16 +691,34 @@ export default function JudgesPage() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid gap-4 md:grid-cols-3">
+                      <div className="grid gap-4 md:grid-cols-4">
                         <div>
-                          <Label className="text-muted-foreground">Assigned Projects</Label>
-                          <p className="text-2xl font-bold">{judge.assignedProjects}</p>
+                          <Label className="text-muted-foreground">Your Allocation</Label>
+                          <p className="text-2xl font-bold">
+                            ${judgeAllocation.toLocaleString()}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            of ${totalInvestmentFund.toLocaleString()} total
+                          </p>
                         </div>
                         <div>
                           <Label className="text-muted-foreground">Total Invested</Label>
                           <p className="text-2xl font-bold">
                             ${judge.totalInvested.toLocaleString()}
                           </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {(judgeAllocation - judge.totalInvested) >= 0 ? (
+                              <>${(judgeAllocation - judge.totalInvested).toFixed(2)} remaining</>
+                            ) : (
+                              <span className="text-destructive">
+                                ${Math.abs(judgeAllocation - judge.totalInvested).toFixed(2)} over
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-muted-foreground">Assigned Projects</Label>
+                          <p className="text-2xl font-bold">{judge.assignedProjects}</p>
                         </div>
                         <div>
                           <Label className="text-muted-foreground">Tracks</Label>
