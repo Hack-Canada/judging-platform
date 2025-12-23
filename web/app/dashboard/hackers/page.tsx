@@ -301,10 +301,6 @@ export default function HackersPage() {
     }
   }
 
-  if (!hasAccess) {
-    return null
-  }
-
   const formatTimeRange = (start: string, end: string) => {
     const format = (t: string) => {
       const [h, m] = t.split(":")
@@ -314,7 +310,10 @@ export default function HackersPage() {
   }
 
   const groupSlotsByDate = React.useMemo(() => {
-    const map = new Map<string, { id: string; date: string; start_time: string; end_time: string; room_id: number }[]>()
+    const map = new Map<
+      string,
+      { id: string; date: string; start_time: string; end_time: string; room_id: number; submission_id?: string | null }[]
+    >()
     scheduleSlots.forEach((slot) => {
       const key = slot.date
       if (!map.has(key)) {
@@ -327,6 +326,10 @@ export default function HackersPage() {
     })
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
   }, [scheduleSlots])
+
+  if (!hasAccess) {
+    return null
+  }
 
   return (
     <div suppressHydrationWarning className="relative">
