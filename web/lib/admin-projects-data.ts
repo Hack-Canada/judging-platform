@@ -4,5 +4,6 @@ export type AdminProject = {
   assignedJudges: string[]
   totalInvestment: number
   track: string // Track name
+  submissionId?: string // UUID from submissions table
 }
 
