@@ -76,7 +76,7 @@ export default function Home() {
               {error && (
                 <p className="text-sm text-destructive text-center">{error}</p>
               )}
-            </div>
+        </div>
             <Button type="submit" className="w-full">
               Access Dashboard
             </Button>
