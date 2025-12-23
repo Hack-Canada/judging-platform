@@ -146,17 +146,10 @@ export default function AdminPage() {
       }
     }
 
-    const savedJudgesLocal = localStorage.getItem("judges_data")
-    if (savedJudgesLocal) {
-      try {
-        setJudgesList(JSON.parse(savedJudgesLocal))
-      } catch {
-        // keep defaults on parse error
-      }
-    }
-
     const loadFromSupabase = async () => {
+      console.log("[Load From Supabase] Starting to fetch all admin data...")
       try {
+        console.log("[Load From Supabase] Making parallel queries to Supabase...")
         const [
           { data: supabaseJudges, error: judgesError }, 
           { data: supabaseSubmissions, error: submissionsError },
@@ -164,7 +157,8 @@ export default function AdminPage() {
         ] = await Promise.all([
           supabase
             .from("judges")
-            .select("id, name, email, assigned_projects, total_invested, tracks"),
+            .select("id, name, email, assigned_projects, total_invested, tracks")
+            .order("created_at", { ascending: false }),
           supabase
             .from("submissions")
             .select("id, project_name, tracks"),
@@ -172,18 +166,50 @@ export default function AdminPage() {
             .from("judge_project_assignments")
             .select("judge_id, submission_id")
         ])
+        console.log("[Load From Supabase] All queries completed")
 
-        if (!judgesError && supabaseJudges && supabaseJudges.length > 0 && !savedJudgesLocal) {
+        console.log("[Load From Supabase] Judges query result:")
+        console.log("[Load From Supabase] Judges error:", judgesError)
+        console.log("[Load From Supabase] Judges data:", supabaseJudges)
+        const judgesArray = supabaseJudges as any[] | null
+        console.log("[Load From Supabase] Judges data length:", judgesArray?.length || 0)
+
+        if (judgesError) {
+          console.error("[Load From Supabase] Error loading judges:", {
+            message: judgesError.message,
+            details: judgesError.details,
+            hint: judgesError.hint,
+            code: judgesError.code,
+          })
+          setJudgesList([])
+        } else if (judgesArray && judgesArray.length > 0) {
+          console.log("[Load From Supabase] Mapping judges data...")
           // Map judges - keeping id as string (UUID) but storing as any to match Judge type expectations
-          const mappedJudges: Judge[] = (supabaseJudges as any[]).map((row) => ({
-            id: row.id as any, // UUID string from Supabase, stored as any for compatibility
-            name: row.name,
-            email: row.email || "",
-            assignedProjects: row.assigned_projects || 0,
-            totalInvested: parseFloat(String(row.total_invested || 0)),
-            tracks: row.tracks || ["General"],
-          }))
+          const mappedJudges: Judge[] = judgesArray.map((row, index) => {
+            const mapped = {
+              id: row.id as any, // UUID string from Supabase, stored as any for compatibility
+              name: row.name,
+              email: row.email || "",
+              assignedProjects: row.assigned_projects || 0,
+              totalInvested: parseFloat(String(row.total_invested || 0)),
+              tracks: row.tracks || ["General"],
+            }
+            console.log(`[Load From Supabase] Mapped judge ${index + 1}:`, mapped)
+            return mapped
+          })
+          console.log("[Load From Supabase] All mapped judges:", mappedJudges)
+          console.log("[Load From Supabase] Setting judges list state...")
           setJudgesList(mappedJudges)
+          console.log("[Load From Supabase] Successfully loaded", mappedJudges.length, "judges")
+          
+          // Force a re-render check
+          setTimeout(() => {
+            console.log("[Load From Supabase] State check - judgesList should have", mappedJudges.length, "items")
+          }, 100)
+        } else if (!judgesArray || judgesArray.length === 0) {
+          console.log("[Load From Supabase] No judges found, setting empty list")
+          // Only set empty if we actually have no data (don't overwrite if already loaded)
+          setJudgesList((prev) => prev.length > 0 ? prev : [])
         }
 
         if (!submissionsError && supabaseSubmissions && supabaseSubmissions.length > 0) {
@@ -215,19 +241,38 @@ export default function AdminPage() {
         }
 
         // Auto-assign if there are submissions but no assignments yet
+        // Use a longer delay to ensure judgesList state has been set
         if (supabaseSubmissions && supabaseSubmissions.length > 0 && 
-            (!assignmentsData || assignmentsData.length === 0)) {
-          setTimeout(() => autoAssignJudges(false), 100)
+            (!assignmentsData || assignmentsData.length === 0) &&
+            judgesArray && judgesArray.length > 0) {
+          console.log("[Load From Supabase] Scheduling auto-assign after judges are loaded")
+          setTimeout(() => {
+            console.log("[Load From Supabase] Running auto-assign now")
+            autoAssignJudges(false)
+          }, 500) // Increased delay to ensure state is updated
         }
       } catch (error) {
-        console.error("Failed to load admin data from Supabase", error)
+        console.error("[Load From Supabase] Failed to load admin data from Supabase:", error)
+        console.error("[Load From Supabase] Error type:", typeof error)
+        console.error("[Load From Supabase] Error constructor:", error?.constructor?.name)
+        if (error instanceof Error) {
+          console.error("[Load From Supabase] Error message:", error.message)
+          console.error("[Load From Supabase] Error stack:", error.stack)
+        }
       } finally {
+        console.log("[Load From Supabase] Setting isInitialized to true")
         setIsInitialized(true)
       }
     }
 
     void loadFromSupabase()
   }, [router])
+
+  // Debug: Track judgesList changes
+  React.useEffect(() => {
+    console.log("[JudgesList State] judgesList changed, new length:", judgesList.length)
+    console.log("[JudgesList State] Current judgesList:", judgesList)
+  }, [judgesList])
 
   // Load submissions
   React.useEffect(() => {
@@ -267,10 +312,74 @@ export default function AdminPage() {
     })
   }
 
-  const saveJudges = (newJudges: Judge[]) => {
-    setJudgesList(newJudges)
-    if (typeof window !== "undefined") {
-      localStorage.setItem("judges_data", JSON.stringify(newJudges))
+  const loadJudgesFromSupabase = async () => {
+    console.log("[Load Judges] Starting to fetch judges from Supabase...")
+    try {
+      console.log("[Load Judges] Making Supabase query...")
+      const { data: supabaseJudges, error: judgesError } = await supabase
+        .from("judges")
+        .select("id, name, email, assigned_projects, total_invested, tracks")
+        .order("created_at", { ascending: false })
+
+      console.log("[Load Judges] Supabase response received")
+      console.log("[Load Judges] Error:", judgesError)
+      console.log("[Load Judges] Data:", supabaseJudges)
+      console.log("[Load Judges] Data length:", supabaseJudges?.length || 0)
+
+      if (judgesError) {
+        console.error("[Load Judges] Error details:", {
+          message: judgesError.message,
+          details: judgesError.details,
+          hint: judgesError.hint,
+          code: judgesError.code,
+        })
+        toast.error("Failed to load judges", {
+          description: judgesError.message,
+        })
+        return
+      }
+
+      if (supabaseJudges && supabaseJudges.length > 0) {
+        console.log("[Load Judges] Mapping judges data...")
+        console.log("[Load Judges] Raw judges data:", JSON.stringify(supabaseJudges, null, 2))
+        
+        const mappedJudges: Judge[] = (supabaseJudges as any[]).map((row, index) => {
+          const mapped = {
+            id: row.id as any,
+            name: row.name,
+            email: row.email || "",
+            assignedProjects: row.assigned_projects || 0,
+            totalInvested: parseFloat(String(row.total_invested || 0)),
+            tracks: row.tracks || ["General"],
+          }
+          console.log(`[Load Judges] Mapped judge ${index + 1}:`, mapped)
+          return mapped
+        })
+        
+        console.log("[Load Judges] All mapped judges:", mappedJudges)
+        console.log("[Load Judges] Setting judges list state...")
+        setJudgesList(mappedJudges)
+        console.log("[Load Judges] Successfully loaded", mappedJudges.length, "judges")
+        
+        // Verify state was set
+        setTimeout(() => {
+          console.log("[Load Judges] State verification - should trigger re-render")
+        }, 50)
+      } else {
+        console.log("[Load Judges] No judges found in database")
+        setJudgesList([])
+      }
+    } catch (error) {
+      console.error("[Load Judges] Unexpected error:", error)
+      console.error("[Load Judges] Error type:", typeof error)
+      console.error("[Load Judges] Error constructor:", error?.constructor?.name)
+      if (error instanceof Error) {
+        console.error("[Load Judges] Error message:", error.message)
+        console.error("[Load Judges] Error stack:", error.stack)
+      }
+      toast.error("Failed to load judges", {
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+      })
     }
   }
 
@@ -322,42 +431,116 @@ export default function AdminPage() {
     setJudgeFormData({ name: "", email: "", tracks: [] })
   }
 
-  const handleJudgeSubmit = (e: React.FormEvent) => {
+  const handleJudgeSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log("[Judge Submit] Form submitted")
+    console.log("[Judge Submit] Form data:", judgeFormData)
+    console.log("[Judge Submit] Editing judge:", editingJudge)
+    
     if (!judgeFormData.name.trim() || !judgeFormData.email.trim()) {
+      console.log("[Judge Submit] Validation failed: name or email is empty")
       toast.error("Validation error", {
         description: "Name and email are required",
       })
       return
     }
 
-    if (editingJudge) {
-      // Update existing judge
-      const updated = judgesList.map(j =>
-        j.id === editingJudge.id
-          ? { ...j, name: judgeFormData.name, email: judgeFormData.email, tracks: judgeFormData.tracks }
-          : j
-      )
-      saveJudges(updated)
-      toast.success("Judge updated!", {
-        description: `${judgeFormData.name} has been updated`,
-      })
-    } else {
-      // Create new judge
-      const newJudge: Judge = {
-        id: Math.max(...judgesList.map(j => j.id), 0) + 1,
-        name: judgeFormData.name,
-        email: judgeFormData.email,
-        assignedProjects: 0,
-        totalInvested: 0,
-        tracks: judgeFormData.tracks.length > 0 ? judgeFormData.tracks : ["General"],
+    try {
+      if (editingJudge) {
+        console.log("[Judge Submit] Updating existing judge...")
+        // Update existing judge in Supabase
+        const judgeId = typeof editingJudge.id === 'string' ? editingJudge.id : String(editingJudge.id)
+        console.log("[Judge Submit] Judge ID:", judgeId)
+        console.log("[Judge Submit] Update payload:", {
+          name: judgeFormData.name,
+          email: judgeFormData.email,
+          tracks: judgeFormData.tracks.length > 0 ? judgeFormData.tracks : ["General"],
+        })
+        
+        const { data, error } = await supabase
+          .from("judges")
+          .update({
+            name: judgeFormData.name,
+            email: judgeFormData.email,
+            tracks: judgeFormData.tracks.length > 0 ? judgeFormData.tracks : ["General"],
+          })
+          .eq("id", judgeId)
+          .select()
+
+        console.log("[Judge Submit] Update response - data:", data)
+        console.log("[Judge Submit] Update response - error:", error)
+
+        if (error) {
+          console.error("[Judge Submit] Update error details:", {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          })
+          toast.error("Failed to update judge", {
+            description: error.message,
+          })
+          return
+        }
+
+        console.log("[Judge Submit] Update successful, reloading judges...")
+        toast.success("Judge updated!", {
+          description: `${judgeFormData.name} has been updated`,
+        })
+      } else {
+        console.log("[Judge Submit] Creating new judge...")
+        // Create new judge in Supabase
+        const insertPayload = {
+          name: judgeFormData.name,
+          email: judgeFormData.email,
+          tracks: judgeFormData.tracks.length > 0 ? judgeFormData.tracks : ["General"],
+          assigned_projects: 0,
+          total_invested: 0,
+        }
+        console.log("[Judge Submit] Insert payload:", insertPayload)
+        
+        const { data, error } = await supabase
+          .from("judges")
+          .insert(insertPayload)
+          .select()
+
+        console.log("[Judge Submit] Insert response - data:", data)
+        console.log("[Judge Submit] Insert response - error:", error)
+
+        if (error) {
+          console.error("[Judge Submit] Insert error details:", {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          })
+          toast.error("Failed to create judge", {
+            description: error.message,
+          })
+          return
+        }
+
+        console.log("[Judge Submit] Insert successful, reloading judges...")
+        toast.success("Judge added!", {
+          description: `${judgeFormData.name} has been added`,
+        })
       }
-      saveJudges([...judgesList, newJudge])
-      toast.success("Judge created!", {
-        description: `${judgeFormData.name} has been added`,
+
+      // Reload judges from Supabase
+      await loadJudgesFromSupabase()
+      handleCloseJudgeDialog()
+    } catch (error) {
+      console.error("[Judge Submit] Unexpected error:", error)
+      console.error("[Judge Submit] Error type:", typeof error)
+      console.error("[Judge Submit] Error constructor:", error?.constructor?.name)
+      if (error instanceof Error) {
+        console.error("[Judge Submit] Error message:", error.message)
+        console.error("[Judge Submit] Error stack:", error.stack)
+      }
+      toast.error("Failed to save judge", {
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
       })
     }
-    handleCloseJudgeDialog()
   }
 
   const handleDeleteJudgeClick = (judge: Judge) => {
@@ -365,19 +548,75 @@ export default function AdminPage() {
     setDeleteJudgeDialogOpen(true)
   }
 
-  const handleDeleteJudgeConfirm = () => {
-    if (judgeToDelete) {
-      const updated = judgesList.filter(j => j.id !== judgeToDelete.id)
-      saveJudges(updated)
+  const handleDeleteJudgeConfirm = async () => {
+    if (!judgeToDelete) {
+      console.log("[Delete Judge] No judge to delete")
+      return
+    }
+
+    console.log("[Delete Judge] Starting delete operation")
+    console.log("[Delete Judge] Judge to delete:", judgeToDelete)
+
+    try {
+      const judgeId = typeof judgeToDelete.id === 'string' ? judgeToDelete.id : String(judgeToDelete.id)
+      console.log("[Delete Judge] Judge ID:", judgeId)
+      
+      const { data, error } = await supabase
+        .from("judges")
+        .delete()
+        .eq("id", judgeId)
+        .select()
+
+      console.log("[Delete Judge] Delete response - data:", data)
+      console.log("[Delete Judge] Delete response - error:", error)
+
+      if (error) {
+        console.error("[Delete Judge] Delete error details:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        })
+        toast.error("Failed to delete judge", {
+          description: error.message,
+        })
+        return
+      }
+
+      console.log("[Delete Judge] Delete successful, reloading judges...")
       toast.success("Judge deleted!", {
         description: `${judgeToDelete.name} has been removed`,
       })
+
+      // Reload judges from Supabase
+      await loadJudgesFromSupabase()
       setDeleteJudgeDialogOpen(false)
       setJudgeToDelete(null)
+    } catch (error) {
+      console.error("[Delete Judge] Unexpected error:", error)
+      console.error("[Delete Judge] Error type:", typeof error)
+      console.error("[Delete Judge] Error constructor:", error?.constructor?.name)
+      if (error instanceof Error) {
+        console.error("[Delete Judge] Error message:", error.message)
+        console.error("[Delete Judge] Error stack:", error.stack)
+      }
+      toast.error("Failed to delete judge", {
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+      })
     }
   }
 
   const autoAssignJudges = (showToast = false) => {
+    console.log("[Auto Assign] Starting auto-assignment")
+    console.log("[Auto Assign] Current judgesList length:", judgesList.length)
+    console.log("[Auto Assign] Current projectsList length:", projectsList.length)
+    
+    // Don't run if we don't have judges or projects yet
+    if (judgesList.length === 0 || projectsList.length === 0) {
+      console.log("[Auto Assign] Skipping - judgesList or projectsList is empty")
+      return
+    }
+    
     // Track-aware assignment: assign judges based on their track assignments
     const activeProjects = projectsList
 
@@ -418,82 +657,87 @@ export default function AdminPage() {
 
     setProjectsList(updatedProjects)
     
-    // Update judge assignedProjects count
-    const updatedJudges = judgesList.map(judge => {
-      const assignedCount = updatedProjects.filter(p =>
-        p.assignedJudges.includes(judge.name)
-      ).length
-      return {
-        ...judge,
-        assignedProjects: assignedCount
-      }
-    })
-    setJudgesList(updatedJudges)
-    
-    // Save assignments to Supabase
-    const saveAssignmentsToSupabase = async () => {
-      try {
-        // First, delete all existing assignments for these submissions
-        const submissionIds = updatedProjects
-          .filter(p => (p as any).submissionId && p.assignedJudges.length > 0)
-          .map(p => (p as any).submissionId)
-        
-        if (submissionIds.length > 0) {
-          // Delete existing assignments for these submissions
-          await supabase
-            .from("judge_project_assignments")
-            .delete()
-            .in("submission_id", submissionIds)
+    // Update judge assignedProjects count - use functional update to ensure we have latest state
+    setJudgesList(currentJudges => {
+      const updatedJudges = currentJudges.map(judge => {
+        const assignedCount = updatedProjects.filter(p =>
+          p.assignedJudges.includes(judge.name)
+        ).length
+        return {
+          ...judge,
+          assignedProjects: assignedCount
         }
-        
-        // Create new assignments
-        const assignmentsToInsert: Array<{ judge_id: string; submission_id: string }> = []
-        
-        updatedProjects.forEach((project) => {
-          const submissionId = (project as any).submissionId
-          if (submissionId && project.assignedJudges.length > 0) {
-            project.assignedJudges.forEach((judgeName) => {
-              const judge = updatedJudges.find(j => j.name === judgeName)
-              if (judge) {
-                // Convert judge.id to string (it's a UUID from Supabase)
-                const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
-                assignmentsToInsert.push({
-                  judge_id: judgeId,
-                  submission_id: submissionId,
-                })
-              }
-            })
-          }
-        })
-        
-        if (assignmentsToInsert.length > 0) {
-          const { error: insertError } = await supabase
-            .from("judge_project_assignments")
-            .insert(assignmentsToInsert)
+      })
+      console.log("[Auto Assign] Updated judges count:", updatedJudges.length)
+      
+      // Save assignments to Supabase (using the updated judges)
+      const saveAssignmentsToSupabase = async () => {
+        try {
+          // First, delete all existing assignments for these submissions
+          const submissionIds = updatedProjects
+            .filter(p => (p as any).submissionId && p.assignedJudges.length > 0)
+            .map(p => (p as any).submissionId)
           
-          if (insertError) {
-            console.error("Failed to save assignments to Supabase:", insertError)
-            toast.error("Failed to save assignments", {
-              description: insertError.message,
-            })
-            return
+          if (submissionIds.length > 0) {
+            // Delete existing assignments for these submissions
+            await supabase
+              .from("judge_project_assignments")
+              .delete()
+              .in("submission_id", submissionIds)
           }
+          
+          // Create new assignments
+          const assignmentsToInsert: Array<{ judge_id: string; submission_id: string }> = []
+          
+          updatedProjects.forEach((project) => {
+            const submissionId = (project as any).submissionId
+            if (submissionId && project.assignedJudges.length > 0) {
+              project.assignedJudges.forEach((judgeName) => {
+                const judge = updatedJudges.find((j: Judge) => j.name === judgeName)
+                if (judge) {
+                  // Convert judge.id to string (it's a UUID from Supabase)
+                  const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
+                  assignmentsToInsert.push({
+                    judge_id: judgeId,
+                    submission_id: submissionId,
+                  })
+                }
+              })
+            }
+          })
+          
+          if (assignmentsToInsert.length > 0) {
+            const { error: insertError } = await supabase
+              .from("judge_project_assignments")
+              .insert(assignmentsToInsert)
+            
+            if (insertError) {
+              console.error("Failed to save assignments to Supabase:", insertError)
+              toast.error("Failed to save assignments", {
+                description: insertError.message,
+              })
+              return
+            }
+          }
+          
+          // Also update judge assigned_projects count in Supabase
+          for (const judge of updatedJudges) {
+            const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
+            await supabase
+              .from("judges")
+              .update({ assigned_projects: judge.assignedProjects })
+              .eq("id", judgeId)
+          }
+        } catch (error) {
+          console.error("Error saving assignments to Supabase:", error)
         }
-        
-        // Also update judge assigned_projects count in Supabase
-        for (const judge of updatedJudges) {
-          const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
-          await supabase
-            .from("judges")
-            .update({ assigned_projects: judge.assignedProjects })
-            .eq("id", judgeId)
-        }
-      } catch (error) {
-        console.error("Error saving assignments to Supabase:", error)
       }
-    }
-    
-    void saveAssignmentsToSupabase()
+      
+      // Save assignments asynchronously
+      void saveAssignmentsToSupabase()
+      
+      return updatedJudges
+    })
     
     // Show toast notification if requested
     if (showToast) {
@@ -697,46 +941,54 @@ export default function AdminPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {judgesList.map((judge) => (
-                            <TableRow key={judge.id}>
-                              <TableCell className="font-medium">{judge.name}</TableCell>
-                              <TableCell>{judge.email}</TableCell>
-                              <TableCell>
-                                <div className="flex flex-wrap gap-1">
-                                  {(judge.tracks && judge.tracks.length > 0 ? judge.tracks : ["General"]).map((track, idx) => (
-                                    <Badge key={idx} variant="outline">{track}</Badge>
-                                  ))}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary">{judge.assignedProjects}</Badge>
-                              </TableCell>
-                              <TableCell className="font-medium">${judge.totalInvested.toLocaleString()}</TableCell>
-                              <TableCell>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <IconDotsVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => handleOpenJudgeDialog(judge)}>
-                                      <IconEdit className="mr-2 h-4 w-4" />
-                                      Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => handleDeleteJudgeClick(judge)}
-                                      className="text-destructive"
-                                    >
-                                      <IconTrash className="mr-2 h-4 w-4" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                          {judgesList.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                                No judges found. Click "Add Judge" to create one.
                               </TableCell>
                             </TableRow>
-                          ))}
+                          ) : (
+                            judgesList.map((judge, index) => (
+                              <TableRow key={String(judge.id)}>
+                                <TableCell className="font-medium">{judge.name}</TableCell>
+                                <TableCell>{judge.email}</TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {(judge.tracks && judge.tracks.length > 0 ? judge.tracks : ["General"]).map((track, idx) => (
+                                      <Badge key={idx} variant="outline">{track}</Badge>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary">{judge.assignedProjects}</Badge>
+                                </TableCell>
+                                <TableCell className="font-medium">${judge.totalInvested.toLocaleString()}</TableCell>
+                                <TableCell>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <IconDotsVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => handleOpenJudgeDialog(judge)}>
+                                        <IconEdit className="mr-2 h-4 w-4" />
+                                        Edit
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={() => handleDeleteJudgeClick(judge)}
+                                        className="text-destructive"
+                                      >
+                                        <IconTrash className="mr-2 h-4 w-4" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
                         </TableBody>
                       </Table>
                     </CardContent>
