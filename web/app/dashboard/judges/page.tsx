@@ -893,9 +893,25 @@ export default function JudgesPage() {
                           if (!entry || !(entry as any).submissionId) return
                           
                           const submissionId = (entry as any).submissionId
+                          
+                          // Save to Supabase - this will update judge.totalInvested
                           await handleSaveInvestment(submissionId, investment)
+                          
+                          // Refresh entries to update status (wait for state to update)
+                          setTimeout(() => {
+                            setDashboardEntries(prev => prev.map(e => {
+                              if (e.id === entryId) {
+                                return {
+                                  ...e,
+                                  investment: investment.toString(),
+                                  status: investment > 0 ? "Invested" : "Under Review",
+                                }
+                              }
+                              return e
+                            }))
+                          }, 100)
                         }}
-                        remainingAllocation={judgeAllocation - judge.totalInvested}
+                        remainingAllocation={Math.max(0, judgeAllocation - judge.totalInvested)}
                         totalInvested={judge.totalInvested}
                       />
                     </div>
