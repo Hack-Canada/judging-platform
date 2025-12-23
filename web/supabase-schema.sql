@@ -65,8 +65,26 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.judges;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.judge_project_assignments;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.judge_investments;
 
+CREATE TABLE public.calendar_schedule_slots (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  date date NOT NULL,
+  start_time text NOT NULL,
+  end_time text NOT NULL,
+  submission_id uuid NOT NULL,
+  room_id integer NOT NULL,
+  judge_ids integer[] NOT NULL DEFAULT ARRAY[]::integer[],
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT calendar_schedule_slots_pkey PRIMARY KEY (id),
+  CONSTRAINT calendar_schedule_slots_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_schedule_slots_date ON public.calendar_schedule_slots(date);
+CREATE INDEX IF NOT EXISTS idx_calendar_schedule_slots_submission_id ON public.calendar_schedule_slots(submission_id);
+
 -- Add comments for documentation
 COMMENT ON TABLE public.judges IS 'Judges who evaluate submissions';
 COMMENT ON TABLE public.submissions IS 'Project submissions from hackers';
 COMMENT ON TABLE public.judge_project_assignments IS 'Assignments of judges to submissions';
 COMMENT ON TABLE public.judge_investments IS 'Investment amounts allocated by judges to submissions';
+COMMENT ON TABLE public.calendar_schedule_slots IS 'Calendar schedule slots for judging sessions';

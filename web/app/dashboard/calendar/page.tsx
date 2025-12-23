@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { IconPlus, IconEdit, IconTrash, IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
+import { IconPlus, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconDeviceFloppy } from "@tabler/icons-react"
 import { toast } from "sonner"
 import type { Judge } from "@/lib/judges-data"
 import { generateTimeSlots, getEndTime, type TimeSlot, type DaySchedule } from "@/lib/schedule-data"
@@ -71,6 +71,7 @@ export default function CalendarPage() {
   const [slotDuration, setSlotDuration] = React.useState(5)
   const [scheduleStartTime, setScheduleStartTime] = React.useState("13:00")
   const [scheduleEndTime, setScheduleEndTime] = React.useState("16:00")
+  const [saving, setSaving] = React.useState(false)
 
   const [formData, setFormData] = React.useState({
     startTime: "09:00",
@@ -480,6 +481,73 @@ export default function CalendarPage() {
     })
   }
 
+  const handleSaveScheduleToSupabase = async () => {
+    if (slots.length === 0) {
+      toast.error("No schedule to save", {
+        description: "Please create a schedule first using Auto Schedule",
+      })
+      return
+    }
+
+    try {
+      setSaving(true)
+      
+      // First, delete existing schedule slots for this date
+      const { error: deleteError } = await supabase
+        .from("calendar_schedule_slots")
+        .delete()
+        .eq("date", selectedDate)
+
+      if (deleteError) {
+        console.error("Error deleting existing schedule:", deleteError)
+        toast.error("Failed to save schedule", {
+          description: deleteError.message,
+        })
+        return
+      }
+
+      // Prepare slots for insertion - convert judge IDs from numbers to the format needed
+      const slotsToInsert = slots.map(slot => ({
+        date: selectedDate,
+        start_time: slot.startTime, // Format: "HH:MM" as string, PostgreSQL will convert
+        end_time: slot.endTime, // Format: "HH:MM" as string
+        submission_id: slot.projectId, // UUID string
+        room_id: slot.roomId, // integer
+        judge_ids: slot.judgeIds, // integer array
+      }))
+
+      // Insert new schedule slots
+      const { error } = await supabase
+        .from("calendar_schedule_slots")
+        .insert(slotsToInsert)
+
+      if (error) {
+        console.error("Error saving schedule to Supabase:", error)
+        console.error("Error details:", JSON.stringify(error, null, 2))
+        toast.error("Failed to save schedule", {
+          description: error.message,
+        })
+        return
+      }
+
+      toast.success("Schedule saved!", {
+        description: `Saved ${slots.length} time slots for ${selectedDate}`,
+      })
+    } catch (error) {
+      console.error("Failed to save schedule to Supabase:", error)
+      console.error("Error type:", typeof error)
+      if (error instanceof Error) {
+        console.error("Error message:", error.message)
+        console.error("Error stack:", error.stack)
+      }
+      toast.error("Failed to save schedule", {
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleJudgeToggle = (judgeId: number) => {
     setFormData(prev => ({
       ...prev,
@@ -559,6 +627,16 @@ export default function CalendarPage() {
                       <Button onClick={handleAutoSchedule} variant="outline">
                         Auto Schedule
                       </Button>
+                      {slots.length > 0 && (
+                        <Button 
+                          onClick={handleSaveScheduleToSupabase} 
+                          disabled={saving}
+                          variant="default"
+                        >
+                          <IconDeviceFloppy className="mr-2 h-4 w-4" />
+                          {saving ? "Saving..." : "Save Schedule"}
+                        </Button>
+                      )}
                     </div>
                   </div>
 
