@@ -34,6 +34,11 @@ const data = {
       icon: IconUsers,
     },
     {
+      title: "Hacker View",
+      url: "/dashboard/hacker-view",
+      icon: IconUser,
+    },
+    {
       title: "Submissions",
       url: "/dashboard/submissions",
       icon: IconFolder,
