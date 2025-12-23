@@ -1,6 +1,14 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.admin_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  setting_key text NOT NULL UNIQUE,
+  setting_value text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT admin_settings_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.calendar_schedule_slots (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   date date NOT NULL,
@@ -8,9 +16,9 @@ CREATE TABLE public.calendar_schedule_slots (
   end_time time without time zone NOT NULL,
   submission_id uuid NOT NULL,
   room_id integer NOT NULL,
-  judge_ids ARRAY NOT NULL DEFAULT ARRAY[]::integer[],
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  judge_ids ARRAY NOT NULL DEFAULT ARRAY[]::uuid[],
   CONSTRAINT calendar_schedule_slots_pkey PRIMARY KEY (id),
   CONSTRAINT calendar_schedule_slots_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
 );
@@ -55,12 +63,4 @@ CREATE TABLE public.submissions (
   submitted_at timestamp with time zone NOT NULL DEFAULT now(),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT submissions_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.admin_settings (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  setting_key text NOT NULL UNIQUE,
-  setting_value text NOT NULL,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT admin_settings_pkey PRIMARY KEY (id)
 );
