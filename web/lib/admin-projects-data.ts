@@ -3,7 +3,7 @@ export type AdminProject = {
   name: string
   assignedJudges: string[]
   totalInvestment: number
-  track: string // Track name
+  tracks: string[] // Track names (e.g. ["General", "RBC Track"])
   submissionId?: string // UUID from submissions table
 }
 

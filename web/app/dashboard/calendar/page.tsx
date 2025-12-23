@@ -46,7 +46,6 @@ import { supabase } from "@/lib/supabase-client"
 type CalendarSubmission = {
   id: string
   name: string
-  track: string
   project_name: string
   tracks: string[]
 }
@@ -390,12 +389,19 @@ export default function CalendarPage() {
   const handleAutoSchedule = () => {
     const activeSubmissions = submissions
     
-    // Helper function to check if a judge can judge a submission's track
-    const canJudgeTrack = (judge: typeof judges[0], submissionTrack: string): boolean => {
-      // Judges can always judge "General" track
-      if (submissionTrack === "General") return true
-      // Judge can judge if they have the submission's track assigned
-      return judge.tracks?.includes(submissionTrack) || false
+    // Helper function to check if a judge can judge a submission's tracks
+    // Rules:
+    // - If the submission is General-only, any judge can judge it.
+    // - If the submission has sponsor tracks (e.g. RBC, Uber), only judges
+    //   who have at least one of those sponsor tracks can judge it.
+    const canJudgeSubmission = (judge: typeof judges[0], submissionTracks: string[]): boolean => {
+      const sponsorTracks = submissionTracks.filter((t) => t !== "General")
+      if (sponsorTracks.length === 0) {
+        // General-only submission
+        return true
+      }
+      // Sponsor submission: judge must have at least one sponsor track
+      return sponsorTracks.some((track) => judge.tracks?.includes(track))
     }
     
     const newSlots: TimeSlot[] = []
@@ -454,11 +460,13 @@ export default function CalendarPage() {
           // Skip if already used
           if (usedSubmissions.has(submission.id)) continue
           
-          const submissionTrack = submission.track || "General"
+          const submissionTracks = submission.tracks && submission.tracks.length > 0
+            ? submission.tracks
+            : ["General"]
           
-          // Filter judges who can judge this track
-          const eligibleJudges = judges.filter(judge => 
-            canJudgeTrack(judge, submissionTrack)
+          // Filter judges who can judge this submission based on its tracks
+          const eligibleJudges = judges.filter(judge =>
+            canJudgeSubmission(judge, submissionTracks)
           )
           
           if (eligibleJudges.length === 0) continue
@@ -1203,11 +1211,18 @@ export default function CalendarPage() {
                     <SelectValue placeholder="Select a submission" />
                   </SelectTrigger>
                   <SelectContent>
-                    {submissions.map((submission) => (
+                    {submissions.map((submission) => {
+                      const sponsorTracks = (submission.tracks || []).filter((t) => t !== "General")
+                      const trackLabel =
+                        sponsorTracks.length > 0
+                          ? sponsorTracks.join(", ")
+                          : "General"
+                      return (
                         <SelectItem key={submission.id} value={submission.id}>
-                          {submission.project_name} {submission.track && `(${submission.track})`}
+                          {submission.project_name} ({trackLabel})
                         </SelectItem>
-                      ))}
+                      )
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -1217,20 +1232,24 @@ export default function CalendarPage() {
                   <div className="grid gap-2">
                     {(() => {
                       const selectedSubmission = submissions.find(s => s.id === formData.projectId)
-                      const submissionTrack = selectedSubmission?.track || "General"
+                      const submissionTracks = selectedSubmission?.tracks && selectedSubmission.tracks.length > 0
+                        ? selectedSubmission.tracks
+                        : ["General"]
+                      const sponsorTracks = submissionTracks.filter((t) => t !== "General")
+                      const isGeneralOnly = sponsorTracks.length === 0
                       
-                      // Filter judges based on track - they can judge if:
-                      // 1. Submission is "General" track (anyone can judge), OR
-                      // 2. Judge has the submission's track in their tracks array
+                      // Filter judges based on tracks:
+                      // - General-only submissions: any judge can judge.
+                      // - Sponsor submissions: only judges with at least one sponsor track.
                       const eligibleJudges = judges.filter(judge => {
-                        if (submissionTrack === "General") return true
-                        return judge.tracks?.includes(submissionTrack) || false
+                        if (isGeneralOnly) return true
+                        return sponsorTracks.some(track => judge.tracks?.includes(track))
                       })
                       
                       if (eligibleJudges.length === 0) {
                         return (
                           <p className="text-sm text-muted-foreground">
-                            No eligible judges for track "{submissionTrack}". Please assign judges to this track first.
+                            No eligible judges for sponsor track "{sponsorTracks.join(", ")}". Please assign judges to this track first.
                           </p>
                         )
                       }
@@ -1261,7 +1280,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Only judges assigned to this submission's track can be selected. Select {judgesPerProject} judge(s) per submission (currently selected: {formData.judgeIds.length})
+                  General-only submissions can be judged by any judge. Sponsor-track submissions (e.g. RBC, Uber) can only be judged by judges assigned to those sponsor tracks. Select {judgesPerProject} judge(s) per submission (currently selected: {formData.judgeIds.length}).
                 </p>
               </div>
             </div>

@@ -431,7 +431,9 @@ export default function AdminPage() {
             name: row.project_name ?? "Untitled Project",
             assignedJudges: assignmentMap.get(row.id) || [],
             totalInvestment: 0,
-            track: (row.tracks && row.tracks.length > 0) ? row.tracks[0] : "General",
+            tracks: (row.tracks && Array.isArray(row.tracks) && row.tracks.length > 0)
+              ? row.tracks
+              : ["General"],
             submissionId: row.id, // Store actual submission UUID
           }))
           setProjectsList(mappedProjects as any)
@@ -921,22 +923,38 @@ export default function AdminPage() {
       assignedJudges: [] as string[]
     }))
 
-    // Helper function to check if a judge can judge a project's track
-    const canJudgeTrack = (judge: Judge, projectTrack: string): boolean => {
-      // Judges can always judge "General" track
-      if (projectTrack === "General") return true
-      // Judge can judge if they have the project's track assigned
-      return judge.tracks?.includes(projectTrack) || false
+    // Helper to get a project's tracks, always including at least "General"
+    const getProjectTracks = (project: AdminProject): string[] => {
+      const rawTracks = (project as any).tracks
+      if (Array.isArray(rawTracks) && rawTracks.length > 0) {
+        return rawTracks as string[]
+      }
+      return ["General"]
+    }
+
+    // Helper function to check if a judge can judge a project's tracks
+    // Rules:
+    // - If the submission is General-only, any judge can judge it.
+    // - If the submission has sponsor tracks (e.g. RBC, Uber), only judges
+    //   who have at least one of those sponsor tracks can judge it.
+    const canJudgeSubmission = (judge: Judge, projectTracks: string[]): boolean => {
+      const sponsorTracks = projectTracks.filter((t) => t !== "General")
+      if ( sponsorTracks.length === 0) {
+        // General-only submission: any judge (all have General)
+        return true
+      }
+      // Sponsor submission: judge must have at least one sponsor track
+      return sponsorTracks.some((track) => judge.tracks?.includes(track))
     }
 
     // Assign judges to active projects respecting track restrictions
     activeProjects.forEach((project) => {
       const projectInList = updatedProjects.find(p => p.id === project.id)
       if (projectInList) {
-        const projectTrack = project.track || "General"
-        // Filter judges who can judge this track
-        const eligibleJudges = judgesList.filter(judge => 
-          canJudgeTrack(judge, projectTrack)
+        const projectTracks = getProjectTracks(project)
+        // Filter judges who can judge this submission based on its tracks
+        const eligibleJudges = judgesList.filter(judge =>
+          canJudgeSubmission(judge, projectTracks)
         )
         
         // Assign judges using round-robin from eligible judges
