@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { NumberTicker } from "@/components/ui/number-ticker"
 import {
   Table,
   TableBody,
@@ -244,17 +245,17 @@ export function JudgesDataTable({
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <p className="text-sm text-muted-foreground">Total Invested</p>
-            <p className="text-2xl font-bold">${totalInvested.toLocaleString()}</p>
+            <p className="text-2xl font-bold">$<NumberTicker value={totalInvested} /></p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Remaining</p>
             <p className={`text-2xl font-bold ${remainingAllocation < 0 ? "text-destructive" : ""}`}>
-              ${remainingAllocation.toFixed(2)}
+              $<NumberTicker value={remainingAllocation} />
             </p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Assigned Submissions</p>
-            <p className="text-2xl font-bold">{data.length}</p>
+            <p className="text-2xl font-bold"><NumberTicker value={data.length} /></p>
           </div>
         </div>
       </div>

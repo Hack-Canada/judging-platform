@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog"
 import { JudgesDataTable } from "@/components/judges-data-table"
 import type { DashboardEntry } from "@/lib/dashboard-entries-data"
+import { NumberTicker } from "@/components/ui/number-ticker"
 
 const ACCESS_CODE = "111-111"
 const ACCESS_CODE_KEY = "dashboard_access_code"
@@ -886,23 +887,23 @@ export default function JudgesPage() {
                         <div>
                           <Label className="text-muted-foreground">Your Allocation</Label>
                           <p className="text-2xl font-bold">
-                            ${judgeAllocation.toLocaleString()}
+                            $<NumberTicker value={judgeAllocation} />
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            of ${totalInvestmentFund.toLocaleString()} total
+                            of $<NumberTicker value={totalInvestmentFund} /> total
                           </p>
                         </div>
                         <div>
                           <Label className="text-muted-foreground">Total Invested</Label>
                           <p className="text-2xl font-bold">
-                            ${judge.totalInvested.toLocaleString()}
+                            $<NumberTicker value={judge.totalInvested} />
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             {(judgeAllocation - judge.totalInvested) >= 0 ? (
-                              <>${(judgeAllocation - judge.totalInvested).toFixed(2)} remaining</>
+                              <>$<NumberTicker value={judgeAllocation - judge.totalInvested} /> remaining</>
                             ) : (
                               <span className="text-destructive">
-                                ${Math.abs(judgeAllocation - judge.totalInvested).toFixed(2)} over
+                                $<NumberTicker value={Math.abs(judgeAllocation - judge.totalInvested)} /> over
                               </span>
                             )}
                           </p>
