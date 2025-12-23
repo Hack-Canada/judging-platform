@@ -110,8 +110,8 @@ export default function AdminPage() {
       return
     }
 
-    // Load track stats function (defined here for use in useEffect)
-    const loadTrackStats = async (submissionsData: any[], judgesData: any[]) => {
+    // Load track stats function (defined at component level for reuse)
+    const loadTrackStats = React.useCallback(async (submissionsData: any[], judgesData: any[]) => {
       try {
         // Get all submissions with their tracks
         const submissionTracksMap = new Map<string, string[]>() // submission_id -> tracks[]
@@ -209,7 +209,7 @@ export default function AdminPage() {
       }
     }, [])
 
-  const loadFromSupabase = async () => {
+    const loadFromSupabase = async () => {
       // Load admin settings from Supabase
       const loadSettingsFromSupabase = async () => {
         try {
