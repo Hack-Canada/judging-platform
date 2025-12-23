@@ -65,17 +65,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="data-[slot=sidebar-menu-button]:!p-1.5"
+              size="lg"
+              className="data-[slot=sidebar-menu-button]:!p-3"
             >
               <a href="#" className="flex items-center gap-2">
                 <Image
                   src="/hackcanada-logo.svg"
                   alt="HackCanada Logo"
-                  width={20}
-                  height={20}
+                  width={24}
+                  height={24}
                   className="flex-shrink-0"
                 />
-                <span className="text-base font-semibold">hackcanada</span>
+                <span className="text-base font-semibold">HackCanada 2026</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
