@@ -78,6 +78,14 @@ export default function HackersPage() {
       return
     }
 
+    // First team member must be provided
+    if (!formData.members[0].trim()) {
+      toast.error("Validation error", {
+        description: "Member 1 is required. Please enter the first team member's name.",
+      })
+      return
+    }
+
     if (!formData.projectName.trim()) {
       toast.error("Validation error", {
         description: "Project name is required",
@@ -240,14 +248,22 @@ export default function HackersPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label>Team Members (up to 4 members, including yourself)</Label>
+                          <Label>
+                            Team Members (up to 4 members, including yourself).{" "}
+                            <span className="text-destructive font-medium">Member 1 is required.</span>
+                          </Label>
                           <div className="grid gap-2">
                             {formData.members.map((member, index) => (
                               <Input
                                 key={index}
                                 value={member}
                                 onChange={(e) => handleMemberChange(index, e.target.value)}
-                                placeholder={`Member ${index + 1} name (optional)`}
+                                placeholder={
+                                  index === 0
+                                    ? "Member 1 name (required)"
+                                    : `Member ${index + 1} name (optional)`
+                                }
+                                required={index === 0}
                               />
                             ))}
                           </div>
