@@ -155,55 +155,68 @@ export default function AdminPage() {
       }
     }
 
-    const savedAssignments = localStorage.getItem("admin_judge_assignments")
-    let hasSavedAssignments = false
-    if (savedAssignments) {
-      try {
-        const parsed = JSON.parse(savedAssignments)
-        if (parsed.projects) {
-          setProjectsList(parsed.projects)
-        }
-        if (parsed.judges) {
-          setJudgesList(parsed.judges)
-        }
-        if (parsed.judgesPerProject) {
-          setJudgesPerProject(parsed.judgesPerProject)
-        }
-        hasSavedAssignments = true
-      } catch {
-        // If parsing fails, we'll fall back to auto-assign below
-      }
-    }
-
     const loadFromSupabase = async () => {
       try {
-        const [{ data: supabaseJudges, error: judgesError }, { data: supabaseProjects, error: projectsError }] =
-          await Promise.all([
-            supabase
-              .from("judges")
-              .select("id, name, email, assignedProjects, totalInvested, tracks"),
-            supabase
-              .from("projects")
-              .select("id, name, track")
-          ])
+        const [
+          { data: supabaseJudges, error: judgesError }, 
+          { data: supabaseSubmissions, error: submissionsError },
+          { data: assignmentsData, error: assignmentsError }
+        ] = await Promise.all([
+          supabase
+            .from("judges")
+            .select("id, name, email, assigned_projects, total_invested, tracks"),
+          supabase
+            .from("submissions")
+            .select("id, project_name, tracks"),
+          supabase
+            .from("judge_project_assignments")
+            .select("judge_id, submission_id")
+        ])
 
-        if (!judgesError && supabaseJudges && supabaseJudges.length > 0 && !savedJudgesLocal && !hasSavedAssignments) {
-          setJudgesList(supabaseJudges as unknown as Judge[])
-        }
-
-        if (!projectsError && supabaseProjects && supabaseProjects.length > 0 && !hasSavedAssignments) {
-          const mappedProjects: AdminProject[] = (supabaseProjects as any[]).map((row, index) => ({
-            id: index + 1,
-            name: row.name ?? "Untitled Project",
-            assignedJudges: [],
-            totalInvestment: 0,
-            track: row.track ?? "General",
+        if (!judgesError && supabaseJudges && supabaseJudges.length > 0 && !savedJudgesLocal) {
+          // Map judges - keeping id as string (UUID) but storing as any to match Judge type expectations
+          const mappedJudges: Judge[] = (supabaseJudges as any[]).map((row) => ({
+            id: row.id as any, // UUID string from Supabase, stored as any for compatibility
+            name: row.name,
+            email: row.email || "",
+            assignedProjects: row.assigned_projects || 0,
+            totalInvested: parseFloat(String(row.total_invested || 0)),
+            tracks: row.tracks || ["General"],
           }))
-          setProjectsList(mappedProjects)
+          setJudgesList(mappedJudges)
         }
 
-        // If we still have no saved assignments, auto-assign once based on the final lists
-        if (!hasSavedAssignments) {
+        if (!submissionsError && supabaseSubmissions && supabaseSubmissions.length > 0) {
+          // Load assignments and map judge names to submissions
+          const assignmentMap = new Map<string, string[]>() // submission_id -> judge names
+          if (!assignmentsError && assignmentsData) {
+            assignmentsData.forEach((assignment: any) => {
+              const submissionId = assignment.submission_id
+              const judge = supabaseJudges?.find((j: any) => j.id === assignment.judge_id)
+              if (judge && submissionId) {
+                if (!assignmentMap.has(submissionId)) {
+                  assignmentMap.set(submissionId, [])
+                }
+                assignmentMap.get(submissionId)?.push(judge.name)
+              }
+            })
+          }
+          
+          // Map submissions to AdminProject format with assignments
+          const mappedProjects: AdminProject[] = (supabaseSubmissions as any[]).map((row, index) => ({
+            id: index + 1, // Internal ID for AdminProject (for UI state)
+            name: row.project_name ?? "Untitled Project",
+            assignedJudges: assignmentMap.get(row.id) || [],
+            totalInvestment: 0,
+            track: (row.tracks && row.tracks.length > 0) ? row.tracks[0] : "General",
+            submissionId: row.id, // Store actual submission UUID
+          }))
+          setProjectsList(mappedProjects as any)
+        }
+
+        // Auto-assign if there are submissions but no assignments yet
+        if (supabaseSubmissions && supabaseSubmissions.length > 0 && 
+            (!assignmentsData || assignmentsData.length === 0)) {
           setTimeout(() => autoAssignJudges(false), 100)
         }
       } catch (error) {
@@ -417,14 +430,70 @@ export default function AdminPage() {
     })
     setJudgesList(updatedJudges)
     
-    // Save to localStorage
-    if (typeof window !== "undefined") {
-      localStorage.setItem("admin_judge_assignments", JSON.stringify({
-        projects: updatedProjects,
-        judges: updatedJudges,
-        judgesPerProject
-      }))
+    // Save assignments to Supabase
+    const saveAssignmentsToSupabase = async () => {
+      try {
+        // First, delete all existing assignments for these submissions
+        const submissionIds = updatedProjects
+          .filter(p => (p as any).submissionId && p.assignedJudges.length > 0)
+          .map(p => (p as any).submissionId)
+        
+        if (submissionIds.length > 0) {
+          // Delete existing assignments for these submissions
+          await supabase
+            .from("judge_project_assignments")
+            .delete()
+            .in("submission_id", submissionIds)
+        }
+        
+        // Create new assignments
+        const assignmentsToInsert: Array<{ judge_id: string; submission_id: string }> = []
+        
+        updatedProjects.forEach((project) => {
+          const submissionId = (project as any).submissionId
+          if (submissionId && project.assignedJudges.length > 0) {
+            project.assignedJudges.forEach((judgeName) => {
+              const judge = updatedJudges.find(j => j.name === judgeName)
+              if (judge) {
+                // Convert judge.id to string (it's a UUID from Supabase)
+                const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
+                assignmentsToInsert.push({
+                  judge_id: judgeId,
+                  submission_id: submissionId,
+                })
+              }
+            })
+          }
+        })
+        
+        if (assignmentsToInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from("judge_project_assignments")
+            .insert(assignmentsToInsert)
+          
+          if (insertError) {
+            console.error("Failed to save assignments to Supabase:", insertError)
+            toast.error("Failed to save assignments", {
+              description: insertError.message,
+            })
+            return
+          }
+        }
+        
+        // Also update judge assigned_projects count in Supabase
+        for (const judge of updatedJudges) {
+          const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
+          await supabase
+            .from("judges")
+            .update({ assigned_projects: judge.assignedProjects })
+            .eq("id", judgeId)
+        }
+      } catch (error) {
+        console.error("Error saving assignments to Supabase:", error)
+      }
     }
+    
+    void saveAssignmentsToSupabase()
     
     // Show toast notification if requested
     if (showToast) {
@@ -432,7 +501,7 @@ export default function AdminPage() {
       const totalAssignments = updatedProjects.reduce((sum, p) => sum + p.assignedJudges.length, 0)
       if (totalAssignments > 0) {
         toast.success("Judges auto-assigned!", {
-          description: `${totalAssignments} judge assignment(s) across ${activeProjectsCount} active project(s)`,
+          description: `${totalAssignments} judge assignment(s) across ${activeProjectsCount} active submission(s)`,
         })
       }
     }
