@@ -25,10 +25,11 @@ export default function HackersPage() {
   const [currentStep, setCurrentStep] = React.useState<1 | 2 | 3>(1)
   const [createdSubmissionId, setCreatedSubmissionId] = React.useState<string | null>(null)
   const [scheduleSlots, setScheduleSlots] = React.useState<
-    { id: string; date: string; start_time: string; end_time: string; room_id: number }[]
+    { id: string; date: string; start_time: string; end_time: string; room_id: number; submission_id?: string | null }[]
   >([])
   const [loadingSchedule, setLoadingSchedule] = React.useState(false)
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
+  const [viewAllSchedules, setViewAllSchedules] = React.useState(false)
   const [formData, setFormData] = React.useState({
     name: "",
     teamName: "",
@@ -120,6 +121,56 @@ export default function HackersPage() {
     },
     []
   )
+
+  // Testing helper: load schedule for all submissions instead of just this hacker
+  const loadAllSchedules = React.useCallback(async () => {
+    try {
+      setLoadingSchedule(true)
+
+      const [{ data: slotsData, error: slotsError }, { data: submissionsData, error: submissionsError }] =
+        await Promise.all([
+          supabase
+            .from("calendar_schedule_slots")
+            .select("id, date, start_time, end_time, room_id, submission_id")
+            .order("date", { ascending: true })
+            .order("start_time", { ascending: true }),
+          supabase.from("submissions").select("id, project_name"),
+        ])
+
+      if (slotsError) {
+        console.error("[Hackers] Error loading all schedule slots:", slotsError)
+        toast.error("Failed to load schedule", {
+          description: slotsError.message,
+        })
+        return
+      }
+
+      const slots =
+        (slotsData as { id: string; date: string; start_time: string; end_time: string; room_id: number; submission_id?: string | null }[]) ||
+        []
+
+      // Optionally enrich slots with project names via a map (used only in UI labels)
+      const projectNameMap = new Map<string, string>()
+      if (submissionsData && !submissionsError) {
+        ;(submissionsData as { id: string; project_name: string }[]).forEach((sub) => {
+          projectNameMap.set(sub.id, sub.project_name ?? "Untitled Project")
+        })
+      }
+
+      // Store slots; project names will be looked up on the fly from the map when rendering
+      setScheduleSlots(slots)
+      if (slots.length > 0) {
+        setCurrentStep(3)
+      }
+    } catch (error) {
+      console.error("[Hackers] Unexpected error loading all schedules:", error)
+      toast.error("Failed to load schedule", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setLoadingSchedule(false)
+    }
+  }, [])
 
   const handleMemberChange = (index: number, value: string) => {
     const newMembers = [...formData.members]
@@ -464,25 +515,53 @@ export default function HackersPage() {
                       </form>
                       ) : (
                         <div className="space-y-6">
+                          {/* Pending / controls section */}
                           <div className="space-y-2">
                             <p className="text-sm text-muted-foreground">
                               Your submission has been received and is currently{" "}
                               <span className="font-semibold">pending schedule</span>. Once organizers schedule your
                               judging slot, it will appear below.
                             </p>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => createdSubmissionId && loadScheduleForSubmission(createdSubmissionId)}
-                              disabled={loadingSchedule}
-                            >
-                              {loadingSchedule ? "Checking schedule..." : "Refresh schedule"}
-                            </Button>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  viewAllSchedules
+                                    ? loadAllSchedules()
+                                    : createdSubmissionId && loadScheduleForSubmission(createdSubmissionId)
+                                }
+                                disabled={loadingSchedule}
+                              >
+                                {loadingSchedule ? "Checking schedule..." : "Refresh schedule"}
+                              </Button>
+                              <div className="flex items-center gap-2 text-xs">
+                                <Checkbox
+                                  id="view-all-schedules"
+                                  checked={viewAllSchedules}
+                                  onCheckedChange={(checked) => {
+                                    const value = Boolean(checked)
+                                    setViewAllSchedules(value)
+                                    if (value) {
+                                      void loadAllSchedules()
+                                    } else if (createdSubmissionId) {
+                                      void loadScheduleForSubmission(createdSubmissionId)
+                                    }
+                                  }}
+                                />
+                                <Label htmlFor="view-all-schedules" className="text-xs cursor-pointer">
+                                  View all projects schedule (testing only)
+                                </Label>
+                              </div>
+                            </div>
                           </div>
 
+                          {/* Calendar-style schedule view */}
                           <div className="space-y-3">
-                            <h3 className="text-base font-semibold">Your judging schedule</h3>
+                            <h3 className="text-base font-semibold">
+                              {viewAllSchedules ? "All judging schedules (testing)" : "Your judging schedule"}
+                            </h3>
                             {scheduleSlots.length === 0 ? (
                               <p className="text-sm text-muted-foreground">
                                 No schedule has been set yet. Please check back later or use the refresh button above.
@@ -515,6 +594,7 @@ export default function HackersPage() {
                                               </p>
                                               <p className="text-xs text-muted-foreground">
                                                 Room: {room?.name ?? `Room ${slot.room_id}`}
+                                                {viewAllSchedules && slot.submission_id && " • Submission ID: " + slot.submission_id}
                                               </p>
                                             </div>
                                           </div>
