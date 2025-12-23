@@ -43,10 +43,12 @@ import { generateTimeSlots, getEndTime, type TimeSlot, type DaySchedule } from "
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { supabase } from "@/lib/supabase-client"
 
-type CalendarProject = {
-  id: number
+type CalendarSubmission = {
+  id: string
   name: string
   track: string
+  project_name: string
+  tracks: string[]
 }
 
 const ACCESS_CODE = "111-111"
@@ -60,7 +62,7 @@ export default function CalendarPage() {
     return today.toISOString().split("T")[0]
   })
   const [judges, setJudges] = React.useState<Judge[]>([])
-  const [projects, setProjects] = React.useState<CalendarProject[]>([])
+  const [submissions, setSubmissions] = React.useState<CalendarSubmission[]>([])
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [slots, setSlots] = React.useState<TimeSlot[]>([])
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
@@ -136,23 +138,33 @@ export default function CalendarPage() {
 
     const loadFromSupabase = async () => {
       try {
-        const [{ data: supabaseJudges, error: judgesError }, { data: supabaseProjects, error: projectsError }] =
+        const [{ data: supabaseJudges, error: judgesError }, { data: supabaseSubmissions, error: submissionsError }] =
           await Promise.all([
             supabase.from("judges").select("id, name, email, tracks"),
-            supabase.from("projects").select("id, name, track"),
+            supabase.from("submissions").select("id, project_name, tracks"),
           ])
 
         if (!judgesError && supabaseJudges) {
-          setJudges(supabaseJudges as unknown as Judge[])
+          const mappedJudges: Judge[] = (supabaseJudges as any[]).map((row) => ({
+            id: row.id,
+            name: row.name,
+            email: row.email || "",
+            assignedProjects: 0,
+            totalInvested: 0,
+            tracks: row.tracks || ["General"],
+          }))
+          setJudges(mappedJudges)
         }
 
-        if (!projectsError && supabaseProjects) {
-          const mappedProjects: CalendarProject[] = (supabaseProjects as any[]).map((row) => ({
+        if (!submissionsError && supabaseSubmissions) {
+          const mappedSubmissions: CalendarSubmission[] = (supabaseSubmissions as any[]).map((row) => ({
             id: row.id,
-            name: row.name ?? "Untitled",
-            track: row.track ?? "General",
+            name: row.project_name ?? "Untitled",
+            project_name: row.project_name ?? "Untitled",
+            track: (row.tracks && row.tracks.length > 0) ? row.tracks[0] : "General",
+            tracks: row.tracks || ["General"],
           }))
-          setProjects(mappedProjects)
+          setSubmissions(mappedSubmissions)
         }
       } catch (error) {
         console.error("Failed to load calendar data from Supabase", error)
@@ -191,7 +203,7 @@ export default function CalendarPage() {
       setEditingSlot(slot)
       setFormData({
         startTime: slot.startTime,
-        projectId: slot.projectId.toString(),
+        projectId: slot.projectId, // Already a string (UUID)
         judgeIds: slot.judgeIds,
         roomId: slot.roomId.toString(),
       })
@@ -222,7 +234,7 @@ export default function CalendarPage() {
     e.preventDefault()
     if (!formData.projectId) {
       toast.error("Validation error", {
-        description: "Please select a project",
+        description: "Please select a submission",
       })
       return
     }
@@ -233,8 +245,8 @@ export default function CalendarPage() {
       return
     }
 
-    const project = projects.find(p => p.id === parseInt(formData.projectId))
-    if (!project) return
+    const submission = submissions.find(s => s.id === formData.projectId)
+    if (!submission) return
 
     const selectedRoom = rooms.find(r => r.id === parseInt(formData.roomId))
     if (!selectedRoom) return
@@ -245,8 +257,8 @@ export default function CalendarPage() {
       id: editingSlot?.id || `${selectedDate}-${formData.startTime}`,
       startTime: formData.startTime,
       endTime: getEndTime(formData.startTime, slotDuration),
-      projectId: project.id,
-      projectName: project.name,
+      projectId: submission.id,
+      projectName: submission.project_name,
       judgeIds: formData.judgeIds,
       judgeNames: selectedJudges.map(j => j.name),
       roomId: selectedRoom.id,
@@ -260,7 +272,7 @@ export default function CalendarPage() {
       )
       saveSchedule(updated)
       toast.success("Time slot updated!", {
-        description: `Slot for ${project.name} has been updated`,
+        description: `Slot for ${submission.project_name} has been updated`,
       })
     } else {
       // Check for conflicts:
@@ -305,7 +317,7 @@ export default function CalendarPage() {
       )
       saveSchedule(updated)
       toast.success("Time slot created!", {
-        description: `Slot for ${project.name} has been scheduled`,
+        description: `Slot for ${submission.project_name} has been scheduled`,
       })
     }
     handleCloseDialog()
@@ -320,20 +332,20 @@ export default function CalendarPage() {
   }
 
   const handleAutoSchedule = () => {
-    const activeProjects = projects
+    const activeSubmissions = submissions
     
-    // Helper function to check if a judge can judge a project's track
-    const canJudgeTrack = (judge: typeof judges[0], projectTrack: string): boolean => {
+    // Helper function to check if a judge can judge a submission's track
+    const canJudgeTrack = (judge: typeof judges[0], submissionTrack: string): boolean => {
       // Judges can always judge "General" track
-      if (projectTrack === "General") return true
-      // Judge can judge if they have the project's track assigned
-      return judge.tracks?.includes(projectTrack) || false
+      if (submissionTrack === "General") return true
+      // Judge can judge if they have the submission's track assigned
+      return judge.tracks?.includes(submissionTrack) || false
     }
     
     const newSlots: TimeSlot[] = []
     let currentTime = scheduleStartTime
-    let projectIndex = 0
-    const usedProjects = new Set<number>() // Track which projects have been scheduled
+    let submissionIndex = 0
+    const usedSubmissions = new Set<string>() // Track which submissions have been scheduled (UUIDs)
 
     // Helper to get available rooms at a specific time
     const getAvailableRooms = (time: string): Room[] => {
@@ -362,7 +374,7 @@ export default function CalendarPage() {
     }
 
     // Main scheduling loop: for each time slot, try to fill all rooms
-    while (currentTime && projectIndex < activeProjects.length) {
+    while (currentTime && submissionIndex < activeSubmissions.length) {
       const availableRooms = getAvailableRooms(currentTime)
       
       // If all rooms are filled at this time, move to next time slot
@@ -377,20 +389,20 @@ export default function CalendarPage() {
       let scheduledAtThisTime = false
       
       for (const room of availableRooms) {
-        // Find next available project that can be scheduled in this room
-        let projectAssigned = false
+        // Find next available submission that can be scheduled in this room
+        let submissionAssigned = false
         
-        for (let i = projectIndex; i < activeProjects.length; i++) {
-          const project = activeProjects[i]
+        for (let i = submissionIndex; i < activeSubmissions.length; i++) {
+          const submission = activeSubmissions[i]
           
           // Skip if already used
-          if (usedProjects.has(project.id)) continue
+          if (usedSubmissions.has(submission.id)) continue
           
-          const projectTrack = project.track || "General"
+          const submissionTrack = submission.track || "General"
           
           // Filter judges who can judge this track
           const eligibleJudges = judges.filter(judge => 
-            canJudgeTrack(judge, projectTrack)
+            canJudgeTrack(judge, submissionTrack)
           )
           
           if (eligibleJudges.length === 0) continue
@@ -405,55 +417,55 @@ export default function CalendarPage() {
           const availableEligibleJudges = eligibleJudges.filter(judge => !usedJudgeIdsAtTime.has(judge.id))
           
           if (availableEligibleJudges.length < judgesPerProject) {
-            // Not enough free judges to schedule this project at this time
+            // Not enough free judges to schedule this submission at this time
             continue
           }
           
-          // Select judges for this project from available pool
-          const projectJudges: number[] = []
+          // Select judges for this submission from available pool
+          const submissionJudges: number[] = []
           for (let j = 0; j < judgesPerProject; j++) {
             const judge = availableEligibleJudges[j % availableEligibleJudges.length]
-            if (!projectJudges.includes(judge.id)) {
-              projectJudges.push(judge.id)
+            if (!submissionJudges.includes(judge.id)) {
+              submissionJudges.push(judge.id)
             }
           }
 
-          // Assign this project to this room at this time
-          const selectedJudgesList = judges.filter(j => projectJudges.includes(j.id))
+          // Assign this submission to this room at this time
+          const selectedJudgesList = judges.filter(j => submissionJudges.includes(j.id))
           
           newSlots.push({
-            id: `${selectedDate}-${currentTime}-${project.id}-${room.id}`,
+            id: `${selectedDate}-${currentTime}-${submission.id}-${room.id}`,
             startTime: currentTime,
             endTime: getEndTime(currentTime, slotDuration),
-            projectId: project.id,
-            projectName: project.name,
-            judgeIds: projectJudges,
+            projectId: submission.id,
+            projectName: submission.project_name,
+            judgeIds: submissionJudges,
             judgeNames: selectedJudgesList.map(j => j.name),
             roomId: room.id,
             roomName: room.name,
           })
 
-          usedProjects.add(project.id)
-          projectAssigned = true
+          usedSubmissions.add(submission.id)
+          submissionAssigned = true
           scheduledAtThisTime = true
           break // Move to next room
         }
 
-        // If we couldn't assign a project to this room, continue to next room
-        if (!projectAssigned) continue
+        // If we couldn't assign a submission to this room, continue to next room
+        if (!submissionAssigned) continue
       }
 
       // If we scheduled something at this time, check if all rooms are filled
-      // If not all rooms filled and no more projects can be scheduled, move to next time
+      // If not all rooms filled and no more submissions can be scheduled, move to next time
       if (!scheduledAtThisTime || getAvailableRooms(currentTime).length === 0) {
         const nextTime = getNextTime(currentTime)
         if (!nextTime) break
         currentTime = nextTime
       }
       
-      // Update project index to continue from where we left off
-      while (projectIndex < activeProjects.length && usedProjects.has(activeProjects[projectIndex].id)) {
-        projectIndex++
+      // Update submission index to continue from where we left off
+      while (submissionIndex < activeSubmissions.length && usedSubmissions.has(activeSubmissions[submissionIndex].id)) {
+        submissionIndex++
       }
     }
 
@@ -464,7 +476,7 @@ export default function CalendarPage() {
     }).length
     
     toast.success("Auto-scheduled!", {
-      description: `Scheduled ${newSlots.length} projects across ${timeSlots.length} time slots. ${filledSlots} time slots have all rooms occupied.`,
+      description: `Scheduled ${newSlots.length} submissions across ${timeSlots.length} time slots. ${filledSlots} time slots have all rooms occupied.`,
     })
   }
 
@@ -540,7 +552,7 @@ export default function CalendarPage() {
                     <div>
                       <h1 className="text-3xl font-bold tracking-tight">Calendar</h1>
                       <p className="text-muted-foreground">
-                        Schedule judge assignments for projects
+                        Schedule judge assignments for submissions
                       </p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -618,7 +630,7 @@ export default function CalendarPage() {
                     <CardHeader>
                       <CardTitle>Time Slots - {formatDate(selectedDate)}</CardTitle>
                       <CardDescription>
-                        Click on a time slot to assign or edit judge-project assignments. All rooms are shown for each time frame.
+                        Click on a time slot to assign or edit judge-submission assignments. All rooms are shown for each time frame.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -677,7 +689,7 @@ export default function CalendarPage() {
                                                 </p>
                                                 <div className="flex flex-wrap items-center gap-1.5">
                                                   <Badge variant="outline" className="text-[10px]">
-                                                    General: {projects.find(p => p.id === slot.projectId)?.track || "General"}
+                                                    General: {submissions.find(s => s.id === slot.projectId)?.track || "General"}
                                                   </Badge>
                                                   <Badge variant="secondary" className="text-[10px]">
                                                     {room.name}
@@ -762,7 +774,7 @@ export default function CalendarPage() {
             <DialogTitle>{editingSlot ? "Edit Time Slot" : "Create Time Slot"}</DialogTitle>
             <DialogDescription>
               {editingSlot
-                ? "Update the project and judge assignments for this time slot."
+                ? "Update the submission and judge assignments for this time slot."
                 : "Assign a project and judges to this time slot."}
             </DialogDescription>
           </DialogHeader>
@@ -873,18 +885,18 @@ export default function CalendarPage() {
                 })()}
               </div>
               <div className="grid gap-2">
-                <Label>Project</Label>
+                <Label>Submission</Label>
                 <Select
                   value={formData.projectId}
                   onValueChange={(value) => setFormData({ ...formData, projectId: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a project" />
+                    <SelectValue placeholder="Select a submission" />
                   </SelectTrigger>
                   <SelectContent>
-                    {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id.toString()}>
-                          {project.name} {project.track && `(${project.track})`}
+                    {submissions.map((submission) => (
+                        <SelectItem key={submission.id} value={submission.id}>
+                          {submission.project_name} {submission.track && `(${submission.track})`}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -895,21 +907,21 @@ export default function CalendarPage() {
                 <div className="border rounded-md p-4 max-h-[200px] overflow-y-auto">
                   <div className="grid gap-2">
                     {(() => {
-                      const selectedProject = projects.find(p => p.id === parseInt(formData.projectId))
-                      const projectTrack = selectedProject?.track || "General"
+                      const selectedSubmission = submissions.find(s => s.id === formData.projectId)
+                      const submissionTrack = selectedSubmission?.track || "General"
                       
                       // Filter judges based on track - they can judge if:
-                      // 1. Project is "General" track (anyone can judge), OR
-                      // 2. Judge has the project's track in their tracks array
+                      // 1. Submission is "General" track (anyone can judge), OR
+                      // 2. Judge has the submission's track in their tracks array
                       const eligibleJudges = judges.filter(judge => {
-                        if (projectTrack === "General") return true
-                        return judge.tracks?.includes(projectTrack) || false
+                        if (submissionTrack === "General") return true
+                        return judge.tracks?.includes(submissionTrack) || false
                       })
                       
                       if (eligibleJudges.length === 0) {
                         return (
                           <p className="text-sm text-muted-foreground">
-                            No eligible judges for track "{projectTrack}". Please assign judges to this track first.
+                            No eligible judges for track "{submissionTrack}". Please assign judges to this track first.
                           </p>
                         )
                       }
@@ -940,7 +952,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Only judges assigned to this project's track can be selected. Select {judgesPerProject} judge(s) per project (currently selected: {formData.judgeIds.length})
+                  Only judges assigned to this submission's track can be selected. Select {judgesPerProject} judge(s) per submission (currently selected: {formData.judgeIds.length})
                 </p>
               </div>
             </div>

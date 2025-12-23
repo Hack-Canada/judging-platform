@@ -2,7 +2,7 @@ export type TimeSlot = {
   id: string
   startTime: string // Format: "HH:MM" (e.g., "09:00")
   endTime: string // Format: "HH:MM" (e.g., "09:05")
-  projectId: number
+  projectId: string // Submission ID (UUID)
   projectName: string
   judgeIds: number[]
   judgeNames: string[]
