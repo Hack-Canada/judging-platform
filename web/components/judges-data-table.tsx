@@ -250,7 +250,7 @@ export function JudgesDataTable({
           <div>
             <p className="text-sm text-muted-foreground">Remaining</p>
             <p className={`text-2xl font-bold ${remainingAllocation < 0 ? "text-destructive" : ""}`}>
-              $<NumberTicker value={remainingAllocation} />
+              $<NumberTicker value={remainingAllocation} decimalPlaces={2} />
             </p>
           </div>
           <div>

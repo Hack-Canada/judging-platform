@@ -900,10 +900,10 @@ export default function JudgesPage() {
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             {(judgeAllocation - judge.totalInvested) >= 0 ? (
-                              <>$<NumberTicker value={judgeAllocation - judge.totalInvested} /> remaining</>
+                              <>$<NumberTicker value={judgeAllocation - judge.totalInvested} decimalPlaces={2} /> remaining</>
                             ) : (
                               <span className="text-destructive">
-                                $<NumberTicker value={Math.abs(judgeAllocation - judge.totalInvested)} /> over
+                                $<NumberTicker value={Math.abs(judgeAllocation - judge.totalInvested)} decimalPlaces={2} /> over
                               </span>
                             )}
                           </p>
