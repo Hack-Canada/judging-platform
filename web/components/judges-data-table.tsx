@@ -206,34 +206,29 @@ export function JudgesDataTable({
     pageSize: 10,
   })
   
-  // Track previous data length to detect if we should preserve pagination
-  const prevDataLengthRef = React.useRef(initialData.length)
-  const prevPageIndexRef = React.useRef(0)
+  // Track current page index to preserve it during updates
+  const preservedPageIndexRef = React.useRef(pagination.pageIndex)
 
-  // Update data when initialData changes, but preserve pagination if only one entry changed
+  // Update data when initialData changes, preserving pagination state
   React.useEffect(() => {
-    const currentDataLength = initialData.length
-    const dataLengthChanged = prevDataLengthRef.current !== currentDataLength
+    // Check if this is just an update (same length, same submission IDs)
+    const isDataUpdate = initialData.length === data.length && 
+      initialData.every((newEntry) => {
+        const oldEntry = data.find(e => (e as any).submissionId === (newEntry as any).submissionId)
+        return oldEntry !== undefined
+      })
     
-    // If data length hasn't changed and we're not on page 0, preserve the page
-    if (!dataLengthChanged && pagination.pageIndex > 0) {
-      // Check if it's just an update to existing entries (same IDs)
-      const isUpdateOnly = initialData.length === data.length && 
-        initialData.every((newEntry, idx) => {
-          const oldEntry = data[idx]
-          return oldEntry && (oldEntry as any).submissionId === (newEntry as any).submissionId
-        })
-      
-      if (isUpdateOnly) {
-        // Preserve current page when it's just a data update
-        setPagination(prev => ({ ...prev, pageIndex: prevPageIndexRef.current }))
-      }
+    // If it's just a data update (not a full reload), preserve the current page
+    if (isDataUpdate && preservedPageIndexRef.current > 0) {
+      // Restore the preserved page index
+      setPagination(prev => ({ 
+        ...prev, 
+        pageIndex: preservedPageIndexRef.current 
+      }))
     }
     
-    prevDataLengthRef.current = currentDataLength
-    prevPageIndexRef.current = pagination.pageIndex
     setData(initialData)
-  }, [initialData, data.length, pagination.pageIndex])
+  }, [initialData, data])
 
   const columns = React.useMemo(
     () => createColumns(onInvestmentChange, remainingAllocation),
@@ -262,7 +257,8 @@ export function JudgesDataTable({
     onPaginationChange: (updater) => {
       setPagination((prev) => {
         const newPagination = typeof updater === 'function' ? updater(prev) : updater
-        prevPageIndexRef.current = newPagination.pageIndex
+        // Preserve the page index for future updates
+        preservedPageIndexRef.current = newPagination.pageIndex
         return newPagination
       })
     },
