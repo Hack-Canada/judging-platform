@@ -98,55 +98,98 @@ export default function AdminPage() {
       return
     }
 
-    // Load settings from localStorage (fund, calendar, scoring, tracks, rooms)
-    const savedFund = localStorage.getItem("admin_investment_fund")
-    if (savedFund) {
-      setInvestmentFund(savedFund)
-    }
-    const savedSlotDuration = localStorage.getItem("calendar_slot_duration")
-    if (savedSlotDuration) {
-      setSlotDuration(parseInt(savedSlotDuration) || 5)
-    }
-    const savedCalendarJudgesPerProject = localStorage.getItem("calendar_judges_per_project")
-    if (savedCalendarJudgesPerProject) {
-      setJudgesPerProject(parseInt(savedCalendarJudgesPerProject) || 2)
-    }
-    const savedStartTime = localStorage.getItem("calendar_start_time")
-    if (savedStartTime) {
-      setScheduleStartTime(savedStartTime)
-    }
-    const savedEndTime = localStorage.getItem("calendar_end_time")
-    if (savedEndTime) {
-      setScheduleEndTime(savedEndTime)
-    }
-    const savedMinInvestment = localStorage.getItem("scoring_min_investment")
-    if (savedMinInvestment) {
-      setMinInvestment(savedMinInvestment)
-    }
-    const savedMaxInvestment = localStorage.getItem("scoring_max_investment")
-    if (savedMaxInvestment) {
-      setMaxInvestment(savedMaxInvestment)
-    }
-
-    const savedTracks = localStorage.getItem("tracks_data")
-    if (savedTracks) {
-      try {
-        setTracksList(JSON.parse(savedTracks))
-      } catch {
-        // keep defaults on parse error
-      }
-    }
-
-    const savedRooms = localStorage.getItem("rooms_data")
-    if (savedRooms) {
-      try {
-        setRoomsList(JSON.parse(savedRooms))
-      } catch {
-        // keep defaults on parse error
-      }
-    }
-
     const loadFromSupabase = async () => {
+      // Load admin settings from Supabase
+      const loadSettingsFromSupabase = async () => {
+        try {
+          const { data: settingsData, error: settingsError } = await supabase
+            .from("admin_settings")
+            .select("setting_key, setting_value")
+
+          if (settingsError) {
+            console.error("[Load Settings] Error loading settings:", settingsError)
+            return
+          }
+
+          if (settingsData) {
+            // Create a map of settings for easy lookup
+            const settingsMap = new Map<string, string>()
+            settingsData.forEach(setting => {
+              settingsMap.set(setting.setting_key, setting.setting_value)
+            })
+
+            // Load investment fund
+            const investmentFund = settingsMap.get("investment_fund")
+            if (investmentFund) {
+              setInvestmentFund(investmentFund)
+            }
+
+            // Load calendar settings
+            const slotDuration = settingsMap.get("calendar_slot_duration")
+            if (slotDuration) {
+              setSlotDuration(parseInt(slotDuration) || 5)
+            }
+
+            const judgesPerProject = settingsMap.get("calendar_judges_per_project")
+            if (judgesPerProject) {
+              setJudgesPerProject(parseInt(judgesPerProject) || 2)
+            }
+
+            const startTime = settingsMap.get("calendar_start_time")
+            if (startTime) {
+              setScheduleStartTime(startTime)
+            }
+
+            const endTime = settingsMap.get("calendar_end_time")
+            if (endTime) {
+              setScheduleEndTime(endTime)
+            }
+
+            // Load scoring settings
+            const minInvestment = settingsMap.get("scoring_min_investment")
+            if (minInvestment) {
+              setMinInvestment(minInvestment)
+            }
+
+            const maxInvestment = settingsMap.get("scoring_max_investment")
+            if (maxInvestment) {
+              setMaxInvestment(maxInvestment)
+            }
+
+            // Load tracks data
+            const tracksData = settingsMap.get("tracks_data")
+            if (tracksData) {
+              try {
+                const parsed = JSON.parse(tracksData)
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setTracksList(parsed)
+                }
+              } catch (e) {
+                console.error("[Load Settings] Error parsing tracks_data:", e)
+              }
+            }
+
+            // Load rooms data
+            const roomsData = settingsMap.get("rooms_data")
+            if (roomsData) {
+              try {
+                const parsed = JSON.parse(roomsData)
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setRoomsList(parsed)
+                }
+              } catch (e) {
+                console.error("[Load Settings] Error parsing rooms_data:", e)
+              }
+            }
+
+            console.log("[Load Settings] Successfully loaded settings from Supabase")
+          }
+        } catch (error) {
+          console.error("[Load Settings] Failed to load settings:", error)
+        }
+      }
+
+      await loadSettingsFromSupabase()
       console.log("[Load From Supabase] Starting to fetch all admin data...")
       try {
         console.log("[Load From Supabase] Making parallel queries to Supabase...")
@@ -267,6 +310,29 @@ export default function AdminPage() {
 
     void loadFromSupabase()
   }, [router])
+  
+  // Helper function to save a setting to Supabase
+  const saveSettingToSupabase = async (key: string, value: string) => {
+    try {
+      const { error } = await supabase
+        .from("admin_settings")
+        .upsert({
+          setting_key: key,
+          setting_value: value,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "setting_key"
+        })
+
+      if (error) {
+        console.error(`[Save Setting] Failed to save ${key}:`, error)
+        throw error
+      }
+    } catch (error) {
+      console.error(`[Save Setting] Error saving ${key}:`, error)
+      throw error
+    }
+  }
 
   // Debug: Track judgesList changes
   React.useEffect(() => {
@@ -383,33 +449,99 @@ export default function AdminPage() {
     }
   }
 
-  const handleSaveFund = () => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("admin_investment_fund", investmentFund)
+  const handleSaveFund = async () => {
+    try {
+      const { error } = await supabase
+        .from("admin_settings")
+        .upsert({
+          setting_key: "investment_fund",
+          setting_value: investmentFund,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "setting_key"
+        })
+
+      if (error) {
+        throw error
+      }
+
       toast.success("Investment fund saved!", {
         description: `Total fund set to $${parseFloat(investmentFund).toLocaleString()}`,
       })
-    }
-  }
-
-  const handleSaveCalendarSettings = () => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("calendar_slot_duration", slotDuration.toString())
-      localStorage.setItem("calendar_judges_per_project", judgesPerProject.toString())
-      localStorage.setItem("calendar_start_time", scheduleStartTime)
-      localStorage.setItem("calendar_end_time", scheduleEndTime)
-      toast.success("Calendar settings saved!", {
-        description: `Schedule: ${scheduleStartTime} - ${scheduleEndTime}, Slot duration: ${slotDuration}min, Judges per project: ${judgesPerProject}`,
+    } catch (error) {
+      console.error("Failed to save investment fund:", error)
+      toast.error("Failed to save investment fund", {
+        description: error instanceof Error ? error.message : "Unknown error",
       })
     }
   }
 
-  const handleSaveScoringSettings = () => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("scoring_min_investment", minInvestment)
-      localStorage.setItem("scoring_max_investment", maxInvestment)
+  const handleSaveCalendarSettings = async () => {
+    try {
+      const settingsToSave = [
+        { setting_key: "calendar_slot_duration", setting_value: slotDuration.toString() },
+        { setting_key: "calendar_judges_per_project", setting_value: judgesPerProject.toString() },
+        { setting_key: "calendar_start_time", setting_value: scheduleStartTime },
+        { setting_key: "calendar_end_time", setting_value: scheduleEndTime },
+      ]
+
+      const { error } = await supabase
+        .from("admin_settings")
+        .upsert(
+          settingsToSave.map(s => ({
+            ...s,
+            updated_at: new Date().toISOString(),
+          })),
+          {
+            onConflict: "setting_key"
+          }
+        )
+
+      if (error) {
+        throw error
+      }
+
+      toast.success("Calendar settings saved!", {
+        description: `Schedule: ${scheduleStartTime} - ${scheduleEndTime}, Slot duration: ${slotDuration}min, Judges per project: ${judgesPerProject}`,
+      })
+    } catch (error) {
+      console.error("Failed to save calendar settings:", error)
+      toast.error("Failed to save calendar settings", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    }
+  }
+
+  const handleSaveScoringSettings = async () => {
+    try {
+      const settingsToSave = [
+        { setting_key: "scoring_min_investment", setting_value: minInvestment },
+        { setting_key: "scoring_max_investment", setting_value: maxInvestment },
+      ]
+
+      const { error } = await supabase
+        .from("admin_settings")
+        .upsert(
+          settingsToSave.map(s => ({
+            ...s,
+            updated_at: new Date().toISOString(),
+          })),
+          {
+            onConflict: "setting_key"
+          }
+        )
+
+      if (error) {
+        throw error
+      }
+
       toast.success("Scoring system settings saved!", {
         description: `Investment range: $${parseFloat(minInvestment).toLocaleString()} - $${parseFloat(maxInvestment).toLocaleString()}`,
+      })
+    } catch (error) {
+      console.error("Failed to save scoring settings:", error)
+      toast.error("Failed to save scoring settings", {
+        description: error instanceof Error ? error.message : "Unknown error",
       })
     }
   }
@@ -1160,9 +1292,26 @@ export default function AdminPage() {
                           }
                           const updated = [...roomsList, newRoom]
                           setRoomsList(updated)
-                          if (typeof window !== "undefined") {
-                            localStorage.setItem("rooms_data", JSON.stringify(updated))
+                          
+                          // Save to Supabase
+                          try {
+                            const { error } = await supabase
+                              .from("admin_settings")
+                              .upsert({
+                                setting_key: "rooms_data",
+                                setting_value: JSON.stringify(updated),
+                                updated_at: new Date().toISOString(),
+                              }, {
+                                onConflict: "setting_key"
+                              })
+
+                            if (error) {
+                              console.error("Failed to save rooms data:", error)
+                            }
+                          } catch (error) {
+                            console.error("Failed to save rooms data:", error)
                           }
+                          
                           toast.success("Room added!", {
                             description: `${newRoom.name} has been added`,
                           })
@@ -1204,9 +1353,26 @@ export default function AdminPage() {
                                     }
                                     const updated = roomsList.filter(r => r.id !== room.id)
                                     setRoomsList(updated)
-                                    if (typeof window !== "undefined") {
-                                      localStorage.setItem("rooms_data", JSON.stringify(updated))
+                                    
+                                    // Save to Supabase
+                                    try {
+                                      const { error } = await supabase
+                                        .from("admin_settings")
+                                        .upsert({
+                                          setting_key: "rooms_data",
+                                          setting_value: JSON.stringify(updated),
+                                          updated_at: new Date().toISOString(),
+                                        }, {
+                                          onConflict: "setting_key"
+                                        })
+
+                                      if (error) {
+                                        console.error("Failed to save rooms data:", error)
+                                      }
+                                    } catch (error) {
+                                      console.error("Failed to save rooms data:", error)
                                     }
+                                    
                                     toast.success("Room deleted!", {
                                       description: `${room.name} has been removed`,
                                     })
