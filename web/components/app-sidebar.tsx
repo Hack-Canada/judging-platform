@@ -35,8 +35,8 @@ const data = {
       icon: IconUsers,
     },
     {
-      title: "Projects",
-      url: "/dashboard/projects",
+      title: "Submissions",
+      url: "/dashboard/submissions",
       icon: IconFolder,
     },
     {
