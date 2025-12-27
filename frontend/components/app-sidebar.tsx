@@ -13,14 +13,17 @@ import {
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
+import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { supabase } from "@/lib/supabase-client"
 
 const data = {
   navMain: [
@@ -63,6 +66,53 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [user, setUser] = React.useState<{
+    name: string
+    email: string
+    avatar?: string
+    role?: string
+  } | null>(null)
+
+  React.useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          const userMetadata = session.user.user_metadata
+          setUser({
+            name: userMetadata?.name || userMetadata?.full_name || session.user.email?.split("@")[0] || "User",
+            email: session.user.email || "",
+            avatar: userMetadata?.avatar_url || userMetadata?.picture,
+            role: userMetadata?.role || userMetadata?.user_role || "User",
+          })
+        }
+      } catch (error) {
+        console.error("Error loading user:", error)
+      }
+    }
+
+    void loadUser()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const userMetadata = session.user.user_metadata
+        setUser({
+          name: userMetadata?.name || userMetadata?.full_name || session.user.email?.split("@")[0] || "User",
+          email: session.user.email || "",
+          avatar: userMetadata?.avatar_url || userMetadata?.picture,
+          role: userMetadata?.role || userMetadata?.user_role || "User",
+        })
+      } else {
+        setUser(null)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -90,6 +140,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <NavMain items={data.navMain} />
       </SidebarContent>
+      {user && (
+        <SidebarFooter className="p-0">
+          <NavUser user={user} />
+        </SidebarFooter>
+      )}
     </Sidebar>
   )
 }
