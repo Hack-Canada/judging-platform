@@ -58,7 +58,6 @@ export default function RolesPage() {
       
       isInitialLoad.current = false
     } catch (error) {
-      console.error("Failed to fetch users:", error)
       // Only show error toast on initial load or manual refresh
       if (isInitialLoad.current || showLoading) {
         toast.error("Failed to load users", {

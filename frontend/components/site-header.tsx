@@ -38,7 +38,6 @@ export function SiteHeader() {
       router.push("/")
       router.refresh()
     } catch (error) {
-      console.error("Logout error:", error)
       toast.error("Logout failed", {
         description: "An unexpected error occurred",
       })

@@ -90,7 +90,7 @@ export default function JudgesPage() {
           router.push("/")
         }
       } catch (error) {
-        console.error("Error checking auth:", error)
+
         router.push("/")
       } finally {
         setAuthLoading(false)
@@ -114,6 +114,13 @@ export default function JudgesPage() {
     }
   }, [router])
 
+  // Open judge name dialog when auth is complete and no judge name is set
+  React.useEffect(() => {
+    if (!authLoading && hasAccess && !judgeName) {
+      setJudgeNameDialogOpen(true)
+    }
+  }, [authLoading, hasAccess, judgeName])
+
   const handleJudgeNameSubmit = async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault()
@@ -129,85 +136,21 @@ export default function JudgesPage() {
 
     try {
       const trimmedJudgeName = judgeNameInput.trim()
-      console.log("[Judge Auth] Checking if judge exists:", trimmedJudgeName)
       
       // Check if judge exists in Supabase
-      console.log("[Judge Auth] Querying judges table for name:", trimmedJudgeName)
       const { data: judgesData, error: judgesError } = await supabase
         .from("judges")
         .select("id, name, email")
         .eq("name", trimmedJudgeName)
         .single()
-      
-      console.log("[Judge Auth] Raw query response:", { data: judgesData, error: judgesError })
-
-      console.log("[Judge Auth] Supabase query result:", { judgesData, judgesError })
 
       if (judgesError) {
-        console.error("[Judge Auth] Error checking judge - Raw error:", judgesError)
-        console.error("[Judge Auth] Error type:", typeof judgesError)
-        console.error("[Judge Auth] Error constructor:", judgesError?.constructor?.name)
-        
-        // Try to get all properties
-        const errorDetails: Record<string, any> = {}
-        for (const key in judgesError) {
-          errorDetails[key] = (judgesError as any)[key]
-        }
-        console.error("[Judge Auth] Error properties:", errorDetails)
-        
-        // Try JSON stringify with replacer
-        try {
-          console.error("[Judge Auth] Error stringified:", JSON.stringify(judgesError, (key, value) => {
-            if (value instanceof Error) {
-              return {
-                name: value.name,
-                message: value.message,
-                stack: value.stack,
-                ...Object.fromEntries(Object.entries(value))
-              }
-            }
-            return value
-          }, 2))
-        } catch (e) {
-          console.error("[Judge Auth] Could not stringify error:", e)
-        }
-        
-        // Check error properties
-        const errorCode = (judgesError as any)?.code || (judgesError as any)?.statusCode
-        const errorMessage = (judgesError as any)?.message || String(judgesError)
-        const errorDetailsProp = (judgesError as any)?.details
-        const errorHint = (judgesError as any)?.hint
-        
-        console.error("[Judge Auth] Extracted error info:", {
-          code: errorCode,
-          message: errorMessage,
-          details: errorDetailsProp,
-          hint: errorHint,
-        })
-        
-        // Check if it's a "not found" error (PGRST116)
-        const isNotFound = errorCode === "PGRST116" || 
-                          errorCode === 406 || 
-                          errorMessage?.includes("No rows") ||
-                          errorMessage?.includes("Could not find")
-        
-        console.log("[Judge Auth] Is not found error?", isNotFound)
-        
         setJudgeNameError("Judge not found. Please contact admin to be added as a judge.")
         setCheckingJudge(false)
         return
       }
 
       if (!judgesData) {
-        console.warn("[Judge Auth] No judge data returned for name:", trimmedJudgeName)
-        setJudgeNameError("Judge not found. Please contact admin to be added as a judge.")
-        setCheckingJudge(false)
-        return
-      }
-
-      console.log("[Judge Auth] Judge found:", { id: judgesData.id, name: judgesData.name, email: judgesData.email })
-
-      if (judgesError || !judgesData) {
         setJudgeNameError("Judge not found. Please contact admin to be added as a judge.")
         setCheckingJudge(false)
         return
@@ -221,7 +164,6 @@ export default function JudgesPage() {
       setHasAccess(true)
     } catch (error) {
       setJudgeNameError("An error occurred. Please try again.")
-      console.error("Error checking judge:", error)
     } finally {
       setCheckingJudge(false)
     }
@@ -244,72 +186,18 @@ export default function JudgesPage() {
     const loadJudgeData = async () => {
       try {
         setLoading(true)
-        console.log("[Load Judge Data] Loading data for judge:", judgeName)
 
         // Load judge from Supabase
         // Note: Using snake_case column names as per database schema (assigned_projects, total_invested)
-        console.log("[Load Judge Data] Querying judges table for name:", judgeName)
+
         const { data: judgesData, error: judgesError } = await supabase
           .from("judges")
           .select("id, name, email, assigned_projects, total_invested, tracks")
           .eq("name", judgeName)
           .single()
-        
-        console.log("[Load Judge Data] Raw query response:", { data: judgesData, error: judgesError })
 
-        console.log("[Load Judge Data] Judge query result:", { judgesData, judgesError })
-        
         // Better error inspection
         if (judgesError) {
-          console.error("[Load Judge Data] Error loading judge - Raw error:", judgesError)
-          console.error("[Load Judge Data] Error type:", typeof judgesError)
-          console.error("[Load Judge Data] Error constructor:", judgesError?.constructor?.name)
-          
-          // Try to get all properties
-          const errorDetails: Record<string, any> = {}
-          for (const key in judgesError) {
-            errorDetails[key] = (judgesError as any)[key]
-          }
-          console.error("[Load Judge Data] Error properties:", errorDetails)
-          
-          // Try JSON stringify with replacer
-          try {
-            console.error("[Load Judge Data] Error stringified:", JSON.stringify(judgesError, (key, value) => {
-              if (value instanceof Error) {
-                return {
-                  name: value.name,
-                  message: value.message,
-                  stack: value.stack,
-                  ...Object.fromEntries(Object.entries(value))
-                }
-              }
-              return value
-            }, 2))
-          } catch (e) {
-            console.error("[Load Judge Data] Could not stringify error:", e)
-          }
-          
-          // Check error properties
-          const errorCode = (judgesError as any)?.code || (judgesError as any)?.statusCode
-          const errorMessage = (judgesError as any)?.message || String(judgesError)
-          const errorDetailsProp = (judgesError as any)?.details
-          const errorHint = (judgesError as any)?.hint
-          
-          console.error("[Load Judge Data] Extracted error info:", {
-            code: errorCode,
-            message: errorMessage,
-            details: errorDetailsProp,
-            hint: errorHint,
-          })
-          
-          // Check if it's a "not found" error (PGRST116)
-          const isNotFound = errorCode === "PGRST116" || 
-                            errorCode === 406 || 
-                            errorMessage?.includes("No rows") ||
-                            errorMessage?.includes("Could not find")
-          
-          console.log("[Load Judge Data] Is not found error?", isNotFound)
-          
           // Judge not found - show dialog again
           setJudgeName("")
           setJudgeNameDialogOpen(true)
@@ -320,7 +208,7 @@ export default function JudgesPage() {
         }
 
         if (!judgesData) {
-          console.warn("[Load Judge Data] No judge data returned for name:", judgeName)
+
           // Judge not found - show dialog again
           setJudgeName("")
           setJudgeNameDialogOpen(true)
@@ -329,8 +217,6 @@ export default function JudgesPage() {
           setHasAccess(false)
           return
         }
-
-        console.log("[Load Judge Data] Raw judge data from database:", judgesData)
 
         // Map database fields (snake_case) to TypeScript interface (camelCase)
         const rawData = judgesData as any
@@ -342,15 +228,7 @@ export default function JudgesPage() {
           totalInvested: parseFloat(String(rawData.total_invested ?? rawData.totalInvested ?? 0)),
           tracks: rawData.tracks || [],
         }
-        
-        console.log("[Load Judge Data] Mapped judge data:", {
-          id: judgeData.id,
-          name: judgeData.name,
-          email: judgeData.email,
-          assignedProjects: judgeData.assignedProjects,
-          totalInvested: judgeData.totalInvested,
-          tracks: judgeData.tracks,
-        })
+
         setJudge(judgeData)
 
         // Load total investment fund from Supabase admin_settings
@@ -362,8 +240,7 @@ export default function JudgesPage() {
         
         const totalFund = fundSetting?.setting_value ? parseFloat(fundSetting.setting_value) : 10000
         setTotalInvestmentFund(totalFund)
-        console.log("[Load Judge Data] Total investment fund:", totalFund)
-        
+
         // Load rooms data for room name mapping
         const { data: roomsSetting } = await supabase
           .from("admin_settings")
@@ -379,9 +256,9 @@ export default function JudgesPage() {
               roomsMapData.set(room.id, room.name)
             })
             setRoomsMap(roomsMapData)
-            console.log("[Load Judge Data] Loaded rooms map:", roomsMapData)
+
           } catch (e) {
-            console.error("[Load Judge Data] Error parsing rooms:", e)
+
           }
         }
 
@@ -391,52 +268,41 @@ export default function JudgesPage() {
           .select("*", { count: "exact", head: true })
 
         if (countError) {
-          console.error("[Load Judge Data] Error counting judges:", countError)
+
         } else {
           const count = judgesCount || 0
           setTotalJudgesCount(count)
-          console.log("[Load Judge Data] Total judges count:", count)
-          
+
           // Calculate per-judge allocation (equal distribution)
           const allocation = count > 0 ? totalFund / count : 0
           setJudgeAllocation(allocation)
-          console.log("[Load Judge Data] Judge allocation:", allocation)
+
         }
 
         // Load assigned submissions for this judge from calendar_schedule_slots
         // Filter calendar slots where judge_ids array contains this judge's ID
-        console.log("[Load Judge Data] Loading assigned submissions from calendar_schedule_slots for judge_id:", judgeData.id)
-        
+
         // Fetch all calendar slots with full schedule info and filter for ones that contain this judge's ID
         // Note: We'll sort in JavaScript to ensure proper chronological order
         const { data: calendarSlotsData, error: calendarSlotsError } = await supabase
           .from("calendar_schedule_slots")
           .select("submission_id, judge_ids, date, start_time, end_time, room_id")
 
-        console.log("[Load Judge Data] Calendar slots query result:", { calendarSlotsData, calendarSlotsError })
-
         if (calendarSlotsError) {
-          console.error("[Load Judge Data] Error loading calendar slots:", calendarSlotsError)
-          console.error("[Load Judge Data] Calendar slots error details:", {
-            message: calendarSlotsError.message,
-            details: calendarSlotsError.details,
-            hint: calendarSlotsError.hint,
-            code: calendarSlotsError.code,
-          })
+
+
         }
 
         // Filter slots where judge_ids array contains the current judge's ID
         // Convert judge ID to string for comparison (it might be UUID or string)
         const judgeIdStr = String(judgeData.id)
-        console.log("[Load Judge Data] Looking for judge ID in slots:", judgeIdStr)
-        
+
         const assignedSlots = (calendarSlotsData || []).filter(slot => {
           const judgeIds = slot.judge_ids || []
-          console.log("[Load Judge Data] Checking slot - submission_id:", slot.submission_id, "judge_ids:", judgeIds)
-          
+
           // Loop through judge_ids array to check if current judge's ID exists
           if (!Array.isArray(judgeIds)) {
-            console.warn("[Load Judge Data] judge_ids is not an array:", judgeIds)
+
             return false
           }
           
@@ -444,10 +310,9 @@ export default function JudgesPage() {
           for (let i = 0; i < judgeIds.length; i++) {
             const slotJudgeId = judgeIds[i]
             const slotJudgeIdStr = String(slotJudgeId)
-            console.log(`[Load Judge Data] Comparing slot judge ID [${i}]: "${slotJudgeIdStr}" with judge ID: "${judgeIdStr}"`)
-            
+
             if (slotJudgeIdStr === judgeIdStr) {
-              console.log("[Load Judge Data] Match found! Judge is assigned to this slot")
+
               return true
             }
           }
@@ -455,14 +320,11 @@ export default function JudgesPage() {
           return false
         })
 
-        console.log("[Load Judge Data] Filtered calendar slots for this judge:", assignedSlots)
-
         // Extract unique submission IDs
         const assignedSubmissionIds = Array.from(
           new Set(assignedSlots.map(slot => slot.submission_id))
         )
-        
-        console.log("[Load Judge Data] Assigned submission IDs from calendar:", assignedSubmissionIds)
+
         setAssignedSubmissionIds(assignedSubmissionIds)
         
         // Build schedule slots map (submission_id -> schedule info array)
@@ -481,55 +343,40 @@ export default function JudgesPage() {
           })
         })
         setScheduleSlotsMap(slotsMap)
-        console.log("[Load Judge Data] Schedule slots map:", slotsMap)
 
         // Load submission details from Supabase (only assigned ones)
         let submissionsData: any[] | null = null
         if (assignedSubmissionIds.length > 0) {
-          console.log("[Load Judge Data] Loading submission details for IDs:", assignedSubmissionIds)
+
           const { data, error: submissionsError } = await supabase
             .from("submissions")
             .select("id, project_name, tracks, team_name, devpost_link")
             .in("id", assignedSubmissionIds)
             .order("submitted_at", { ascending: false })
-          
-          console.log("[Load Judge Data] Submissions query result:", { data, error: submissionsError })
 
           if (submissionsError) {
-            console.error("[Load Judge Data] Error loading submissions:", submissionsError)
-            console.error("[Load Judge Data] Submissions error details:", {
-              message: submissionsError.message,
-              details: submissionsError.details,
-              hint: submissionsError.hint,
-              code: submissionsError.code,
-            })
+
+
           } else {
             submissionsData = data
-            console.log("[Load Judge Data] Loaded submissions:", submissionsData)
+
           }
         } else {
-          console.log("[Load Judge Data] No assigned submission IDs found for this judge")
+
         }
 
         // Load investments from Supabase (using submission_id)
-        console.log("[Load Judge Data] Loading investments for judge_id:", judgeData.id)
+
         const { data: investmentsData, error: investmentsError } = await supabase
           .from("judge_investments")
           .select("submission_id, amount")
           .eq("judge_id", judgeData.id)
 
-        console.log("[Load Judge Data] Investments query result:", { investmentsData, investmentsError })
-
         if (investmentsError) {
-          console.error("[Load Judge Data] Error loading investments:", investmentsError)
-          console.error("[Load Judge Data] Investments error details:", {
-            message: investmentsError.message,
-            details: investmentsError.details,
-            hint: investmentsError.hint,
-            code: investmentsError.code,
-          })
+
+
         } else {
-          console.log("[Load Judge Data] Loaded investments:", investmentsData)
+
         }
 
         // Build investments map using submission IDs
@@ -537,7 +384,6 @@ export default function JudgesPage() {
         investmentsData?.forEach(inv => {
           investmentsMap[inv.submission_id] = parseFloat(String(inv.amount)) || 0
         })
-        console.log("[Load Judge Data] Investments map:", investmentsMap)
 
         if (submissionsData && submissionsData.length > 0) {
           const judgeSubmissions: JudgeSubmission[] = submissionsData.map((submission: any) => ({
@@ -549,7 +395,6 @@ export default function JudgesPage() {
             devpost_link: submission.devpost_link,
           }))
 
-          console.log("[Load Judge Data] Final judge submissions:", judgeSubmissions)
           setSubmissions(judgeSubmissions)
           setInvestments(investmentsMap)
           
@@ -584,8 +429,6 @@ export default function JudgesPage() {
               return timeA - timeB
             })
             
-            console.log(`[Sort] Submission ${submission.id} - Before sort:`, scheduleSlots.map(s => s.start_time))
-            console.log(`[Sort] Submission ${submission.id} - After sort:`, sortedSlots.map(s => s.start_time))
             
             // Get the first (earliest) schedule slot for sorting and display
             const firstSlot = sortedSlots.length > 0 ? sortedSlots[0] : null
@@ -664,15 +507,14 @@ export default function JudgesPage() {
           
           setDashboardEntries(sortedEntries as DashboardEntry[])
         } else {
-          console.log("[Load Judge Data] No submissions to display")
+
           setSubmissions([])
           setInvestments({})
           setDashboardEntries([])
         }
-        
-        console.log("[Load Judge Data] Judge data loading completed successfully")
+
       } catch (error) {
-        console.error("Failed to load judge data", error)
+
         toast.error("Failed to load data", {
           description: error instanceof Error ? error.message : "Unknown error",
         })
@@ -755,7 +597,7 @@ export default function JudgesPage() {
         .eq("id", judge.id)
 
       if (judgeUpdateError) {
-        console.error("Failed to update judge total:", judgeUpdateError)
+
         // Continue anyway as investment was saved
       }
 
@@ -795,7 +637,13 @@ export default function JudgesPage() {
     setInvestmentInput(currentValue.toString())
   }
 
-  if (!hasAccess && !judgeNameDialogOpen) {
+  // Show nothing while auth is loading
+  if (authLoading) {
+    return null
+  }
+
+  // If no access, redirect will happen, but show nothing
+  if (!hasAccess) {
     return null
   }
 

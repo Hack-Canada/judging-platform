@@ -52,7 +52,7 @@ export default function HackersPage() {
           router.push("/")
         }
       } catch (error) {
-        console.error("Error checking auth:", error)
+
         router.push("/")
       } finally {
         setAuthLoading(false)
@@ -86,7 +86,7 @@ export default function HackersPage() {
           .eq("setting_key", "rooms_data")
 
         if (error) {
-          console.error("[Hackers] Error loading rooms_data:", error)
+
           return
         }
 
@@ -98,11 +98,11 @@ export default function HackersPage() {
               setRooms(parsed)
             }
           } catch (e) {
-            console.error("[Hackers] Failed to parse rooms_data:", e)
+
           }
         }
       } catch (error) {
-        console.error("[Hackers] Failed to load rooms from admin_settings:", error)
+
       }
     }
 
@@ -121,7 +121,7 @@ export default function HackersPage() {
           .order("start_time", { ascending: true })
 
         if (error) {
-          console.error("[Hackers] Error loading schedule for submission:", error)
+
           toast.error("Failed to load schedule", {
             description: error.message,
           })
@@ -147,7 +147,7 @@ export default function HackersPage() {
           }
         }
       } catch (error) {
-        console.error("[Hackers] Unexpected error loading schedule:", error)
+
         toast.error("Failed to load schedule", {
           description: error instanceof Error ? error.message : "Unknown error",
         })
@@ -174,7 +174,7 @@ export default function HackersPage() {
         ])
 
       if (slotsError) {
-        console.error("[Hackers] Error loading all schedule slots:", slotsError)
+
         toast.error("Failed to load schedule", {
           description: slotsError.message,
         })
@@ -217,7 +217,7 @@ export default function HackersPage() {
         setCurrentStep(3)
       }
     } catch (error) {
-      console.error("[Hackers] Unexpected error loading all schedules:", error)
+
       toast.error("Failed to load schedule", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
@@ -356,7 +356,7 @@ export default function HackersPage() {
       // Try to load schedule immediately in case it's already set
       void loadScheduleForSubmission(inserted.id as string)
     } catch (error) {
-      console.error("Submission error:", error)
+
       toast.error("Failed to submit", {
         description: error instanceof Error ? error.message : "Unknown error occurred",
       })

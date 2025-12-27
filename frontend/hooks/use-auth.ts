@@ -17,7 +17,6 @@ export function useAuth() {
           router.push("/")
         }
       } catch (error) {
-        console.error("Error checking session:", error)
         router.push("/")
       } finally {
         setLoading(false)

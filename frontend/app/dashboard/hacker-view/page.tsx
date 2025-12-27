@@ -45,7 +45,7 @@ export default function HackerViewPage() {
           router.push("/")
         }
       } catch (error) {
-        console.error("Error checking auth:", error)
+
         router.push("/")
       } finally {
         setAuthLoading(false)

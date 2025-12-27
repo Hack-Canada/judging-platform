@@ -91,7 +91,7 @@ export default function CalendarPage() {
           return
         }
       } catch (error) {
-        console.error("Error checking auth:", error)
+
         router.push("/")
         return
       } finally {
@@ -121,7 +121,7 @@ export default function CalendarPage() {
               .select("setting_key, setting_value")
 
             if (settingsError) {
-              console.error("[Calendar] Error loading settings:", settingsError)
+
               return
             }
 
@@ -164,17 +164,16 @@ export default function CalendarPage() {
                     setRooms(defaultRooms)
                   }
                 } catch (e) {
-                  console.error("[Calendar] Error parsing rooms_data:", e)
+
                   setRooms(defaultRooms)
                 }
               } else {
                 setRooms(defaultRooms)
               }
 
-              console.log("[Calendar] Successfully loaded settings from Supabase")
             }
           } catch (error) {
-            console.error("[Calendar] Failed to load settings:", error)
+
             // Fallback to defaults
             setRooms(defaultRooms)
           }
@@ -214,7 +213,7 @@ export default function CalendarPage() {
 
         // Note: Scheduled slots will be loaded separately when date changes
       } catch (error) {
-        console.error("Failed to load calendar data from Supabase", error)
+
       }
     }
 
@@ -231,7 +230,7 @@ export default function CalendarPage() {
           table: "admin_settings",
         },
         (payload) => {
-          console.log("[Calendar] Settings changed:", payload)
+
           // Reload settings when they change
           void loadFromSupabase()
         }
@@ -247,7 +246,7 @@ export default function CalendarPage() {
   // Update time slots when time range changes
   React.useEffect(() => {
     // This will cause timeSlots to recalculate when settings change
-    console.log("[Calendar] Time range changed:", { scheduleStartTime, scheduleEndTime, slotDuration, judgesPerProject })
+
   }, [scheduleStartTime, scheduleEndTime, slotDuration, judgesPerProject])
 
   const saveSchedule = (newSlots: TimeSlot[]) => {
@@ -585,7 +584,7 @@ export default function CalendarPage() {
       setSaving(true)
       
       // First, delete existing schedule slots for this date (ignore if table doesn't exist)
-      console.log("[Save Schedule] Deleting existing schedule for date:", selectedDate)
+
       const { error: deleteError } = await supabase
         .from("calendar_schedule_slots")
         .delete()
@@ -597,9 +596,8 @@ export default function CalendarPage() {
         if (deleteErrorMsg.includes("does not exist") || 
             deleteErrorMsg.includes("relation") ||
             (deleteError as any)?.code === "42P01") {
-          console.warn("[Save Schedule] Table might not exist yet, will try to create:", deleteErrorMsg)
+
         } else {
-          console.error("[Save Schedule] Error deleting existing schedule:", {
             message: deleteErrorMsg,
             code: (deleteError as any)?.code,
             details: (deleteError as any)?.details,
@@ -607,19 +605,13 @@ export default function CalendarPage() {
           // Continue anyway - we'll try to insert
         }
       } else {
-        console.log("[Save Schedule] Successfully deleted existing schedule")
+
       }
 
       // Prepare slots for insertion
       // Convert judge IDs to UUID strings (they may be numbers or strings)
       const slotsToInsert = slots.map((slot, index) => {
-        console.log(`[Save Schedule] Preparing slot ${index + 1}:`, {
-          slot,
-          judgeIds: slot.judgeIds,
-          judgeIdsType: typeof slot.judgeIds,
-          judgeIdsLength: slot.judgeIds?.length,
-        })
-        
+
         // Convert judge IDs to UUID strings
         // Judge IDs from Supabase are UUIDs, but they might be stored as numbers in legacy data
         const judgeIdUuids = (slot.judgeIds || []).map(id => {
@@ -627,7 +619,7 @@ export default function CalendarPage() {
           const idStr = String(id)
           // Validate it looks like a UUID (basic check)
           if (idStr.length < 30) {
-            console.warn(`[Save Schedule] Judge ID "${idStr}" doesn't look like a UUID - may need conversion`)
+
           }
           return idStr
         })
@@ -638,7 +630,7 @@ export default function CalendarPage() {
           : parseInt(String(slot.roomId), 10)
         
         if (isNaN(roomIdInt)) {
-          console.error(`[Save Schedule] Invalid room_id for slot ${index + 1}:`, slot.roomId)
+
           throw new Error(`Invalid room ID: ${slot.roomId}`)
         }
         
@@ -650,15 +642,12 @@ export default function CalendarPage() {
           room_id: roomIdInt, // integer (validated)
           judge_ids: judgeIdUuids, // UUID array
         }
-        
-        console.log(`[Save Schedule] Slot ${index + 1} prepared:`, slotData)
+
         return slotData
       })
 
-      console.log("[Save Schedule] Prepared slots to insert:", JSON.stringify(slotsToInsert, null, 2))
-      console.log("[Save Schedule] Number of slots:", slotsToInsert.length)
-      console.log("[Save Schedule] First slot sample:", slotsToInsert[0])
-      
+
+
       // Validate that we have slots to insert
       if (slotsToInsert.length === 0) {
         toast.error("No slots to save", {
@@ -670,7 +659,6 @@ export default function CalendarPage() {
       
       // Validate first slot structure
       const firstSlot = slotsToInsert[0]
-      console.log("[Save Schedule] First slot validation:", {
         hasDate: !!firstSlot.date,
         hasStartTime: !!firstSlot.start_time,
         hasEndTime: !!firstSlot.end_time,
@@ -684,14 +672,12 @@ export default function CalendarPage() {
       })
 
       // Insert new schedule slots
-      console.log("[Save Schedule] Calling Supabase insert...")
+
       const { data, error } = await supabase
         .from("calendar_schedule_slots")
         .insert(slotsToInsert)
         .select()
 
-      console.log("[Save Schedule] Insert response - data:", data)
-      console.log("[Save Schedule] Insert response - error:", error)
 
       if (error) {
         // Supabase errors typically have: message, details, hint, code
@@ -699,24 +685,20 @@ export default function CalendarPage() {
         const errorDetails = (error as any)?.details || null
         const errorHint = (error as any)?.hint || null
         const errorCode = (error as any)?.code || null
-        
-        console.error("[Save Schedule] Error saving schedule to Supabase")
-        console.error("[Save Schedule] Error object:", error)
-        console.error("[Save Schedule] Error message:", errorMessage)
-        console.error("[Save Schedule] Error code:", errorCode)
-        console.error("[Save Schedule] Error details:", errorDetails)
-        console.error("[Save Schedule] Error hint:", errorHint)
-        
+
+
+
+
+
+
         // Log all properties
         if (error && typeof error === 'object') {
-          console.error("[Save Schedule] All error properties:")
+
           Object.keys(error).forEach(key => {
-            console.error(`  ${key}:`, (error as any)[key])
           })
           // Also try Object.getOwnPropertyNames for non-enumerable
           Object.getOwnPropertyNames(error).forEach(key => {
             if (!Object.keys(error).includes(key)) {
-              console.error(`  [non-enumerable] ${key}:`, (error as any)[key])
             }
           })
         }
@@ -743,11 +725,11 @@ export default function CalendarPage() {
         description: `Saved ${slots.length} time slots for ${selectedDate}`,
       })
     } catch (error) {
-      console.error("Failed to save schedule to Supabase:", error)
-      console.error("Error type:", typeof error)
+
+
       if (error instanceof Error) {
-        console.error("Error message:", error.message)
-        console.error("Error stack:", error.stack)
+
+
       }
       toast.error("Failed to save schedule", {
         description: error instanceof Error ? error.message : "An unexpected error occurred",

@@ -51,7 +51,7 @@ export default function SubmissionsPage() {
           router.push("/")
         }
       } catch (error) {
-        console.error("Error checking auth:", error)
+
         router.push("/")
       } finally {
         setAuthLoading(false)
@@ -87,7 +87,7 @@ export default function SubmissionsPage() {
           .order("submitted_at", { ascending: false })
 
         if (error) {
-          console.error("Error loading submissions:", error)
+
           return
         }
 
@@ -95,7 +95,7 @@ export default function SubmissionsPage() {
           setSubmissions(data as Submission[])
         }
       } catch (error) {
-        console.error("Failed to load submissions", error)
+
       } finally {
         setLoading(false)
       }

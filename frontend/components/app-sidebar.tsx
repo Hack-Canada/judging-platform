@@ -87,7 +87,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           })
         }
       } catch (error) {
-        console.error("Error loading user:", error)
+        // Error loading user
       }
     }
 

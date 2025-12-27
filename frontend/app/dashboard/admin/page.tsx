@@ -113,7 +113,7 @@ export default function AdminPage() {
         )
 
       if (error) {
-        console.error("Failed to save rooms data:", error)
+
         toast.error("Failed to save rooms", {
           description: error.message,
         })
@@ -124,7 +124,7 @@ export default function AdminPage() {
         description: "Room settings have been saved",
       })
     } catch (error) {
-      console.error("Failed to save rooms data:", error)
+
       toast.error("Failed to save rooms", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
@@ -156,7 +156,7 @@ export default function AdminPage() {
         .select("submission_id, amount")
       
       if (investmentsError) {
-        console.error("[Load Track Stats] Error loading investments:", investmentsError)
+
         return
       }
       
@@ -233,9 +233,9 @@ export default function AdminPage() {
       })
       
       setTrackStats(finalStats)
-      console.log("[Load Track Stats] Loaded stats for", finalStats.size, "tracks")
+
     } catch (error) {
-      console.error("[Load Track Stats] Error:", error)
+
     }
   }, [])
 
@@ -251,7 +251,7 @@ export default function AdminPage() {
           return
         }
       } catch (error) {
-        console.error("Error checking auth:", error)
+
         router.push("/")
         return
       } finally {
@@ -280,7 +280,7 @@ export default function AdminPage() {
             .select("setting_key, setting_value")
 
           if (settingsError) {
-            console.error("[Load Settings] Error loading settings:", settingsError)
+
             return
           }
 
@@ -338,7 +338,7 @@ export default function AdminPage() {
                   setTracksList(parsed)
                 }
               } catch (e) {
-                console.error("[Load Settings] Error parsing tracks_data:", e)
+
               }
             }
 
@@ -351,21 +351,20 @@ export default function AdminPage() {
                   setRoomsList(parsed)
                 }
               } catch (e) {
-                console.error("[Load Settings] Error parsing rooms_data:", e)
+
               }
             }
 
-            console.log("[Load Settings] Successfully loaded settings from Supabase")
           }
         } catch (error) {
-          console.error("[Load Settings] Failed to load settings:", error)
+
         }
       }
 
       await loadSettingsFromSupabase()
-      console.log("[Load From Supabase] Starting to fetch all admin data...")
+
       try {
-        console.log("[Load From Supabase] Making parallel queries to Supabase...")
+
         const [
           { data: supabaseJudges, error: judgesError }, 
           { data: supabaseSubmissions, error: submissionsError },
@@ -382,24 +381,16 @@ export default function AdminPage() {
             .from("judge_project_assignments")
             .select("judge_id, submission_id")
         ])
-        console.log("[Load From Supabase] All queries completed")
 
-        console.log("[Load From Supabase] Judges query result:")
-        console.log("[Load From Supabase] Judges error:", judgesError)
-        console.log("[Load From Supabase] Judges data:", supabaseJudges)
+
+
         const judgesArray = supabaseJudges as any[] | null
-        console.log("[Load From Supabase] Judges data length:", judgesArray?.length || 0)
 
         if (judgesError) {
-          console.error("[Load From Supabase] Error loading judges:", {
-            message: judgesError.message,
-            details: judgesError.details,
-            hint: judgesError.hint,
-            code: judgesError.code,
-          })
+
           setJudgesList([])
         } else if (judgesArray && judgesArray.length > 0) {
-          console.log("[Load From Supabase] Mapping judges data...")
+
           // Map judges - keeping id as string (UUID) but storing as any to match Judge type expectations
           const mappedJudges: Judge[] = judgesArray.map((row, index) => {
             const mapped = {
@@ -410,20 +401,19 @@ export default function AdminPage() {
               totalInvested: parseFloat(String(row.total_invested || 0)),
               tracks: row.tracks || ["General"],
             }
-            console.log(`[Load From Supabase] Mapped judge ${index + 1}:`, mapped)
+
             return mapped
           })
-          console.log("[Load From Supabase] All mapped judges:", mappedJudges)
-          console.log("[Load From Supabase] Setting judges list state...")
+
+
           setJudgesList(mappedJudges)
-          console.log("[Load From Supabase] Successfully loaded", mappedJudges.length, "judges")
-          
+
           // Force a re-render check
           setTimeout(() => {
-            console.log("[Load From Supabase] State check - judgesList should have", mappedJudges.length, "items")
+
           }, 100)
         } else if (!judgesArray || judgesArray.length === 0) {
-          console.log("[Load From Supabase] No judges found, setting empty list")
+
           // Only set empty if we actually have no data (don't overwrite if already loaded)
           setJudgesList((prev) => prev.length > 0 ? prev : [])
         }
@@ -466,23 +456,23 @@ export default function AdminPage() {
         if (supabaseSubmissions && supabaseSubmissions.length > 0 && 
             (!assignmentsData || assignmentsData.length === 0) &&
             judgesArray && judgesArray.length > 0) {
-          console.log("[Load From Supabase] Scheduling auto-assign after judges are loaded")
+
           setTimeout(() => {
-            console.log("[Load From Supabase] Running auto-assign now")
+
             autoAssignJudges(false)
             // Don't mark as modified on initial load - only mark when user manually triggers
           }, 500) // Increased delay to ensure state is updated
         }
       } catch (error) {
-        console.error("[Load From Supabase] Failed to load admin data from Supabase:", error)
-        console.error("[Load From Supabase] Error type:", typeof error)
-        console.error("[Load From Supabase] Error constructor:", error?.constructor?.name)
+
+
+
         if (error instanceof Error) {
-          console.error("[Load From Supabase] Error message:", error.message)
-          console.error("[Load From Supabase] Error stack:", error.stack)
+
+
         }
       } finally {
-        console.log("[Load From Supabase] Setting isInitialized to true")
+
         setIsInitialized(true)
       }
     }
@@ -508,19 +498,19 @@ export default function AdminPage() {
         })
 
       if (error) {
-        console.error(`[Save Setting] Failed to save ${key}:`, error)
+
         throw error
       }
     } catch (error) {
-      console.error(`[Save Setting] Error saving ${key}:`, error)
+
       throw error
     }
   }
 
   // Debug: Track judgesList changes
   React.useEffect(() => {
-    console.log("[JudgesList State] judgesList changed, new length:", judgesList.length)
-    console.log("[JudgesList State] Current judgesList:", judgesList)
+
+
   }, [judgesList])
 
   // Load submissions
@@ -536,7 +526,7 @@ export default function AdminPage() {
           .order("submitted_at", { ascending: false })
 
         if (error && !error.message.includes("relation") && !error.message.includes("does not exist")) {
-          console.error("Error loading submissions:", error)
+
           return
         }
 
@@ -544,7 +534,7 @@ export default function AdminPage() {
           setSubmissions(data)
         }
       } catch (error) {
-        console.error("Failed to load submissions", error)
+
       } finally {
         setLoadingSubmissions(false)
       }
@@ -562,26 +552,19 @@ export default function AdminPage() {
   }
 
   const loadJudgesFromSupabase = async () => {
-    console.log("[Load Judges] Starting to fetch judges from Supabase...")
+
     try {
-      console.log("[Load Judges] Making Supabase query...")
+
       const { data: supabaseJudges, error: judgesError } = await supabase
         .from("judges")
         .select("id, name, email, assigned_projects, total_invested, tracks")
         .order("created_at", { ascending: false })
 
-      console.log("[Load Judges] Supabase response received")
-      console.log("[Load Judges] Error:", judgesError)
-      console.log("[Load Judges] Data:", supabaseJudges)
-      console.log("[Load Judges] Data length:", supabaseJudges?.length || 0)
+
+
 
       if (judgesError) {
-        console.error("[Load Judges] Error details:", {
-          message: judgesError.message,
-          details: judgesError.details,
-          hint: judgesError.hint,
-          code: judgesError.code,
-        })
+
         toast.error("Failed to load judges", {
           description: judgesError.message,
         })
@@ -589,8 +572,7 @@ export default function AdminPage() {
       }
 
       if (supabaseJudges && supabaseJudges.length > 0) {
-        console.log("[Load Judges] Mapping judges data...")
-        console.log("[Load Judges] Raw judges data:", JSON.stringify(supabaseJudges, null, 2))
+
         
         const mappedJudges: Judge[] = (supabaseJudges as any[]).map((row, index) => {
           const mapped = {
@@ -601,15 +583,13 @@ export default function AdminPage() {
             totalInvested: parseFloat(String(row.total_invested || 0)),
             tracks: row.tracks || ["General"],
           }
-          console.log(`[Load Judges] Mapped judge ${index + 1}:`, mapped)
+
           return mapped
         })
-        
-        console.log("[Load Judges] All mapped judges:", mappedJudges)
-      console.log("[Load Judges] Setting judges list state...")
+
+
       setJudgesList(mappedJudges)
-      console.log("[Load Judges] Successfully loaded", mappedJudges.length, "judges")
-      
+
       // Reload track stats after judges are updated
       if (submissions.length > 0) {
         loadTrackStats(submissions, mappedJudges)
@@ -617,19 +597,19 @@ export default function AdminPage() {
         
         // Verify state was set
         setTimeout(() => {
-          console.log("[Load Judges] State verification - should trigger re-render")
+
         }, 50)
       } else {
-        console.log("[Load Judges] No judges found in database")
+
         setJudgesList([])
       }
     } catch (error) {
-      console.error("[Load Judges] Unexpected error:", error)
-      console.error("[Load Judges] Error type:", typeof error)
-      console.error("[Load Judges] Error constructor:", error?.constructor?.name)
+
+
+
       if (error instanceof Error) {
-        console.error("[Load Judges] Error message:", error.message)
-        console.error("[Load Judges] Error stack:", error.stack)
+
+
       }
       toast.error("Failed to load judges", {
         description: error instanceof Error ? error.message : "An unexpected error occurred",
@@ -657,7 +637,7 @@ export default function AdminPage() {
         description: `Total fund set to $${parseFloat(investmentFund).toLocaleString()}`,
       })
     } catch (error) {
-      console.error("Failed to save investment fund:", error)
+
       toast.error("Failed to save investment fund", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
@@ -693,7 +673,7 @@ export default function AdminPage() {
         description: `Schedule: ${scheduleStartTime} - ${scheduleEndTime}, Slot duration: ${slotDuration}min, Judges per project: ${judgesPerProject}`,
       })
     } catch (error) {
-      console.error("Failed to save calendar settings:", error)
+
       toast.error("Failed to save calendar settings", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
@@ -727,7 +707,7 @@ export default function AdminPage() {
         description: `Investment range: $${parseFloat(minInvestment).toLocaleString()} - $${parseFloat(maxInvestment).toLocaleString()}`,
       })
     } catch (error) {
-      console.error("Failed to save scoring settings:", error)
+
       toast.error("Failed to save scoring settings", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
@@ -753,12 +733,11 @@ export default function AdminPage() {
 
   const handleJudgeSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("[Judge Submit] Form submitted")
-    console.log("[Judge Submit] Form data:", judgeFormData)
-    console.log("[Judge Submit] Editing judge:", editingJudge)
-    
+
+
+
     if (!judgeFormData.name.trim() || !judgeFormData.email.trim()) {
-      console.log("[Judge Submit] Validation failed: name or email is empty")
+
       toast.error("Validation error", {
         description: "Name and email are required",
       })
@@ -767,16 +746,11 @@ export default function AdminPage() {
 
     try {
       if (editingJudge) {
-        console.log("[Judge Submit] Updating existing judge...")
+
         // Update existing judge in Supabase
         const judgeId = typeof editingJudge.id === 'string' ? editingJudge.id : String(editingJudge.id)
-        console.log("[Judge Submit] Judge ID:", judgeId)
-        console.log("[Judge Submit] Update payload:", {
-          name: judgeFormData.name,
-          email: judgeFormData.email,
-          tracks: judgeFormData.tracks.length > 0 ? judgeFormData.tracks : ["General"],
-        })
-        
+
+
         const { data, error } = await supabase
           .from("judges")
           .update({
@@ -787,28 +761,20 @@ export default function AdminPage() {
           .eq("id", judgeId)
           .select()
 
-        console.log("[Judge Submit] Update response - data:", data)
-        console.log("[Judge Submit] Update response - error:", error)
 
         if (error) {
-          console.error("[Judge Submit] Update error details:", {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code,
-          })
+
           toast.error("Failed to update judge", {
             description: error.message,
           })
           return
         }
 
-        console.log("[Judge Submit] Update successful, reloading judges...")
         toast.success("Judge updated!", {
           description: `${judgeFormData.name} has been updated`,
         })
       } else {
-        console.log("[Judge Submit] Creating new judge...")
+
         // Create new judge in Supabase
         const insertPayload = {
           name: judgeFormData.name,
@@ -817,30 +783,21 @@ export default function AdminPage() {
           assigned_projects: 0,
           total_invested: 0,
         }
-        console.log("[Judge Submit] Insert payload:", insertPayload)
-        
+
         const { data, error } = await supabase
           .from("judges")
           .insert(insertPayload)
           .select()
 
-        console.log("[Judge Submit] Insert response - data:", data)
-        console.log("[Judge Submit] Insert response - error:", error)
 
         if (error) {
-          console.error("[Judge Submit] Insert error details:", {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code,
-          })
+
           toast.error("Failed to create judge", {
             description: error.message,
           })
           return
         }
 
-        console.log("[Judge Submit] Insert successful, reloading judges...")
         toast.success("Judge added!", {
           description: `${judgeFormData.name} has been added`,
         })
@@ -850,12 +807,12 @@ export default function AdminPage() {
       await loadJudgesFromSupabase()
       handleCloseJudgeDialog()
     } catch (error) {
-      console.error("[Judge Submit] Unexpected error:", error)
-      console.error("[Judge Submit] Error type:", typeof error)
-      console.error("[Judge Submit] Error constructor:", error?.constructor?.name)
+
+
+
       if (error instanceof Error) {
-        console.error("[Judge Submit] Error message:", error.message)
-        console.error("[Judge Submit] Error stack:", error.stack)
+
+
       }
       toast.error("Failed to save judge", {
         description: error instanceof Error ? error.message : "An unexpected error occurred",
@@ -870,40 +827,29 @@ export default function AdminPage() {
 
   const handleDeleteJudgeConfirm = async () => {
     if (!judgeToDelete) {
-      console.log("[Delete Judge] No judge to delete")
+
       return
     }
 
-    console.log("[Delete Judge] Starting delete operation")
-    console.log("[Delete Judge] Judge to delete:", judgeToDelete)
 
     try {
       const judgeId = typeof judgeToDelete.id === 'string' ? judgeToDelete.id : String(judgeToDelete.id)
-      console.log("[Delete Judge] Judge ID:", judgeId)
-      
+
       const { data, error } = await supabase
         .from("judges")
         .delete()
         .eq("id", judgeId)
         .select()
 
-      console.log("[Delete Judge] Delete response - data:", data)
-      console.log("[Delete Judge] Delete response - error:", error)
 
       if (error) {
-        console.error("[Delete Judge] Delete error details:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        })
+
         toast.error("Failed to delete judge", {
           description: error.message,
         })
         return
       }
 
-      console.log("[Delete Judge] Delete successful, reloading judges...")
       toast.success("Judge deleted!", {
         description: `${judgeToDelete.name} has been removed`,
       })
@@ -913,12 +859,12 @@ export default function AdminPage() {
       setDeleteJudgeDialogOpen(false)
       setJudgeToDelete(null)
     } catch (error) {
-      console.error("[Delete Judge] Unexpected error:", error)
-      console.error("[Delete Judge] Error type:", typeof error)
-      console.error("[Delete Judge] Error constructor:", error?.constructor?.name)
+
+
+
       if (error instanceof Error) {
-        console.error("[Delete Judge] Error message:", error.message)
-        console.error("[Delete Judge] Error stack:", error.stack)
+
+
       }
       toast.error("Failed to delete judge", {
         description: error instanceof Error ? error.message : "An unexpected error occurred",
@@ -927,13 +873,12 @@ export default function AdminPage() {
   }
 
   const autoAssignJudges = (showToast = false) => {
-    console.log("[Auto Assign] Starting auto-assignment")
-    console.log("[Auto Assign] Current judgesList length:", judgesList.length)
-    console.log("[Auto Assign] Current projectsList length:", projectsList.length)
-    
+
+
+
     // Don't run if we don't have judges or projects yet
     if (judgesList.length === 0 || projectsList.length === 0) {
-      console.log("[Auto Assign] Skipping - judgesList or projectsList is empty")
+
       return
     }
     
@@ -1004,8 +949,7 @@ export default function AdminPage() {
           assignedProjects: assignedCount
         }
       })
-      console.log("[Auto Assign] Updated judges count:", updatedJudges.length)
-      
+
       // Don't save automatically - wait for user to press save button
       
       return updatedJudges
@@ -1112,7 +1056,7 @@ export default function AdminPage() {
         description: `Saved ${assignmentsToInsert.length} judge assignment(s)`,
       })
     } catch (error) {
-      console.error("Failed to save assignments to Supabase:", error)
+
       toast.error("Failed to save assignments", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
