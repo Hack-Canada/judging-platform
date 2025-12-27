@@ -596,16 +596,13 @@ export default function CalendarPage() {
         if (deleteErrorMsg.includes("does not exist") || 
             deleteErrorMsg.includes("relation") ||
             (deleteError as any)?.code === "42P01") {
-
+          // Table doesn't exist - that's okay, we'll create it
         } else {
-            message: deleteErrorMsg,
-            code: (deleteError as any)?.code,
-            details: (deleteError as any)?.details,
+          toast.error("Failed to delete existing schedule", {
+            description: deleteErrorMsg,
           })
           // Continue anyway - we'll try to insert
         }
-      } else {
-
       }
 
       // Prepare slots for insertion
@@ -657,20 +654,6 @@ export default function CalendarPage() {
         return
       }
       
-      // Validate first slot structure
-      const firstSlot = slotsToInsert[0]
-        hasDate: !!firstSlot.date,
-        hasStartTime: !!firstSlot.start_time,
-        hasEndTime: !!firstSlot.end_time,
-        hasSubmissionId: !!firstSlot.submission_id,
-        submissionIdType: typeof firstSlot.submission_id,
-        submissionIdLength: firstSlot.submission_id?.length,
-        hasRoomId: typeof firstSlot.room_id === 'number',
-        hasJudgeIds: Array.isArray(firstSlot.judge_ids),
-        judgeIdsLength: firstSlot.judge_ids?.length,
-        judgeIdsSample: firstSlot.judge_ids?.slice(0, 2),
-      })
-
       // Insert new schedule slots
 
       const { data, error } = await supabase
