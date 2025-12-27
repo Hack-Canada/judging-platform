@@ -11,7 +11,15 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase-client"
 
 type AuthUser = {
   id: string
@@ -33,9 +41,23 @@ type AuthUser = {
   }
 }
 
+// Standard roles for the platform
+const STANDARD_ROLES = [
+  "hacker",
+  "judge",
+  "sponsor",
+  "admin",
+  "org",
+  "volunteer",
+] as const
+
+type StandardRole = typeof STANDARD_ROLES[number]
+
 export default function RolesPage() {
   const [users, setUsers] = React.useState<AuthUser[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [selectedRole, setSelectedRole] = React.useState<string>("all")
+  const [updatingRoles, setUpdatingRoles] = React.useState<Set<string>>(new Set())
   const isInitialLoad = React.useRef(true)
 
   const fetchUsers = React.useCallback(async (showLoading = false) => {
@@ -95,6 +117,128 @@ export default function RolesPage() {
     })
   }
 
+  // Extract unique roles from users, prioritizing standard roles
+  const uniqueRoles = React.useMemo(() => {
+    const standardRolesSet = new Set(STANDARD_ROLES)
+    const standardRolesFound: string[] = []
+    const otherRoles: string[] = []
+    
+    users.forEach((user) => {
+      const role = user.raw_user_meta_data?.role || user.raw_app_meta_data?.role
+      if (role) {
+        if (standardRolesSet.has(role as StandardRole)) {
+          if (!standardRolesFound.includes(role)) {
+            standardRolesFound.push(role)
+          }
+        } else {
+          if (!otherRoles.includes(role)) {
+            otherRoles.push(role)
+          }
+        }
+      }
+    })
+    
+    // Sort standard roles by their order in STANDARD_ROLES, then add other roles sorted alphabetically
+    const sortedStandardRoles = standardRolesFound.sort((a, b) => {
+      const indexA = STANDARD_ROLES.indexOf(a as StandardRole)
+      const indexB = STANDARD_ROLES.indexOf(b as StandardRole)
+      return indexA - indexB
+    })
+    
+    return [...sortedStandardRoles, ...otherRoles.sort()]
+  }, [users])
+
+  // Filter users based on selected role
+  const filteredUsers = React.useMemo(() => {
+    if (selectedRole === "all") {
+      return users
+    }
+    if (selectedRole === "no-role") {
+      return users.filter(
+        (user) =>
+          !user.raw_user_meta_data?.role && !user.raw_app_meta_data?.role
+      )
+    }
+    return users.filter(
+      (user) =>
+        user.raw_user_meta_data?.role === selectedRole ||
+        user.raw_app_meta_data?.role === selectedRole
+    )
+  }, [users, selectedRole])
+
+  // Update user role
+  const handleRoleUpdate = async (userId: string, newRole: string) => {
+    setUpdatingRoles((prev) => new Set(prev).add(userId))
+    
+    try {
+      const response = await fetch("/api/users", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId,
+          role: newRole === "none" ? null : newRole,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update role")
+      }
+
+      // Update local state
+      setUsers((prevUsers) =>
+        prevUsers.map((user) => {
+          if (user.id === userId) {
+            return {
+              ...user,
+              raw_user_meta_data: {
+                ...user.raw_user_meta_data,
+                role: newRole === "none" ? undefined : newRole,
+              },
+              raw_app_meta_data: {
+                ...user.raw_app_meta_data,
+                role: newRole === "none" ? undefined : newRole,
+              },
+            }
+          }
+          return user
+        })
+      )
+
+      // Check if this is the current user and refresh their session
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user?.id === userId) {
+        // Refresh the session to get updated metadata
+        await supabase.auth.refreshSession()
+        
+        // Dispatch custom event to notify other components
+        window.dispatchEvent(new CustomEvent('userRoleUpdated', { 
+          detail: { userId, role: newRole === "none" ? null : newRole } 
+        }))
+      } else {
+        // Still dispatch event for other components that might need it
+        window.dispatchEvent(new CustomEvent('userRoleUpdated', { 
+          detail: { userId, role: newRole === "none" ? null : newRole } 
+        }))
+      }
+
+      toast.success("Role updated successfully")
+    } catch (error) {
+      toast.error("Failed to update role", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setUpdatingRoles((prev) => {
+        const next = new Set(prev)
+        next.delete(userId)
+        return next
+      })
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
@@ -102,9 +246,60 @@ export default function RolesPage() {
           <div className="px-4 lg:px-6">
             <div className="mb-6">
               <h1 className="text-3xl font-bold tracking-tight">Role Management</h1>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground mb-2">
                 Manage user roles and permissions
               </p>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p>
+                  <strong>How roles work:</strong> Roles are stored in Supabase user metadata and control access to different parts of the platform.
+                </p>
+                <p>
+                  <strong>Standard roles:</strong>{" "}
+                  {STANDARD_ROLES.map((role, idx) => (
+                    <React.Fragment key={role}>
+                      <code className="px-1 py-0.5 bg-muted rounded text-xs">{role}</code>
+                      {idx < STANDARD_ROLES.length - 1 && ", "}
+                    </React.Fragment>
+                  ))}
+                </p>
+                <p>
+                  Roles can be assigned using the dropdown in the Role column. Users without a role will display as "No role".
+                </p>
+              </div>
+            </div>
+
+            {/* Role Filter */}
+            <div className="mb-4 flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label htmlFor="role-filter" className="text-sm font-medium">
+                  Filter by Role:
+                </label>
+                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                  <SelectTrigger id="role-filter" className="w-[200px]">
+                    <SelectValue placeholder="All roles" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All roles</SelectItem>
+                    <SelectItem value="no-role">No role</SelectItem>
+                    {STANDARD_ROLES.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                      </SelectItem>
+                    ))}
+                    {/* Show other non-standard roles if they exist */}
+                    {uniqueRoles
+                      .filter((role) => !STANDARD_ROLES.includes(role as StandardRole))
+                      .map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Showing {filteredUsers.length} of {users.length} users
+              </div>
             </div>
 
             {loading ? (
@@ -115,19 +310,23 @@ export default function RolesPage() {
               <div className="text-center py-8 text-muted-foreground">
                 No users found in the authentication system.
               </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No users found with the selected role filter.
+              </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
+                    <TableHead className="w-[200px]">Role</TableHead>
                     <TableHead>Created At</TableHead>
                     <TableHead>Last Sign In</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => {
+                  {filteredUsers.map((user) => {
                     const name = user.raw_user_meta_data?.name || user.email?.split("@")[0] || "User"
                     const initials = name
                       .split(" ")
@@ -150,13 +349,23 @@ export default function RolesPage() {
                       </TableCell>
                       <TableCell>{user.email || "-"}</TableCell>
                       <TableCell>
-                        {user.raw_user_meta_data?.role || user.raw_app_meta_data?.role ? (
-                          <Badge variant="secondary">
-                            {user.raw_user_meta_data?.role || user.raw_app_meta_data?.role}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">No role</Badge>
-                        )}
+                        <Select
+                          value={user.raw_user_meta_data?.role || user.raw_app_meta_data?.role || "none"}
+                          onValueChange={(value) => handleRoleUpdate(user.id, value)}
+                          disabled={updatingRoles.has(user.id)}
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No role</SelectItem>
+                            {STANDARD_ROLES.map((role) => (
+                              <SelectItem key={role} value={role}>
+                                {role.charAt(0).toUpperCase() + role.slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatDate(user.created_at)}

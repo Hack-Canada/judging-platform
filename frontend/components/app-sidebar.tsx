@@ -73,45 +73,58 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     role?: string
   } | null>(null)
 
-  React.useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session?.user) {
-          const userMetadata = session.user.user_metadata
-          setUser({
-            name: userMetadata?.name || userMetadata?.full_name || session.user.email?.split("@")[0] || "User",
-            email: session.user.email || "",
-            avatar: userMetadata?.avatar_url || userMetadata?.picture,
-            role: userMetadata?.role || userMetadata?.user_role || "User",
-          })
-        }
-      } catch (error) {
-        // Error loading user
+  const loadUser = React.useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        const userMetadata = session.user.user_metadata
+        const appMetadata = session.user.app_metadata
+        setUser({
+          name: userMetadata?.name || userMetadata?.full_name || session.user.email?.split("@")[0] || "User",
+          email: session.user.email || "",
+          avatar: userMetadata?.avatar_url || userMetadata?.picture,
+          role: userMetadata?.role || appMetadata?.role || userMetadata?.user_role || "User",
+        })
       }
+    } catch (error) {
+      // Error loading user
     }
+  }, [])
 
+  React.useEffect(() => {
     void loadUser()
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const userMetadata = session.user.user_metadata
+        const appMetadata = session.user.app_metadata
         setUser({
           name: userMetadata?.name || userMetadata?.full_name || session.user.email?.split("@")[0] || "User",
           email: session.user.email || "",
           avatar: userMetadata?.avatar_url || userMetadata?.picture,
-          role: userMetadata?.role || userMetadata?.user_role || "User",
+          role: userMetadata?.role || appMetadata?.role || userMetadata?.user_role || "User",
         })
       } else {
         setUser(null)
       }
     })
 
+    // Listen for custom role update events
+    const handleRoleUpdate = async () => {
+      // Refresh session to get updated metadata
+      await supabase.auth.refreshSession()
+      // Reload user data
+      await loadUser()
+    }
+
+    window.addEventListener('userRoleUpdated', handleRoleUpdate)
+
     return () => {
       subscription.unsubscribe()
+      window.removeEventListener('userRoleUpdated', handleRoleUpdate)
     }
-  }, [])
+  }, [loadUser])
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
