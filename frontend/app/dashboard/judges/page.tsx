@@ -28,8 +28,6 @@ import { JudgesDataTable } from "@/components/judges-data-table"
 import type { DashboardEntry } from "@/lib/dashboard-entries-data"
 import { NumberTicker } from "@/components/ui/number-ticker"
 
-const ACCESS_CODE = "111-111"
-const ACCESS_CODE_KEY = "dashboard_access_code"
 
 type JudgeSubmission = {
   id: string
@@ -51,6 +49,7 @@ type ScheduleSlotInfo = {
 export default function JudgesPage() {
   const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
+  const [authLoading, setAuthLoading] = React.useState(true)
   const [judgeName, setJudgeName] = React.useState<string>("")
   const [judge, setJudge] = React.useState<Judge | null>(null)
   const [submissions, setSubmissions] = React.useState<JudgeSubmission[]>([])
@@ -81,18 +80,38 @@ export default function JudgesPage() {
   const [dashboardEntries, setDashboardEntries] = React.useState<DashboardEntry[]>([])
 
   React.useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const stored = localStorage.getItem(ACCESS_CODE_KEY)
-    if (stored !== ACCESS_CODE) {
-      setHasAccess(false)
-      router.push("/")
-      return
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          setHasAccess(true)
+        } else {
+          setHasAccess(false)
+          router.push("/")
+        }
+      } catch (error) {
+        console.error("Error checking auth:", error)
+        router.push("/")
+      } finally {
+        setAuthLoading(false)
+      }
     }
 
-    // Always show dialog to enter judge name (no localStorage persistence)
-    setJudgeNameDialogOpen(true)
-    setHasAccess(false)
+    void checkAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setHasAccess(true)
+      } else {
+        setHasAccess(false)
+        router.push("/")
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [router])
 
   const handleJudgeNameSubmit = async (e?: React.FormEvent) => {

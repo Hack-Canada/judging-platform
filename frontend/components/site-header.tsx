@@ -1,8 +1,13 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import * as React from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
+import { IconLogout } from "@tabler/icons-react"
+import { signOut } from "@/lib/auth-helpers"
+import { toast } from "sonner"
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Judges",
@@ -12,11 +17,33 @@ const pageTitles: Record<string, string> = {
   "/dashboard/hackers": "Hackers Submission",
   "/dashboard/hacker-view": "Hacker View",
   "/dashboard/submissions": "Submissions",
+  "/dashboard/roles": "Role Management",
 }
 
 export function SiteHeader() {
   const pathname = usePathname()
+  const router = useRouter()
   const title = pageTitles[pathname] || "Dashboard"
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await signOut()
+      if (error) {
+        toast.error("Logout failed", {
+          description: error.message,
+        })
+        return
+      }
+      toast.success("Logged out successfully")
+      router.push("/")
+      router.refresh()
+    } catch (error) {
+      console.error("Logout error:", error)
+      toast.error("Logout failed", {
+        description: "An unexpected error occurred",
+      })
+    }
+  }
 
   return (
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
@@ -27,6 +54,17 @@ export function SiteHeader() {
           className="mx-2 data-[orientation=vertical]:h-4"
         />
         <h1 className="text-base font-medium">{title}</h1>
+        <div className="ml-auto">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="gap-2"
+          >
+            <IconLogout className="h-4 w-4" />
+            Logout
+          </Button>
+        </div>
       </div>
     </header>
   )

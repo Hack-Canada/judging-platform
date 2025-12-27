@@ -50,12 +50,11 @@ type CalendarSubmission = {
   tracks: string[]
 }
 
-const ACCESS_CODE = "111-111"
-const ACCESS_CODE_KEY = "dashboard_access_code"
 
 export default function CalendarPage() {
   const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
+  const [authLoading, setAuthLoading] = React.useState(true)
   const [selectedDate, setSelectedDate] = React.useState(() => {
     const today = new Date()
     return today.toISOString().split("T")[0]
@@ -81,16 +80,36 @@ export default function CalendarPage() {
   })
 
   React.useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const stored = localStorage.getItem(ACCESS_CODE_KEY)
-    if (stored === ACCESS_CODE) {
-      setHasAccess(true)
-    } else {
-      setHasAccess(false)
-      router.push("/")
-      return
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          setHasAccess(true)
+        } else {
+          setHasAccess(false)
+          router.push("/")
+          return
+        }
+      } catch (error) {
+        console.error("Error checking auth:", error)
+        router.push("/")
+        return
+      } finally {
+        setAuthLoading(false)
+      }
     }
+
+    void checkAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setHasAccess(true)
+      } else {
+        setHasAccess(false)
+        router.push("/")
+      }
+    })
 
     const loadFromSupabase = async () => {
       try {
@@ -220,6 +239,7 @@ export default function CalendarPage() {
       .subscribe()
 
     return () => {
+      subscription.unsubscribe()
       void supabase.removeChannel(settingsChannel)
     }
   }, [selectedDate, router])
@@ -780,6 +800,14 @@ export default function CalendarPage() {
 
   const getSlotsAtTime = (time: string): TimeSlot[] => {
     return slots.filter(s => s.startTime === time)
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
   }
 
   if (!hasAccess) {

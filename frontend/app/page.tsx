@@ -7,45 +7,59 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-
-const ACCESS_CODE = "111-111"
-const ACCESS_CODE_KEY = "dashboard_access_code"
+import { signIn } from "@/lib/auth-helpers"
 
 export default function Home() {
-  const [otp, setOtp] = React.useState("")
+  const [email, setEmail] = React.useState("")
+  const [password, setPassword] = React.useState("")
   const [error, setError] = React.useState("")
+  const [loading, setLoading] = React.useState(false)
   const router = useRouter()
 
-  const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, "") // Remove non-digits
-    
-    // Format as XXX-XXX
-    if (value.length > 3) {
-      value = value.slice(0, 3) + "-" + value.slice(3, 6)
+  React.useEffect(() => {
+    // Check if user is already logged in
+    const checkSession = async () => {
+      const { supabase } = await import("@/lib/supabase-client")
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push("/dashboard")
+      }
     }
-    
-    setOtp(value)
-    setError("")
-  }
+    void checkSession()
+  }, [router])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setLoading(true)
 
-    if (otp === ACCESS_CODE) {
-      if (typeof window !== "undefined") {
-        localStorage.setItem(ACCESS_CODE_KEY, ACCESS_CODE)
-        toast.success("Access granted!", {
+    try {
+      const { data, error: signInError } = await signIn(email, password)
+
+      if (signInError) {
+        setError(signInError.message || "Invalid email or password")
+        toast.error("Login failed", {
+          description: signInError.message || "Please check your credentials and try again.",
+        })
+        setPassword("")
+        return
+      }
+
+      if (data.session) {
+        toast.success("Login successful!", {
           description: "Redirecting to dashboard...",
         })
         router.push("/dashboard")
+        router.refresh()
       }
-    } else {
-      setError("Incorrect access code. Please try again.")
-      setOtp("")
-      toast.error("Access denied", {
-        description: "The access code you entered is incorrect. Please try again.",
+    } catch (err) {
+      setError("An unexpected error occurred")
+      toast.error("Login failed", {
+        description: "An unexpected error occurred. Please try again.",
       })
+      setPassword("")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -55,30 +69,49 @@ export default function Home() {
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold">HackCanada</CardTitle>
           <CardDescription>
-            Enter your access code to continue to the judging platform
+            Sign in to access the judging platform
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="otp">Access Code</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="otp"
-                type="text"
-                value={otp}
-                onChange={handleOtpChange}
-                placeholder="000-000"
-                maxLength={7}
-                className={`text-center text-lg tracking-widest font-mono ${error ? "border-destructive" : ""}`}
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  setError("")
+                }}
+                placeholder="you@example.com"
+                className={error ? "border-destructive" : ""}
                 autoFocus
-                autoComplete="off"
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  setError("")
+                }}
+                placeholder="Enter your password"
+                className={error ? "border-destructive" : ""}
+                autoComplete="current-password"
+                required
               />
               {error && (
                 <p className="text-sm text-destructive text-center">{error}</p>
               )}
-        </div>
-            <Button type="submit" className="w-full">
-              Access Dashboard
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
         </CardContent>

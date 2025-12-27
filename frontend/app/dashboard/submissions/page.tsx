@@ -20,8 +20,6 @@ import {
 } from "@/components/ui/table"
 import { supabase } from "@/lib/supabase-client"
 
-const ACCESS_CODE = "111-111"
-const ACCESS_CODE_KEY = "dashboard_access_code"
 
 type Submission = {
   id: string
@@ -38,19 +36,42 @@ type Submission = {
 export default function SubmissionsPage() {
   const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
+  const [authLoading, setAuthLoading] = React.useState(true)
   const [submissions, setSubmissions] = React.useState<Submission[]>([])
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
-    // Check if access code is stored
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(ACCESS_CODE_KEY)
-      if (stored === ACCESS_CODE) {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          setHasAccess(true)
+        } else {
+          setHasAccess(false)
+          router.push("/")
+        }
+      } catch (error) {
+        console.error("Error checking auth:", error)
+        router.push("/")
+      } finally {
+        setAuthLoading(false)
+      }
+    }
+
+    void checkAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
         setHasAccess(true)
       } else {
         setHasAccess(false)
         router.push("/")
       }
+    })
+
+    return () => {
+      subscription.unsubscribe()
     }
   }, [router])
 
@@ -82,6 +103,14 @@ export default function SubmissionsPage() {
 
     void loadSubmissions()
   }, [hasAccess])
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   if (!hasAccess) {
     return null

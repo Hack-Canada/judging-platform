@@ -15,13 +15,12 @@ import { defaultTracks } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { supabase } from "@/lib/supabase-client"
 
-const ACCESS_CODE = "111-111"
-const ACCESS_CODE_KEY = "dashboard_access_code"
 
 export default function HackersPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [hasAccess, setHasAccess] = React.useState(false)
+  const [authLoading, setAuthLoading] = React.useState(true)
   const [submitting, setSubmitting] = React.useState(false)
   const [currentStep, setCurrentStep] = React.useState<1 | 2 | 3>(1)
   const [createdSubmissionId, setCreatedSubmissionId] = React.useState<string | null>(null)
@@ -43,14 +42,37 @@ export default function HackersPage() {
   })
 
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(ACCESS_CODE_KEY)
-      if (stored === ACCESS_CODE) {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          setHasAccess(true)
+        } else {
+          setHasAccess(false)
+          router.push("/")
+        }
+      } catch (error) {
+        console.error("Error checking auth:", error)
+        router.push("/")
+      } finally {
+        setAuthLoading(false)
+      }
+    }
+
+    void checkAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
         setHasAccess(true)
       } else {
         setHasAccess(false)
         router.push("/")
       }
+    })
+
+    return () => {
+      subscription.unsubscribe()
     }
   }, [router])
 
@@ -385,6 +407,14 @@ export default function HackersPage() {
     })
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
   }, [slotsForCurrentProject])
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   if (!hasAccess) {
     return null

@@ -51,12 +51,11 @@ import { defaultTracks, type Track } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { supabase } from "@/lib/supabase-client"
 
-const ACCESS_CODE = "111-111"
-const ACCESS_CODE_KEY = "dashboard_access_code"
 
 export default function AdminPage() {
   const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
+  const [authLoading, setAuthLoading] = React.useState(true)
   const [investmentFund, setInvestmentFund] = React.useState("10000")
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
@@ -241,16 +240,36 @@ export default function AdminPage() {
   }, [])
 
   React.useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const stored = localStorage.getItem(ACCESS_CODE_KEY)
-    if (stored === ACCESS_CODE) {
-      setHasAccess(true)
-    } else {
-      setHasAccess(false)
-      router.push("/")
-      return
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          setHasAccess(true)
+        } else {
+          setHasAccess(false)
+          router.push("/")
+          return
+        }
+      } catch (error) {
+        console.error("Error checking auth:", error)
+        router.push("/")
+        return
+      } finally {
+        setAuthLoading(false)
+      }
     }
+
+    void checkAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setHasAccess(true)
+      } else {
+        setHasAccess(false)
+        router.push("/")
+      }
+    })
 
     const loadFromSupabase = async () => {
       // Load admin settings from Supabase
@@ -469,6 +488,10 @@ export default function AdminPage() {
     }
 
     void loadFromSupabase()
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [router])
   
   // Helper function to save a setting to Supabase
@@ -1102,6 +1125,14 @@ export default function AdminPage() {
   const totalJudgesInvestment = judgesList.reduce((sum, judge) => sum + judge.totalInvested, 0)
   const totalProjectsInvestment = projectsList.reduce((sum, project) => sum + project.totalInvestment, 0)
   const remainingFund = parseFloat(investmentFund) - totalJudgesInvestment
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   if (!hasAccess) {
     return null

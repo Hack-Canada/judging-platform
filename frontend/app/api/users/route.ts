@@ -46,6 +46,7 @@ export async function GET() {
       created_at: user.created_at,
       updated_at: user.updated_at,
       last_sign_in_at: user.last_sign_in_at,
+      avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
       raw_user_meta_data: user.user_metadata,
       raw_app_meta_data: user.app_metadata,
     })) || []

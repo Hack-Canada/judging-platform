@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { toast } from "sonner"
 
 type AuthUser = {
@@ -18,9 +19,12 @@ type AuthUser = {
   created_at: string
   updated_at?: string
   last_sign_in_at?: string
+  avatar_url?: string | null
   raw_user_meta_data?: {
     name?: string
     role?: string
+    avatar_url?: string
+    picture?: string
     [key: string]: any
   }
   raw_app_meta_data?: {
@@ -116,24 +120,36 @@ export default function RolesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
+                    <TableHead>User</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Name</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Created At</TableHead>
                     <TableHead>Last Sign In</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
+                  {users.map((user) => {
+                    const name = user.raw_user_meta_data?.name || user.email?.split("@")[0] || "User"
+                    const initials = name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2)
+                    const avatarUrl = user.avatar_url || user.raw_user_meta_data?.avatar_url || user.raw_user_meta_data?.picture
+                    
+                    return (
                     <TableRow key={user.id}>
-                      <TableCell className="font-mono text-xs">
-                        {user.id.slice(0, 8)}...
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarImage src={avatarUrl || undefined} alt={name} />
+                            <AvatarFallback>{initials}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{name}</span>
+                        </div>
                       </TableCell>
                       <TableCell>{user.email || "-"}</TableCell>
-                      <TableCell>
-                        {user.raw_user_meta_data?.name || "-"}
-                      </TableCell>
                       <TableCell>
                         {user.raw_user_meta_data?.role || user.raw_app_meta_data?.role ? (
                           <Badge variant="secondary">
@@ -150,7 +166,7 @@ export default function RolesPage() {
                         {user.last_sign_in_at ? formatDate(user.last_sign_in_at) : "Never"}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
             )}
