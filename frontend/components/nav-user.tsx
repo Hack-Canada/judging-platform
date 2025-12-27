@@ -32,14 +32,19 @@ export function NavUser({
         toast.error("Failed to logout", {
           description: error.message,
         })
+        setLoading(false)
         return
       }
+      
+      // Logout successful - navigate to home page
       toast.success("Logged out successfully")
-      router.push("/")
-      router.refresh()
+      
+      // Use window.location for a full page reload to ensure clean state
+      window.location.href = "/"
     } catch (error) {
-      toast.error("Failed to logout")
-    } finally {
+      toast.error("Failed to logout", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
       setLoading(false)
     }
   }

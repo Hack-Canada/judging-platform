@@ -34,12 +34,15 @@ export function SiteHeader() {
         })
         return
       }
+      
+      // Logout successful - navigate to home page
       toast.success("Logged out successfully")
-      router.push("/")
-      router.refresh()
+      
+      // Use window.location for a full page reload to ensure clean state
+      window.location.href = "/"
     } catch (error) {
       toast.error("Logout failed", {
-        description: "An unexpected error occurred",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
       })
     }
   }
