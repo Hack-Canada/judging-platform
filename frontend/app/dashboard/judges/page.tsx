@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -45,9 +44,6 @@ type ScheduleSlotInfo = {
 }
 
 export default function JudgesPage() {
-  const router = useRouter()
-  const [hasAccess, setHasAccess] = React.useState(false)
-  const [authLoading, setAuthLoading] = React.useState(true)
   const [judgesList, setJudgesList] = React.useState<{ id: string; name: string }[]>([])
   const [selectedJudgeId, setSelectedJudgeId] = React.useState<string | null>(null)
   const [judge, setJudge] = React.useState<Judge | null>(null)
@@ -76,44 +72,8 @@ export default function JudgesPage() {
   // Dashboard entries for DataTable
   const [dashboardEntries, setDashboardEntries] = React.useState<DashboardEntry[]>([])
 
+  // Load list of all judges
   React.useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          setHasAccess(true)
-        } else {
-          setHasAccess(false)
-          router.push("/")
-        }
-      } catch (error) {
-
-        router.push("/")
-      } finally {
-        setAuthLoading(false)
-      }
-    }
-
-    void checkAuth()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setHasAccess(true)
-      } else {
-        setHasAccess(false)
-        router.push("/")
-      }
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [router])
-
-  // Load list of all judges when user has access
-  React.useEffect(() => {
-    if (!hasAccess) return
     const loadJudgesList = async () => {
       try {
         setLoadingJudgesList(true)
@@ -134,7 +94,7 @@ export default function JudgesPage() {
       }
     }
     void loadJudgesList()
-  }, [hasAccess])
+  }, [])
 
   React.useEffect(() => {
     if (!selectedJudgeId) return
@@ -571,20 +531,8 @@ export default function JudgesPage() {
     setInvestmentInput(currentValue.toString())
   }
 
-  // Show nothing while auth is loading
-  if (authLoading) {
-    return null
-  }
-
-  // If no access, redirect will happen, but show nothing
-  if (!hasAccess) {
-    return null
-  }
-
   return (
-    <>
-      {hasAccess && (
-        <div suppressHydrationWarning className="relative">
+    <div suppressHydrationWarning className="relative">
       <div className="animated-grid fixed inset-0 z-0" />
       <SidebarProvider
         style={
@@ -746,7 +694,5 @@ export default function JudgesPage() {
         </SidebarInset>
       </SidebarProvider>
     </div>
-      )}
-    </>
   )
 }

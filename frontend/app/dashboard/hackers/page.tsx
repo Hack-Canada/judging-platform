@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -17,10 +17,7 @@ import { supabase } from "@/lib/supabase-client"
 
 
 export default function HackersPage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
-  const [hasAccess, setHasAccess] = React.useState(false)
-  const [authLoading, setAuthLoading] = React.useState(true)
   const [submitting, setSubmitting] = React.useState(false)
   const [currentStep, setCurrentStep] = React.useState<1 | 2 | 3>(1)
   const [createdSubmissionId, setCreatedSubmissionId] = React.useState<string | null>(null)
@@ -40,41 +37,6 @@ export default function HackersPage() {
     projectName: "",
     tracks: [] as string[], // Selected tracks/categories
   })
-
-  React.useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          setHasAccess(true)
-        } else {
-          setHasAccess(false)
-          router.push("/")
-        }
-      } catch (error) {
-
-        router.push("/")
-      } finally {
-        setAuthLoading(false)
-      }
-    }
-
-    void checkAuth()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setHasAccess(true)
-      } else {
-        setHasAccess(false)
-        router.push("/")
-      }
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [router])
 
   // Load rooms from admin settings so names match the main calendar
   React.useEffect(() => {
@@ -407,18 +369,6 @@ export default function HackersPage() {
     })
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
   }, [slotsForCurrentProject])
-
-  if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!hasAccess) {
-    return null
-  }
 
   return (
     <div suppressHydrationWarning className="relative">

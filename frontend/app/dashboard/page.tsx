@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   IconGavel,
@@ -16,7 +15,6 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { supabase } from "@/lib/supabase-client"
 
 const shortcuts = [
   { title: "Judges", url: "/dashboard/judges", icon: IconGavel, description: "Judge dashboard and investments" },
@@ -29,50 +27,6 @@ const shortcuts = [
 ]
 
 export default function Page() {
-  const router = useRouter()
-  const [hasAccess, setHasAccess] = React.useState(false)
-  const [loading, setLoading] = React.useState(true)
-
-  React.useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          setHasAccess(true)
-        } else {
-          setHasAccess(false)
-          router.push("/")
-        }
-      } catch (error) {
-        router.push("/")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void checkAuth()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) setHasAccess(true)
-      else {
-        setHasAccess(false)
-        router.push("/")
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [router])
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!hasAccess) return null
-
   return (
     <div suppressHydrationWarning className="relative">
       <div className="animated-grid fixed inset-0 z-0" />

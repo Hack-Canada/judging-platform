@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -53,9 +52,6 @@ import { supabase } from "@/lib/supabase-client"
 
 
 export default function AdminPage() {
-  const router = useRouter()
-  const [hasAccess, setHasAccess] = React.useState(false)
-  const [authLoading, setAuthLoading] = React.useState(true)
   const [investmentFund, setInvestmentFund] = React.useState("10000")
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
@@ -246,37 +242,6 @@ export default function AdminPage() {
   }, [])
 
   React.useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          setHasAccess(true)
-        } else {
-          setHasAccess(false)
-          router.push("/")
-          return
-        }
-      } catch (error) {
-
-        router.push("/")
-        return
-      } finally {
-        setAuthLoading(false)
-      }
-    }
-
-    void checkAuth()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setHasAccess(true)
-      } else {
-        setHasAccess(false)
-        router.push("/")
-      }
-    })
-
     const loadFromSupabase = async () => {
       // Load admin settings from Supabase
       const loadSettingsFromSupabase = async () => {
@@ -478,11 +443,7 @@ export default function AdminPage() {
     }
 
     void loadFromSupabase()
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [router])
+  }, [])
   
   // Helper function to save a setting to Supabase
   const saveSettingToSupabase = async (key: string, value: string) => {
@@ -515,7 +476,7 @@ export default function AdminPage() {
 
   // Load submissions
   React.useEffect(() => {
-    if (!hasAccess || !isInitialized) return
+    if (!isInitialized) return
 
     const loadSubmissions = async () => {
       try {
@@ -541,7 +502,7 @@ export default function AdminPage() {
     }
 
     void loadSubmissions()
-  }, [hasAccess, isInitialized])
+  }, [isInitialized])
 
   const loadJudgesFromSupabase = async () => {
 
@@ -1250,16 +1211,12 @@ export default function AdminPage() {
   const totalProjectsInvestment = projectsList.reduce((sum, project) => sum + project.totalInvestment, 0)
   const remainingFund = parseFloat(investmentFund) - totalJudgesInvestment
 
-  if (authLoading) {
+  if (!isInitialized) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
       </div>
     )
-  }
-
-  if (!hasAccess) {
-    return null
   }
 
   return (

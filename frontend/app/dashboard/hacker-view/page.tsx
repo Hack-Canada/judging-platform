@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -34,52 +33,13 @@ type SubmissionRow = {
 }
 
 export default function HackerViewPage() {
-  const router = useRouter()
-  const [hasAccess, setHasAccess] = React.useState(false)
-  const [authLoading, setAuthLoading] = React.useState(true)
   const [slots, setSlots] = React.useState<SlotRow[]>([])
   const [submissions, setSubmissions] = React.useState<SubmissionRow[]>([])
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [loading, setLoading] = React.useState(true)
   const [activeSubmissionId, setActiveSubmissionId] = React.useState<string | undefined>(undefined)
 
-  React.useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          setHasAccess(true)
-        } else {
-          setHasAccess(false)
-          router.push("/")
-        }
-      } catch (error) {
-
-        router.push("/")
-      } finally {
-        setAuthLoading(false)
-      }
-    }
-
-    void checkAuth()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setHasAccess(true)
-      } else {
-        setHasAccess(false)
-        router.push("/")
-      }
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [router])
-
   const loadData = React.useCallback(async () => {
-    if (!hasAccess) return
     try {
       setLoading(true)
       const [{ data: slotData }, { data: submissionData }, { data: settingsData }] =
@@ -116,7 +76,7 @@ export default function HackerViewPage() {
     } finally {
       setLoading(false)
     }
-  }, [hasAccess])
+  }, [])
 
   React.useEffect(() => {
     void loadData()
@@ -166,18 +126,6 @@ export default function HackerViewPage() {
       return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
     }
     return `${toHM(start)} – ${toHM(end)}`
-  }
-
-  if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!hasAccess) {
-    return null
   }
 
   return (

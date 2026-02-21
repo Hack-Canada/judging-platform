@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -34,50 +33,10 @@ type Submission = {
 }
 
 export default function SubmissionsPage() {
-  const router = useRouter()
-  const [hasAccess, setHasAccess] = React.useState(false)
-  const [authLoading, setAuthLoading] = React.useState(true)
   const [submissions, setSubmissions] = React.useState<Submission[]>([])
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          setHasAccess(true)
-        } else {
-          setHasAccess(false)
-          router.push("/")
-        }
-      } catch (error) {
-
-        router.push("/")
-      } finally {
-        setAuthLoading(false)
-      }
-    }
-
-    void checkAuth()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setHasAccess(true)
-      } else {
-        setHasAccess(false)
-        router.push("/")
-      }
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [router])
-
-  React.useEffect(() => {
-    if (!hasAccess) return
-
     const loadSubmissions = async () => {
       try {
         setLoading(true)
@@ -102,19 +61,7 @@ export default function SubmissionsPage() {
     }
 
     void loadSubmissions()
-  }, [hasAccess])
-
-  if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!hasAccess) {
-    return null
-  }
+  }, [])
 
   return (
     <div suppressHydrationWarning className="relative">

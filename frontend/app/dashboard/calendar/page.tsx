@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -52,9 +51,6 @@ type CalendarSubmission = {
 
 
 export default function CalendarPage() {
-  const router = useRouter()
-  const [hasAccess, setHasAccess] = React.useState(false)
-  const [authLoading, setAuthLoading] = React.useState(true)
   const [selectedDate, setSelectedDate] = React.useState(() => {
     const today = new Date()
     return today.toISOString().split("T")[0]
@@ -80,37 +76,6 @@ export default function CalendarPage() {
   })
 
   React.useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          setHasAccess(true)
-        } else {
-          setHasAccess(false)
-          router.push("/")
-          return
-        }
-      } catch (error) {
-
-        router.push("/")
-        return
-      } finally {
-        setAuthLoading(false)
-      }
-    }
-
-    void checkAuth()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setHasAccess(true)
-      } else {
-        setHasAccess(false)
-        router.push("/")
-      }
-    })
-
     const loadFromSupabase = async () => {
       try {
         // Load settings from Supabase admin_settings table
@@ -241,7 +206,7 @@ export default function CalendarPage() {
       subscription.unsubscribe()
       void supabase.removeChannel(settingsChannel)
     }
-  }, [selectedDate, router])
+  }, [selectedDate])
   
   // Load slots from Supabase for selectedDate (so Admin-published schedule shows up)
   const loadSlotsForDate = React.useCallback(async (date: string) => {
@@ -288,9 +253,8 @@ export default function CalendarPage() {
   }, [submissions, rooms, judges])
 
   React.useEffect(() => {
-    if (!hasAccess) return
     void loadSlotsForDate(selectedDate)
-  }, [hasAccess, selectedDate, loadSlotsForDate])
+  }, [selectedDate, loadSlotsForDate])
 
   // When Admin publishes schedule, refetch slots for current date
   React.useEffect(() => {
@@ -656,18 +620,6 @@ export default function CalendarPage() {
 
   const getSlotsAtTime = (time: string): TimeSlot[] => {
     return slots.filter(s => s.startTime === time)
-  }
-
-  if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!hasAccess) {
-    return null
   }
 
   return (
