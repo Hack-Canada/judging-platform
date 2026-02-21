@@ -5,8 +5,16 @@ import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase-client"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 
@@ -21,6 +29,7 @@ type SlotRow = {
 
 type SubmissionRow = {
   id: string
+  team_name: string
   project_name: string
 }
 
@@ -69,46 +78,49 @@ export default function HackerViewPage() {
     }
   }, [router])
 
-  React.useEffect(() => {
+  const loadData = React.useCallback(async () => {
     if (!hasAccess) return
-    const loadData = async () => {
-      try {
-        setLoading(true)
+    try {
+      setLoading(true)
+      const [{ data: slotData }, { data: submissionData }, { data: settingsData }] =
+        await Promise.all([
+          supabase
+            .from("calendar_schedule_slots")
+            .select("id, date, start_time, end_time, room_id, submission_id")
+            .order("date", { ascending: true })
+            .order("start_time", { ascending: true }),
+          supabase.from("submissions").select("id, team_name, project_name"),
+          supabase
+            .from("admin_settings")
+            .select("setting_key, setting_value")
+            .eq("setting_key", "rooms_data"),
+        ])
 
-        const [{ data: slotData }, { data: submissionData }, { data: settingsData }] =
-          await Promise.all([
-            supabase
-              .from("calendar_schedule_slots")
-              .select("id, date, start_time, end_time, room_id, submission_id")
-              .order("date", { ascending: true })
-              .order("start_time", { ascending: true }),
-            supabase.from("submissions").select("id, project_name"),
-            supabase
-              .from("admin_settings")
-              .select("setting_key, setting_value")
-              .eq("setting_key", "rooms_data"),
-          ])
-
-        setSlots((slotData as SlotRow[]) || [])
-        setSubmissions((submissionData as SubmissionRow[]) || [])
-
-        if (settingsData && settingsData.length > 0) {
-          try {
-            const parsed = JSON.parse(settingsData[0].setting_value)
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setRooms(parsed)
-            }
-          } catch {
-            // ignore parse errors, fall back to default rooms
-          }
-        }
-      } finally {
-        setLoading(false)
+      setSlots((slotData as SlotRow[]) || [])
+      const subs = (submissionData as SubmissionRow[]) || []
+      setSubmissions(subs)
+      if (subs.length > 0) {
+        setActiveSubmissionId((prev) => prev ?? subs[0].id)
       }
-    }
 
-    void loadData()
+      if (settingsData && settingsData.length > 0) {
+        try {
+          const parsed = JSON.parse(settingsData[0].setting_value)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRooms(parsed)
+          }
+        } catch {
+          // ignore parse errors, fall back to default rooms
+        }
+      }
+    } finally {
+      setLoading(false)
+    }
   }, [hasAccess])
+
+  React.useEffect(() => {
+    void loadData()
+  }, [loadData])
 
   const roomsById = React.useMemo(() => {
     const map = new Map<number, Room>()
@@ -117,38 +129,36 @@ export default function HackerViewPage() {
   }, [rooms])
 
   const submissionsById = React.useMemo(() => {
-    const map = new Map<string, string>()
-    submissions.forEach((s) => map.set(s.id, s.project_name ?? "Untitled Project"))
+    const map = new Map<string, { teamName: string; projectName: string }>()
+    submissions.forEach((s) =>
+      map.set(s.id, {
+        teamName: s.team_name ?? "Unknown Team",
+        projectName: s.project_name ?? "Untitled Project",
+      })
+    )
     return map
   }, [submissions])
 
-  const groupedBySubmission = React.useMemo(() => {
-    const map = new Map<string, SlotRow[]>()
-    slots.forEach((slot) => {
-      if (!slot.submission_id) return
-      const key = slot.submission_id
-      if (!map.has(key)) {
-        map.set(key, [])
-      }
-      map.get(key)!.push(slot)
-    })
-
-    // Sort each project's slots by date/time
-    map.forEach((projectSlots) => {
-      projectSlots.sort((a, b) => {
+  const slotsForSelectedTeam = React.useMemo(() => {
+    if (!activeSubmissionId) return []
+    const projectSlots = slots
+      .filter((slot) => slot.submission_id === activeSubmissionId)
+      .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date)
         return a.start_time.localeCompare(b.start_time)
       })
+    return projectSlots
+  }, [slots, activeSubmissionId])
+
+  const groupSlotsByDate = React.useMemo(() => {
+    const map = new Map<string, SlotRow[]>()
+    slotsForSelectedTeam.forEach((slot) => {
+      const key = slot.date
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(slot)
     })
-
-    return Array.from(map.entries())
-  }, [slots])
-
-  React.useEffect(() => {
-    if (!activeSubmissionId && groupedBySubmission.length > 0) {
-      setActiveSubmissionId(groupedBySubmission[0][0])
-    }
-  }, [groupedBySubmission, activeSubmissionId])
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  }, [slotsForSelectedTeam])
 
   const formatTimeRange = (start: string, end: string) => {
     const toHM = (t: string) => {
@@ -190,76 +200,99 @@ export default function HackerViewPage() {
                 <div className="px-4 lg:px-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Hacker View</CardTitle>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <CardTitle>Hacker View</CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void loadData()}
+                          disabled={loading}
+                        >
+                          {loading ? "Refreshing…" : "Refresh timings"}
+                        </Button>
+                      </div>
+                      <CardDescription className="sr-only">
+                        Timings are loaded from the published calendar schedule.
+                      </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      {loading ? (
-                        <p className="text-sm text-muted-foreground">Loading schedule…</p>
-                      ) : groupedBySubmission.length === 0 ? (
+                    <CardContent className="space-y-4">
+                      {loading && submissions.length === 0 && slots.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Loading…</p>
+                      ) : submissions.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                          No judging schedule is available yet. Please check back later.
+                          No teams have submitted yet. Check back later.
                         </p>
                       ) : (
-                        <Tabs
-                          value={activeSubmissionId}
-                          onValueChange={(value) => setActiveSubmissionId(value)}
-                          className="space-y-4"
-                        >
-                          <TabsList className="w-full overflow-x-auto">
-                            {groupedBySubmission.map(([submissionId]) => {
-                              const projectName = submissionsById.get(submissionId) ?? "Untitled Project"
-                              return (
-                                <TabsTrigger
-                                  key={submissionId}
-                                  value={submissionId}
-                                  className="whitespace-nowrap"
-                                >
-                                  {projectName}
-                                </TabsTrigger>
-                              )
-                            })}
-                          </TabsList>
+                        <>
+                          <div className="space-y-2">
+                            <Label htmlFor="team-select">Team</Label>
+                            <Select
+                              value={activeSubmissionId ?? ""}
+                              onValueChange={(value) => setActiveSubmissionId(value)}
+                            >
+                              <SelectTrigger id="team-select" className="w-full max-w-sm">
+                                <SelectValue placeholder="Select a team to view their timings" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {submissions.map((sub) => (
+                                  <SelectItem key={sub.id} value={sub.id}>
+                                    {sub.team_name || sub.project_name || "Untitled"}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                          {groupedBySubmission.map(([submissionId, projectSlots]) => {
-                            const projectName = submissionsById.get(submissionId) ?? "Untitled Project"
-                            return (
-                              <TabsContent key={submissionId} value={submissionId} className="space-y-4">
-                                <Card className="border-dashed">
-                                  <CardHeader>
-                                    <CardTitle className="text-sm">{projectName}</CardTitle>
-                                  </CardHeader>
-                                  <CardContent className="space-y-2">
-                                    {projectSlots.map((slot) => {
-                                      const room = roomsById.get(slot.room_id)
-                                      return (
-                                        <div
-                                          key={slot.id}
-                                          className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
-                                        >
-                                          <div>
-                                            <p className="font-medium">
-                                              {new Date(slot.date).toLocaleDateString(undefined, {
-                                                weekday: "short",
-                                                month: "short",
-                                                day: "numeric",
-                                              })}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                              {formatTimeRange(slot.start_time, slot.end_time)}
-                                            </p>
-                                          </div>
-                                          <div className="text-xs text-muted-foreground">
-                                            Room: {room?.name ?? `Room ${slot.room_id}`}
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
-                                  </CardContent>
-                                </Card>
-                              </TabsContent>
-                            )
-                          })}
-                        </Tabs>
+                          {activeSubmissionId && (
+                            <div className="space-y-3">
+                              <h3 className="text-sm font-semibold">
+                                {submissionsById.get(activeSubmissionId)?.teamName} – Judging times
+                              </h3>
+                              {slotsForSelectedTeam.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                  No judging times scheduled yet for this team.
+                                </p>
+                              ) : (
+                                <div className="space-y-4">
+                                  {groupSlotsByDate.map(([date, dateSlots]) => (
+                                    <Card key={date} className="border-dashed">
+                                      <CardHeader>
+                                        <CardTitle className="text-sm">
+                                          {new Date(date).toLocaleDateString(undefined, {
+                                            weekday: "short",
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                          })}
+                                        </CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="space-y-2">
+                                        {dateSlots.map((slot) => {
+                                          const room = roomsById.get(slot.room_id)
+                                          return (
+                                            <div
+                                              key={slot.id}
+                                              className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                                            >
+                                              <div>
+                                                <p className="font-medium">
+                                                  {formatTimeRange(slot.start_time, slot.end_time)}
+                                                </p>
+                                              </div>
+                                              <p className="text-xs text-muted-foreground">
+                                                Room: {room?.name ?? `Room ${slot.room_id}`}
+                                              </p>
+                                            </div>
+                                          )
+                                        })}
+                                      </CardContent>
+                                    </Card>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
                       )}
                     </CardContent>
                   </Card>
