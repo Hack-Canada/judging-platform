@@ -63,8 +63,14 @@ export default function AdminPage() {
   const [slotDuration, setSlotDuration] = React.useState(5) // Calendar slot duration in minutes
   const [scheduleStartTime, setScheduleStartTime] = React.useState("13:00") // Default 1 PM
   const [scheduleEndTime, setScheduleEndTime] = React.useState("16:00") // Default 4 PM
-  const [minInvestment, setMinInvestment] = React.useState("0") // Scoring system min investment
-  const [maxInvestment, setMaxInvestment] = React.useState("1000") // Scoring system max investment
+  const [minInvestment, setMinInvestment] = React.useState("0")
+  const [maxInvestment, setMaxInvestment] = React.useState("1000")
+  const [scheduleDate, setScheduleDate] = React.useState(() =>
+    new Date().toISOString().slice(0, 10)
+  )
+  const [publishingSchedule, setPublishingSchedule] = React.useState(false)
+  const [clearingSchedule, setClearingSchedule] = React.useState(false)
+  const [clearingAssignments, setClearingAssignments] = React.useState(false)
   const [isInitialized, setIsInitialized] = React.useState(false)
   
   // Judges management state
@@ -451,17 +457,11 @@ export default function AdminPage() {
         // Load track stats
         await loadTrackStats(supabaseSubmissions || [], judgesArray || [])
         
-        // Auto-assign if there are submissions but no assignments yet
-        // Use a longer delay to ensure judgesList state has been set
+        // Auto-assign in UI if there are submissions but no assignments yet (state only; user can click to save)
         if (supabaseSubmissions && supabaseSubmissions.length > 0 && 
             (!assignmentsData || assignmentsData.length === 0) &&
             judgesArray && judgesArray.length > 0) {
-
-          setTimeout(() => {
-
-            autoAssignJudges(false)
-            // Don't mark as modified on initial load - only mark when user manually triggers
-          }, 500) // Increased delay to ensure state is updated
+          setTimeout(() => autoAssignJudges(false), 500)
         }
       } catch (error) {
 
@@ -542,14 +542,6 @@ export default function AdminPage() {
 
     void loadSubmissions()
   }, [hasAccess, isInitialized])
-
-  const handleAutoAssignJudgesToProjects = async () => {
-    // Trigger auto-assignment
-    autoAssignJudges(true)
-    toast.success("Automated judging started!", {
-      description: "Judges have been assigned to all projects",
-    })
-  }
 
   const loadJudgesFromSupabase = async () => {
 
@@ -915,23 +907,30 @@ export default function AdminPage() {
       return sponsorTracks.some((track) => judge.tracks?.includes(track))
     }
 
-    // Assign judges to active projects respecting track restrictions
+    // Track how many projects each judge is assigned to (for balanced distribution)
+    const judgeAssignmentCount = new Map<string, number>()
+    judgesList.forEach((j) => judgeAssignmentCount.set(j.name, 0))
+
+    // Assign judges to active projects respecting track restrictions.
+    // Prefer judges with the fewest current assignments so load is balanced.
     activeProjects.forEach((project) => {
       const projectInList = updatedProjects.find(p => p.id === project.id)
       if (projectInList) {
         const projectTracks = getProjectTracks(project)
-        // Filter judges who can judge this submission based on its tracks
         const eligibleJudges = judgesList.filter(judge =>
           canJudgeSubmission(judge, projectTracks)
         )
-        
-        // Assign judges using round-robin from eligible judges
-        for (let i = 0; i < judgesPerProject && eligibleJudges.length > 0; i++) {
-          const judgeIndex = i % eligibleJudges.length
-          const judge = eligibleJudges[judgeIndex]
-          if (!projectInList.assignedJudges.includes(judge.name)) {
-            projectInList.assignedJudges.push(judge.name)
-          }
+        // Sort by current assignment count (ascending) so least-loaded judges are picked first
+        const sortedEligible = [...eligibleJudges].sort(
+          (a, b) => (judgeAssignmentCount.get(a.name) ?? 0) - (judgeAssignmentCount.get(b.name) ?? 0)
+        )
+        let added = 0
+        for (const judge of sortedEligible) {
+          if (added >= judgesPerProject) break
+          if (projectInList.assignedJudges.includes(judge.name)) continue
+          projectInList.assignedJudges.push(judge.name)
+          judgeAssignmentCount.set(judge.name, (judgeAssignmentCount.get(judge.name) ?? 0) + 1)
+          added++
         }
       }
     })
@@ -965,11 +964,6 @@ export default function AdminPage() {
         })
       }
     }
-  }
-
-  const handleReassign = () => {
-    autoAssignJudges(true)
-    setAssignmentsModified(true) // Mark as modified so user can save
   }
 
   const handleSaveAssignments = async () => {
@@ -1065,6 +1059,192 @@ export default function AdminPage() {
     }
   }
 
+  /** One-click: auto-assign judges then save to DB. */
+  const handleAutoAssignAndSave = async () => {
+    autoAssignJudges(false)
+    setAssignmentsModified(true)
+    await handleSaveAssignments()
+  }
+
+  /** Build calendar_schedule_slots from current assignments and publish. */
+  const handlePublishSchedule = async () => {
+    if (projectsList.length === 0 || judgesList.length === 0) {
+      toast.error("No submissions or judges", {
+        description: "Auto-assign judges first, then publish.",
+      })
+      return
+    }
+    if (roomsList.length === 0) {
+      toast.error("No rooms", {
+        description: "Add at least one room before publishing the schedule.",
+      })
+      return
+    }
+
+    const subsWithJudges = projectsList
+      .filter((p) => (p as any).submissionId && p.assignedJudges.length > 0)
+      .map((p) => {
+        const submissionId = (p as any).submissionId
+        const judgeIds = p.assignedJudges
+          .map((name) => judgesList.find((j) => j.name === name)?.id)
+          .filter(Boolean) as string[]
+        return {
+          submissionId,
+          projectName: p.name,
+          judgeIds: judgeIds.map((id) => String(id)),
+        }
+      })
+      .filter((s) => s.judgeIds.length > 0)
+
+    if (subsWithJudges.length === 0) {
+      toast.error("No assignments", {
+        description: "Run “Auto-assign judges” first, then publish.",
+      })
+      return
+    }
+
+    const getEndTime = (start: string, durationMin: number) => {
+      const [h, m] = start.split(":").map(Number)
+      const total = h * 60 + m + durationMin
+      const eh = Math.floor(total / 60)
+      const em = total % 60
+      return `${eh.toString().padStart(2, "0")}:${em.toString().padStart(2, "0")}`
+    }
+    const getNextTime = (time: string) => {
+      const [h, m] = time.split(":").map(Number)
+      const total = h * 60 + m + slotDuration
+      const nh = Math.floor(total / 60)
+      const nm = total % 60
+      const [eh, em] = scheduleEndTime.split(":").map(Number)
+      if (nh > eh || (nh === eh && nm > em)) return null
+      return `${nh.toString().padStart(2, "0")}:${nm.toString().padStart(2, "0")}`
+    }
+
+    // Build slots so that at each time slot, no judge is assigned to more than one project.
+    const slots: { date: string; start_time: string; end_time: string; submission_id: string; room_id: number; judge_ids: string[] }[] = []
+    const scheduledSubmissionIds = new Set<string>()
+    let currentTime = scheduleStartTime
+
+    while (currentTime) {
+      const judgesUsedThisTime = new Set<string>()
+      for (const room of roomsList) {
+        const sub = subsWithJudges.find(
+          (s) =>
+            !scheduledSubmissionIds.has(s.submissionId) &&
+            !s.judgeIds.some((jid) => judgesUsedThisTime.has(jid))
+        )
+        if (!sub) continue
+        slots.push({
+          date: scheduleDate,
+          start_time: currentTime,
+          end_time: getEndTime(currentTime, slotDuration),
+          submission_id: sub.submissionId,
+          room_id: room.id,
+          judge_ids: sub.judgeIds,
+        })
+        scheduledSubmissionIds.add(sub.submissionId)
+        sub.judgeIds.forEach((jid) => judgesUsedThisTime.add(jid))
+      }
+      if (scheduledSubmissionIds.size >= subsWithJudges.length) break
+      currentTime = getNextTime(currentTime)
+    }
+
+    try {
+      setPublishingSchedule(true)
+      await supabase.from("calendar_schedule_slots").delete().eq("date", scheduleDate)
+      const { error: insertErr } = await supabase
+        .from("calendar_schedule_slots")
+        .insert(slots)
+
+      if (insertErr) throw insertErr
+
+      await supabase.from("admin_settings").upsert(
+        [
+          { setting_key: "calendar_slot_duration", setting_value: String(slotDuration), updated_at: new Date().toISOString() },
+          { setting_key: "calendar_judges_per_project", setting_value: String(judgesPerProject), updated_at: new Date().toISOString() },
+          { setting_key: "calendar_start_time", setting_value: scheduleStartTime, updated_at: new Date().toISOString() },
+          { setting_key: "calendar_end_time", setting_value: scheduleEndTime, updated_at: new Date().toISOString() },
+        ],
+        { onConflict: "setting_key" }
+      )
+
+      toast.success("Schedule published!", {
+        description: `${slots.length} slot(s) for ${scheduleDate}. Judges and Calendar view updated.`,
+      })
+      window.dispatchEvent(new CustomEvent("schedulePublished", { detail: { date: scheduleDate } }))
+    } catch (error) {
+      toast.error("Failed to publish schedule", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setPublishingSchedule(false)
+    }
+  }
+
+  /** Clear schedule for the selected date (calendar_schedule_slots). */
+  const handleClearSchedule = async () => {
+    if (!confirm(`Clear all schedule slots for ${scheduleDate}? This cannot be undone.`)) return
+    const loadingId = toast.loading("Clearing schedule...")
+    try {
+      setClearingSchedule(true)
+      const { error } = await supabase
+        .from("calendar_schedule_slots")
+        .delete()
+        .eq("date", scheduleDate)
+      if (error) throw error
+      toast.dismiss(loadingId)
+      toast.success("Schedule cleared", {
+        description: `All slots for ${scheduleDate} have been removed. Calendar view updated.`,
+        duration: 4000,
+      })
+      window.dispatchEvent(new CustomEvent("schedulePublished", { detail: { date: scheduleDate } }))
+    } catch (error) {
+      toast.dismiss(loadingId)
+      toast.error("Failed to clear schedule", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setClearingSchedule(false)
+    }
+  }
+
+  /** Clear all judge–project assignments and reset judge counts. */
+  const handleClearAssignments = async () => {
+    if (!confirm("Clear all judge assignments to projects? Judges will see no assigned submissions until you auto-assign again.")) return
+    const loadingId = toast.loading("Clearing judge assignments...")
+    try {
+      setClearingAssignments(true)
+      const { error: deleteError } = await supabase
+        .from("judge_project_assignments")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000")
+      if (deleteError) throw deleteError
+      for (const judge of judgesList) {
+        const judgeId = typeof judge.id === "string" ? judge.id : String(judge.id)
+        await supabase.from("judges").update({ assigned_projects: 0 }).eq("id", judgeId)
+      }
+      setProjectsList((prev) =>
+        prev.map((p) => ({ ...p, assignedJudges: [] as string[] }))
+      )
+      setJudgesList((prev) =>
+        prev.map((j) => ({ ...j, assignedProjects: 0 }))
+      )
+      setAssignmentsModified(false)
+      toast.dismiss(loadingId)
+      toast.success("Judge assignments cleared", {
+        description: "All judge–project assignments have been removed. Run Auto-assign again to reassign.",
+        duration: 4000,
+      })
+    } catch (error) {
+      toast.dismiss(loadingId)
+      toast.error("Failed to clear assignments", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setClearingAssignments(false)
+    }
+  }
+
   // Calculate stats
   const totalJudgesInvestment = judgesList.reduce((sum, judge) => sum + judge.totalInvested, 0)
   const totalProjectsInvestment = projectsList.reduce((sum, project) => sum + project.totalInvestment, 0)
@@ -1102,9 +1282,9 @@ export default function AdminPage() {
               <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
                 <div className="px-4 lg:px-6">
                   <div className="mb-6">
-                    <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">Admin</h1>
                     <p className="text-muted-foreground">
-                      Manage judges, projects, and investment funds
+                      Auto-assign judges to submissions, then publish the schedule
                     </p>
                   </div>
 
@@ -1152,51 +1332,6 @@ export default function AdminPage() {
                     </Card>
                   </div>
 
-                  {/* Track/Category Stats */}
-                  {trackStats.size > 0 && (
-                    <Card className="mb-6">
-                      <CardHeader>
-                        <CardTitle>Track Statistics</CardTitle>
-                        <CardDescription>
-                          Investment and submission statistics by track/category
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                          {Array.from(trackStats.values())
-                            .sort((a, b) => a.trackName.localeCompare(b.trackName))
-                            .map((stats) => (
-                            <Card key={stats.trackName}>
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-lg font-semibold">
-                                  {stats.trackName}
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-3">
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Submissions</p>
-                                  <p className="text-2xl font-bold">{stats.submissionCount}</p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Total Investment</p>
-                                  <p className="text-2xl font-bold">${stats.totalInvestment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Average Investment</p>
-                                  <p className="text-2xl font-bold">${stats.averageInvestment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Assigned Judges</p>
-                                  <p className="text-2xl font-bold">{stats.judgeCount}</p>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
                   {/* Investment Funds Configuration */}
                   <Card className="mb-6">
                     <CardHeader>
@@ -1222,55 +1357,108 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Auto Assign Judges to Projects */}
+                  {/* Step 1: Auto-assign judges to submissions */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <CardTitle>Auto Assign Judges to Projects</CardTitle>
+                      <CardTitle>Step 1: Auto-assign judges to submissions</CardTitle>
                       <CardDescription>
-                        Automatically assign judges to projects respecting track restrictions. Judges can only be assigned to projects in tracks they're assigned to, or General track projects.
+                        Assign judges to every submission by track (round-robin). Then publish the schedule in Step 2.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col gap-4 md:flex-row md:items-end">
-                        <div className="flex-1 max-w-sm">
-                          <Label htmlFor="judges-per-project">Judges per Project</Label>
+                        <div className="flex-1 max-w-xs">
+                          <Label htmlFor="judges-per-project">Judges per submission</Label>
                           <Input
                             id="judges-per-project"
                             type="number"
                             min="1"
                             max="10"
                             value={judgesPerProject}
-                            onChange={(e) => {
-                              const newValue = parseInt(e.target.value) || 2
-                              setJudgesPerProject(newValue)
-                              // Do not auto-assign or save here; user must click the button
-                            }}
+                            onChange={(e) => setJudgesPerProject(Math.max(1, parseInt(e.target.value) || 2))}
                           />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Number of judges to assign to each active project
-                          </p>
                         </div>
-                        <div className="flex gap-2">
-                          <Button onClick={handleReassign}>
-                            Auto Assign Judges
+                        <Button onClick={handleAutoAssignAndSave} disabled={savingAssignments}>
+                          {savingAssignments ? "Saving..." : "Auto-assign judges"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleClearAssignments}
+                          disabled={clearingAssignments}
+                        >
+                          {clearingAssignments ? "Clearing..." : "Clear judge assignments"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Step 2: Publish schedule */}
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle>Step 2: Publish schedule</CardTitle>
+                      <CardDescription>
+                        Build the calendar from current assignments. Judges will see their assigned submissions on the Judges view.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="schedule-date">Date</Label>
+                          <Input
+                            id="schedule-date"
+                            type="date"
+                            value={scheduleDate}
+                            onChange={(e) => setScheduleDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="schedule-start-time">Start time</Label>
+                          <Input
+                            id="schedule-start-time"
+                            type="time"
+                            value={scheduleStartTime}
+                            onChange={(e) => setScheduleStartTime(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="schedule-end-time">End time</Label>
+                          <Input
+                            id="schedule-end-time"
+                            type="time"
+                            value={scheduleEndTime}
+                            onChange={(e) => setScheduleEndTime(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="slot-duration">Slot duration (min)</Label>
+                          <Input
+                            id="slot-duration"
+                            type="number"
+                            min="5"
+                            max="60"
+                            step="5"
+                            value={slotDuration}
+                            onChange={(e) => setSlotDuration(Math.max(5, parseInt(e.target.value) || 5))}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2 justify-end">
+                          <Button onClick={handlePublishSchedule} disabled={publishingSchedule}>
+                            {publishingSchedule ? "Publishing..." : "Publish schedule"}
                           </Button>
-                          {assignmentsModified && (
-                            <Button 
-                              onClick={handleSaveAssignments}
-                              disabled={savingAssignments}
-                              variant="default"
-                            >
-                              {savingAssignments ? "Saving..." : "Save Assignments"}
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleClearSchedule}
+                            disabled={clearingSchedule}
+                          >
+                            {clearingSchedule ? "Clearing..." : "Clear schedule"}
+                          </Button>
                         </div>
                       </div>
-                      <div className="mt-4 p-3 bg-muted rounded-md">
-                        <p className="text-sm text-muted-foreground">
-                          <strong>Current Assignment:</strong> Judges are automatically assigned using round-robin distribution. 
-                          Each active project gets {judgesPerProject} judge(s) distributed evenly.
-                        </p>
-                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        &quot;Clear schedule&quot; removes all slots for the selected date above. Calendar and Judges view will update.
+                      </p>
                     </CardContent>
                   </Card>
 
@@ -1353,140 +1541,6 @@ export default function AdminPage() {
                           )}
                         </TableBody>
                       </Table>
-                    </CardContent>
-                  </Card>
-
-                  {/* Calendar Settings */}
-                  <Card className="mb-6">
-                    <CardHeader>
-                      <CardTitle>Calendar Settings</CardTitle>
-                      <CardDescription>
-                        Configure time range, slot duration and judge assignment for the calendar
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="schedule-start-time">Schedule Start Time</Label>
-                          <Input
-                            id="schedule-start-time"
-                            type="time"
-                            value={scheduleStartTime}
-                            onChange={(e) => setScheduleStartTime(e.target.value)}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Start time for judging sessions (e.g., 13:00 for 1 PM)
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="schedule-end-time">Schedule End Time</Label>
-                          <Input
-                            id="schedule-end-time"
-                            type="time"
-                            value={scheduleEndTime}
-                            onChange={(e) => setScheduleEndTime(e.target.value)}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            End time for judging sessions (e.g., 16:00 for 4 PM)
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="slot-duration">Slot Duration (minutes)</Label>
-                          <Input
-                            id="slot-duration"
-                            type="number"
-                            min="5"
-                            max="60"
-                            step="5"
-                            value={slotDuration}
-                            onChange={(e) => {
-                              const newDuration = parseInt(e.target.value) || 5
-                              setSlotDuration(newDuration)
-                            }}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Duration of each time slot (5-60 minutes)
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="calendar-judges-per-project">Judges per Project</Label>
-                          <Input
-                            id="calendar-judges-per-project"
-                            type="number"
-                            min="1"
-                            max="10"
-                            value={judgesPerProject}
-                            onChange={(e) => {
-                              const newValue = parseInt(e.target.value) || 2
-                              setJudgesPerProject(newValue)
-                            }}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Number of judges per project
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-4 p-3 bg-muted rounded-md">
-                        <p className="text-sm text-muted-foreground">
-                          <strong>Calendar Range:</strong> The calendar will display slots from 30 minutes before start time ({(() => {
-                            const [hour, minute] = scheduleStartTime.split(":").map(Number)
-                            const totalMinutes = hour * 60 + minute - 30
-                            const displayHour = Math.floor(totalMinutes / 60)
-                            const displayMinute = totalMinutes % 60
-                            return `${displayHour.toString().padStart(2, "0")}:${displayMinute.toString().padStart(2, "0")}`
-                          })()}) to 30 minutes after end time ({(() => {
-                            const [hour, minute] = scheduleEndTime.split(":").map(Number)
-                            const totalMinutes = hour * 60 + minute + 30
-                            const displayHour = Math.floor(totalMinutes / 60)
-                            const displayMinute = totalMinutes % 60
-                            return `${displayHour.toString().padStart(2, "0")}:${displayMinute.toString().padStart(2, "0")}`
-                          })()})
-                        </p>
-                      </div>
-                      <div className="mt-4">
-                        <Button onClick={handleSaveCalendarSettings}>
-                          Save Calendar Settings
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Scoring System Settings */}
-                  <Card className="mb-6">
-                    <CardHeader>
-                      <CardTitle>Scoring System Settings</CardTitle>
-                      <CardDescription>
-                        Configure investment range for scoring criteria
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="min-investment">Minimum Investment ($)</Label>
-                          <Input
-                            id="min-investment"
-                            type="number"
-                            value={minInvestment}
-                            onChange={(e) => setMinInvestment(e.target.value)}
-                            placeholder="0"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="max-investment">Maximum Investment ($)</Label>
-                          <Input
-                            id="max-investment"
-                            type="number"
-                            value={maxInvestment}
-                            onChange={(e) => setMaxInvestment(e.target.value)}
-                            placeholder="1000"
-                          />
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <Button onClick={handleSaveScoringSettings}>
-                          Save Scoring Settings
-                        </Button>
-                      </div>
                     </CardContent>
                   </Card>
 
@@ -1592,34 +1646,13 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Hacker Submissions Management */}
+                  {/* Hacker Submissions (read-only) */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle>Hacker Submissions</CardTitle>
-                          <CardDescription>
-                            Review and manage project submissions from hackers
-                          </CardDescription>
-                        </div>
-                        <Button onClick={() => {
-                          handleAutoAssignJudgesToProjects()
-                          setAssignmentsModified(true)
-                        }} size="sm">
-                          Auto-Assign Judges
-                        </Button>
-                        {assignmentsModified && (
-                          <Button 
-                            onClick={handleSaveAssignments}
-                            disabled={savingAssignments}
-                            variant="default"
-                            size="sm"
-                            className="ml-2"
-                          >
-                            {savingAssignments ? "Saving..." : "Save Assignments"}
-                          </Button>
-                        )}
-                      </div>
+                      <CardTitle>Submissions</CardTitle>
+                      <CardDescription>
+                        Project submissions from hackers. Use Step 1 above to assign judges.
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       {loadingSubmissions ? (
