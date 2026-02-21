@@ -19,11 +19,22 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase-client"
 import type { Judge } from "@/lib/judges-data"
 import { JudgesDataTable } from "@/components/judges-data-table"
 import type { DashboardEntry } from "@/lib/dashboard-entries-data"
 import { NumberTicker } from "@/components/ui/number-ticker"
+import { IconNotes } from "@tabler/icons-react"
 
 
 type JudgeSubmission = {
@@ -71,6 +82,18 @@ export default function JudgesPage() {
   
   // Dashboard entries for DataTable
   const [dashboardEntries, setDashboardEntries] = React.useState<DashboardEntry[]>([])
+
+  // Judge notes: submissionId -> notes for the current page judge
+  const [notesMap, setNotesMap] = React.useState<Record<string, string>>({})
+  const [isNotesDialogOpen, setIsNotesDialogOpen] = React.useState(false)
+  const [notesDialogJudgeId, setNotesDialogJudgeId] = React.useState<string | null>(null)
+  const [notesDialogSubmissionId, setNotesDialogSubmissionId] = React.useState<string>("")
+  const [notesDialogText, setNotesDialogText] = React.useState("")
+  // When dialog shows another judge: their projects and notes
+  const [otherJudgeProjects, setOtherJudgeProjects] = React.useState<{ id: string; project_name: string }[]>([])
+  const [otherJudgeNotesMap, setOtherJudgeNotesMap] = React.useState<Record<string, string>>({})
+  const [notesDialogSaving, setNotesDialogSaving] = React.useState(false)
+  const [notesDialogTab, setNotesDialogTab] = React.useState<"view" | "edit">("view")
 
   // Load list of all judges
   React.useEffect(() => {
@@ -278,6 +301,21 @@ export default function JudgesPage() {
         investmentsData?.forEach(inv => {
           investmentsMap[inv.submission_id] = parseFloat(String(inv.amount)) || 0
         })
+
+        // Load judge notes for this judge
+        const { data: notesData, error: notesError } = await supabase
+          .from("judge_notes")
+          .select("submission_id, notes")
+          .eq("judge_id", judgeData.id)
+        if (!notesError && notesData) {
+          const nm: Record<string, string> = {}
+          notesData.forEach((row: { submission_id: string; notes: string | null }) => {
+            nm[row.submission_id] = row.notes ?? ""
+          })
+          setNotesMap(nm)
+        } else {
+          setNotesMap({})
+        }
 
         if (submissionsData && submissionsData.length > 0) {
           const judgeSubmissions: JudgeSubmission[] = submissionsData.map((submission: any) => ({
@@ -531,6 +569,111 @@ export default function JudgesPage() {
     setInvestmentInput(currentValue.toString())
   }
 
+  // Open notes dialog (optionally with a project pre-selected, e.g. from table row)
+  const openNotesDialog = React.useCallback((preSelectSubmissionId?: string) => {
+    setNotesDialogJudgeId(selectedJudgeId)
+    setOtherJudgeProjects([])
+    setOtherJudgeNotesMap({})
+    const sid = preSelectSubmissionId ?? submissions[0]?.id ?? ""
+    setNotesDialogSubmissionId(sid)
+    setNotesDialogText(sid ? (notesMap[sid] ?? "") : "")
+    setNotesDialogTab(preSelectSubmissionId ? "edit" : "view")
+    setIsNotesDialogOpen(true)
+  }, [selectedJudgeId, submissions, notesMap])
+
+  // When dialog shows another judge and their projects have loaded, pre-select first project if none selected
+  React.useEffect(() => {
+    if (notesDialogJudgeId !== selectedJudgeId && otherJudgeProjects.length > 0 && !notesDialogSubmissionId) {
+      const firstId = otherJudgeProjects[0].id
+      setNotesDialogSubmissionId(firstId)
+      setNotesDialogText(otherJudgeNotesMap[firstId] ?? "")
+    }
+  }, [notesDialogJudgeId, selectedJudgeId, otherJudgeProjects, otherJudgeNotesMap, notesDialogSubmissionId])
+
+  // When dialog is open and shows another judge, fetch their assigned projects and notes
+  React.useEffect(() => {
+    if (!isNotesDialogOpen || !notesDialogJudgeId || notesDialogJudgeId === selectedJudgeId) {
+      if (notesDialogJudgeId === selectedJudgeId) {
+        setOtherJudgeProjects([])
+        setOtherJudgeNotesMap({})
+      }
+      return
+    }
+    let cancelled = false
+    const run = async () => {
+      const judgeId = notesDialogJudgeId
+      const judgeIdStr = String(judgeId).toLowerCase()
+      const [
+        { data: assignmentData },
+        { data: notesData },
+        { data: calendarSlotsData },
+      ] = await Promise.all([
+        supabase.from("judge_project_assignments").select("submission_id").eq("judge_id", judgeId),
+        supabase.from("judge_notes").select("submission_id, notes").eq("judge_id", judgeId),
+        supabase.from("calendar_schedule_slots").select("submission_id, judge_ids"),
+      ])
+      if (cancelled || notesDialogJudgeId !== judgeId) return
+      const fromCalendar = (calendarSlotsData ?? []).filter((slot: { judge_ids?: string[] }) => {
+        const ids = slot.judge_ids ?? []
+        return ids.some((id: string) => String(id).toLowerCase() === judgeIdStr)
+      }).map((slot: { submission_id: string }) => slot.submission_id)
+      const fromAssignments = (assignmentData ?? []).map((r: { submission_id: string }) => r.submission_id)
+      const submissionIds = Array.from(new Set([...fromCalendar, ...fromAssignments]))
+      const notes: Record<string, string> = {}
+      ;(notesData ?? []).forEach((row: { submission_id: string; notes: string | null }) => {
+        notes[row.submission_id] = row.notes ?? ""
+      })
+      setOtherJudgeNotesMap(notes)
+      if (submissionIds.length === 0) {
+        setOtherJudgeProjects([])
+        return
+      }
+      const { data: subs } = await supabase
+        .from("submissions")
+        .select("id, project_name")
+        .in("id", submissionIds)
+      if (cancelled || notesDialogJudgeId !== judgeId) return
+      setOtherJudgeProjects((subs ?? []).map((s: { id: string; project_name: string }) => ({ id: s.id, project_name: s.project_name })))
+    }
+    void run()
+    return () => { cancelled = true }
+  }, [isNotesDialogOpen, notesDialogJudgeId, selectedJudgeId])
+
+  const notesDialogProjects = notesDialogJudgeId === selectedJudgeId
+    ? submissions.map(s => ({ id: s.id, project_name: s.project_name }))
+    : otherJudgeProjects
+
+  const handleSaveNote = async () => {
+    if (!notesDialogJudgeId || !notesDialogSubmissionId) {
+      toast.error("Select a judge and project")
+      return
+    }
+    setNotesDialogSaving(true)
+    try {
+      const { error } = await supabase
+        .from("judge_notes")
+        .upsert({
+          judge_id: notesDialogJudgeId,
+          submission_id: notesDialogSubmissionId,
+          notes: notesDialogText.trim() || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "judge_id,submission_id" })
+      if (error) throw error
+      if (notesDialogJudgeId === selectedJudgeId) {
+        setNotesMap(prev => ({ ...prev, [notesDialogSubmissionId]: notesDialogText.trim() }))
+      } else {
+        setOtherJudgeNotesMap(prev => ({ ...prev, [notesDialogSubmissionId]: notesDialogText.trim() }))
+      }
+      toast.success("Notes saved")
+      setNotesDialogSubmissionId("")
+      setNotesDialogText("")
+    } catch (e) {
+      toast.error("Failed to save notes", { description: e instanceof Error ? e.message : "Unknown error" })
+    } finally {
+      setNotesDialogSaving(false)
+    }
+  }
+
   return (
     <div suppressHydrationWarning className="relative">
       <div className="animated-grid fixed inset-0 z-0" />
@@ -593,6 +736,15 @@ export default function JudgesPage() {
                               onClick={() => setRefreshKey((k) => k + 1)}
                             >
                               {loading ? "Refreshing…" : "Refresh timings"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!selectedJudgeId}
+                              onClick={() => openNotesDialog()}
+                            >
+                              <IconNotes className="size-4 mr-1.5" />
+                              Notes
                             </Button>
                           </div>
                         )}
@@ -684,6 +836,7 @@ export default function JudgesPage() {
                         }}
                         remainingAllocation={Math.max(0, judgeAllocation - judge.totalInvested)}
                         totalInvested={judge.totalInvested}
+                        onOpenNotes={openNotesDialog}
                       />
                     </div>
                   )}
@@ -693,6 +846,141 @@ export default function JudgesPage() {
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      <Dialog open={isNotesDialogOpen} onOpenChange={setIsNotesDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Judge notes</DialogTitle>
+            <DialogDescription>
+              View your notes or add and edit notes for a project.
+            </DialogDescription>
+          </DialogHeader>
+          <Tabs value={notesDialogTab} onValueChange={(v) => setNotesDialogTab(v as "view" | "edit")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="view">My notes</TabsTrigger>
+              <TabsTrigger value="edit">Add / Edit note</TabsTrigger>
+            </TabsList>
+            <TabsContent value="view" className="mt-3">
+              {(() => {
+                const map = notesDialogJudgeId === selectedJudgeId ? notesMap : otherJudgeNotesMap
+                const projects = notesDialogJudgeId === selectedJudgeId
+                  ? submissions
+                  : otherJudgeProjects.map(p => ({ id: p.id, project_name: p.project_name }))
+                const nameById = Object.fromEntries(projects.map(p => [p.id, p.project_name]))
+                const entries = Object.entries(map)
+                  .filter(([, text]) => text?.trim())
+                  .map(([submissionId, notes]) => ({
+                    submissionId,
+                    projectName: nameById[submissionId] ?? "Unknown project",
+                    notes: notes.trim(),
+                  }))
+                if (entries.length === 0) {
+                  return (
+                    <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      <p className="mb-2">No notes yet.</p>
+                      <Button variant="outline" size="sm" onClick={() => setNotesDialogTab("edit")}>
+                        Add / Edit note
+                      </Button>
+                    </div>
+                  )
+                }
+                return (
+                  <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
+                    {entries.map(({ submissionId, projectName, notes }) => (
+                      <div key={submissionId} className="rounded-md border p-3">
+                        <p className="font-medium text-sm">{projectName}</p>
+                        <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{notes}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-2 h-7 text-xs"
+                          onClick={() => {
+                            setNotesDialogSubmissionId(submissionId)
+                            setNotesDialogText(map[submissionId] ?? "")
+                            setNotesDialogTab("edit")
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </TabsContent>
+            <TabsContent value="edit" className="mt-3">
+              <div className="grid gap-4 py-2">
+                <div className="space-y-2">
+                  <Label>Judge</Label>
+                  <Select
+                    value={notesDialogJudgeId ?? ""}
+                    onValueChange={(value) => {
+                      setNotesDialogJudgeId(value)
+                      const projects = value === selectedJudgeId
+                        ? submissions.map(s => ({ id: s.id, project_name: s.project_name }))
+                        : otherJudgeProjects
+                      const firstId = projects[0]?.id ?? ""
+                      setNotesDialogSubmissionId(firstId)
+                      const text = value === selectedJudgeId
+                        ? (notesMap[firstId] ?? "")
+                        : (otherJudgeNotesMap[firstId] ?? "")
+                      setNotesDialogText(text)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select judge" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {judgesList.map((j) => (
+                        <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Project</Label>
+                  <Select
+                    value={notesDialogSubmissionId}
+                    onValueChange={(value) => {
+                      setNotesDialogSubmissionId(value)
+                      const text = notesDialogJudgeId === selectedJudgeId
+                        ? (notesMap[value] ?? "")
+                        : (otherJudgeNotesMap[value] ?? "")
+                      setNotesDialogText(text)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {notesDialogProjects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Textarea
+                    value={notesDialogText}
+                    onChange={(e) => setNotesDialogText(e.target.value)}
+                    placeholder="Write notes about this project..."
+                    className="min-h-[120px]"
+                  />
+                </div>
+              </div>
+              <DialogFooter showCloseButton={false} className="mt-4">
+                <Button variant="outline" onClick={() => setIsNotesDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveNote} disabled={notesDialogSaving || !notesDialogJudgeId || !notesDialogSubmissionId}>
+                  {notesDialogSaving ? "Saving…" : "Save"}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

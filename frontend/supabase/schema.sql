@@ -64,3 +64,13 @@ CREATE TABLE public.submissions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT submissions_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.judge_notes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  judge_id uuid NOT NULL REFERENCES public.judges(id) ON DELETE CASCADE,
+  submission_id uuid NOT NULL REFERENCES public.submissions(id) ON DELETE CASCADE,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_notes_judge_id_submission_id_key UNIQUE (judge_id, submission_id)
+);
