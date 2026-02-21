@@ -154,23 +154,22 @@ export default function CalendarPage() {
           ])
 
         if (!judgesError && supabaseJudges) {
-          const mappedJudges: Judge[] = (supabaseJudges as any[]).map((row) => ({
+          const rows = supabaseJudges as { id: string; name: string; email?: string; tracks?: string[] }[]
+          setJudges(rows.map((row) => ({
             id: row.id,
             name: row.name,
             email: row.email || "",
             assignedProjects: 0,
             totalInvested: 0,
             tracks: row.tracks || ["General"],
-          }))
-          setJudges(mappedJudges)
+          })) as unknown as Judge[])
         }
 
         if (!submissionsError && supabaseSubmissions) {
-          const mappedSubmissions: CalendarSubmission[] = (supabaseSubmissions as any[]).map((row) => ({
+          const mappedSubmissions: CalendarSubmission[] = (supabaseSubmissions as { id: string; project_name?: string; tracks?: string[] }[]).map((row) => ({
             id: row.id,
             name: row.project_name ?? "Untitled",
             project_name: row.project_name ?? "Untitled",
-            track: (row.tracks && row.tracks.length > 0) ? row.tracks[0] : "General",
             tracks: row.tracks || ["General"],
           }))
           setSubmissions(mappedSubmissions)
@@ -194,8 +193,7 @@ export default function CalendarPage() {
           schema: "public",
           table: "admin_settings",
         },
-        (payload) => {
-
+        () => {
           // Reload settings when they change
           void loadFromSupabase()
         }
@@ -203,7 +201,6 @@ export default function CalendarPage() {
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
       void supabase.removeChannel(settingsChannel)
     }
   }, [selectedDate])
@@ -224,7 +221,8 @@ export default function CalendarPage() {
       setSlots([])
       return
     }
-    const timeSlotsMapped: TimeSlot[] = rows.map((row: any) => {
+    type SlotRow = { id: string; start_time: string; end_time: string; submission_id: string; room_id: number; judge_ids?: string[] }
+    const timeSlotsMapped: TimeSlot[] = (rows as SlotRow[]).map((row) => {
       const startTime = typeof row.start_time === "string"
         ? row.start_time.slice(0, 5)
         : row.start_time
@@ -341,7 +339,7 @@ export default function CalendarPage() {
     const selectedRoom = rooms.find(r => r.id === parseInt(formData.roomId))
     if (!selectedRoom) return
 
-    const selectedJudges = judges.filter(j => formData.judgeIds.includes(String(j.id)) || formData.judgeIds.includes(j.id as any))
+    const selectedJudges = judges.filter(j => formData.judgeIds.some(id => String(id) === String(j.id)))
     
     const slotData: TimeSlot = {
       id: editingSlot?.id || `${selectedDate}-${formData.startTime}`,
@@ -446,11 +444,12 @@ export default function CalendarPage() {
         .eq("date", selectedDate)
 
       if (deleteError) {
-        const deleteErrorMsg = (deleteError as any)?.message || String(deleteError)
+        const err = deleteError as { message?: string; code?: string }
+        const deleteErrorMsg = err?.message || String(deleteError)
         // Check if it's a "table doesn't exist" error
-        if (deleteErrorMsg.includes("does not exist") || 
+        if (deleteErrorMsg.includes("does not exist") ||
             deleteErrorMsg.includes("relation") ||
-            (deleteError as any)?.code === "42P01") {
+            err?.code === "42P01") {
           // Table doesn't exist - that's okay, we'll create it
         } else {
           toast.error("Failed to delete existing schedule", {
@@ -519,24 +518,23 @@ export default function CalendarPage() {
 
       if (error) {
         // Supabase errors typically have: message, details, hint, code
-        const errorMessage = (error as any)?.message || "Unknown error"
-        const errorDetails = (error as any)?.details || null
-        const errorHint = (error as any)?.hint || null
-        const errorCode = (error as any)?.code || null
+        const err = error as { message?: string; details?: string; hint?: string; code?: string }
+        const errorMessage = err?.message || "Unknown error"
+        const errorDetails = err?.details ?? null
+        const errorHint = err?.hint ?? null
+        const errorCode = err?.code ?? null
 
 
 
 
 
 
-        // Log all properties
-        if (error && typeof error === 'object') {
-
-          Object.keys(error).forEach(key => {
-          })
-          // Also try Object.getOwnPropertyNames for non-enumerable
-          Object.getOwnPropertyNames(error).forEach(key => {
+        // Log all properties (for debugging)
+        if (error && typeof error === "object") {
+          Object.keys(error).forEach(() => {})
+          Object.getOwnPropertyNames(error).forEach((key) => {
             if (!Object.keys(error).includes(key)) {
+              void key
             }
           })
         }
@@ -596,7 +594,7 @@ export default function CalendarPage() {
     })
   }
 
-  const getConflictingJudges = (judgeIds: number[], time: string, excludeSlotId?: string): string[] => {
+  const getConflictingJudges = (judgeIds: (string | number)[], time: string, excludeSlotId?: string): string[] => {
     const slotsAtSameTime = slots.filter(s => 
       s.startTime === time &&
       (!excludeSlotId || s.id !== excludeSlotId)
@@ -604,17 +602,18 @@ export default function CalendarPage() {
     
     if (judgeIds.length === 0) return []
     
-    const conflictingJudgeIds: number[] = []
+    const conflictingJudgeIds: (string | number)[] = []
     for (const slot of slotsAtSameTime) {
       for (const judgeId of judgeIds) {
-        if (slot.judgeIds.includes(judgeId) && !conflictingJudgeIds.includes(judgeId)) {
+        const matches = slot.judgeIds.some(id => String(id) === String(judgeId))
+        if (matches && !conflictingJudgeIds.some(id => String(id) === String(judgeId))) {
           conflictingJudgeIds.push(judgeId)
         }
       }
     }
     
     return conflictingJudgeIds
-      .map(jId => judges.find(j => j.id === jId)?.name)
+      .map(jId => judges.find(j => String(j.id) === String(jId))?.name)
       .filter((name): name is string => Boolean(name))
   }
 
@@ -745,8 +744,8 @@ export default function CalendarPage() {
                               {rooms.map((room) => (
                                 <TableHead key={room.id} className="min-w-[200px]">
                                   {room.name}
-                                  {room.capacity && (
-                                    <span className="text-xs text-muted-foreground ml-1">({room.capacity})</span>
+                                  {"capacity" in room && (room as Room & { capacity?: number }).capacity != null && (
+                                    <span className="text-xs text-muted-foreground ml-1">({(room as Room & { capacity?: number }).capacity})</span>
                                   )}
                                 </TableHead>
                               ))}
@@ -792,7 +791,7 @@ export default function CalendarPage() {
                                                 </p>
                                                 <div className="flex flex-wrap items-center gap-1.5">
                                                   <Badge variant="outline" className="text-[10px]">
-                                                    General: {submissions.find(s => s.id === slot.projectId)?.track || "General"}
+                                                    General: {submissions.find(s => s.id === slot.projectId)?.tracks?.[0] ?? "General"}
                                                   </Badge>
                                                   <Badge variant="secondary" className="text-[10px]">
                                                     {room.name}
@@ -1080,7 +1079,7 @@ export default function CalendarPage() {
                       if (eligibleJudges.length === 0) {
                         return (
                           <p className="text-sm text-muted-foreground">
-                            No eligible judges for sponsor track "{sponsorTracks.join(", ")}". Please assign judges to this track first.
+                            No eligible judges for sponsor track &quot;{sponsorTracks.join(", ")}&quot;. Please assign judges to this track first.
                           </p>
                         )
                       }
