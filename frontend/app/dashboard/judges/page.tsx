@@ -10,20 +10,18 @@ import {
 } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase-client"
 import type { Judge } from "@/lib/judges-data"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { JudgesDataTable } from "@/components/judges-data-table"
 import type { DashboardEntry } from "@/lib/dashboard-entries-data"
 import { NumberTicker } from "@/components/ui/number-ticker"
@@ -50,17 +48,16 @@ export default function JudgesPage() {
   const router = useRouter()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [authLoading, setAuthLoading] = React.useState(true)
-  const [judgeName, setJudgeName] = React.useState<string>("")
+  const [judgesList, setJudgesList] = React.useState<{ id: string; name: string }[]>([])
+  const [selectedJudgeId, setSelectedJudgeId] = React.useState<string | null>(null)
   const [judge, setJudge] = React.useState<Judge | null>(null)
   const [submissions, setSubmissions] = React.useState<JudgeSubmission[]>([])
   const [loading, setLoading] = React.useState(true)
   const [investments, setInvestments] = React.useState<Record<string, number>>({})
   const [editingInvestment, setEditingInvestment] = React.useState<string | null>(null)
   const [investmentInput, setInvestmentInput] = React.useState("")
-  const [judgeNameDialogOpen, setJudgeNameDialogOpen] = React.useState(false)
-  const [judgeNameInput, setJudgeNameInput] = React.useState("")
-  const [judgeNameError, setJudgeNameError] = React.useState("")
-  const [checkingJudge, setCheckingJudge] = React.useState(false)
+  const [loadingJudgesList, setLoadingJudgesList] = React.useState(true)
+  const [refreshKey, setRefreshKey] = React.useState(0)
   
   // Load assigned submissions for this judge
   const [assignedSubmissionIds, setAssignedSubmissionIds] = React.useState<string[]>([])
@@ -114,107 +111,46 @@ export default function JudgesPage() {
     }
   }, [router])
 
-  // Open judge name dialog when auth is complete and no judge name is set
+  // Load list of all judges when user has access
   React.useEffect(() => {
-    if (!authLoading && hasAccess && !judgeName) {
-      setJudgeNameDialogOpen(true)
-    }
-  }, [authLoading, hasAccess, judgeName])
-
-  const handleJudgeNameSubmit = async (e?: React.FormEvent) => {
-    if (e) {
-      e.preventDefault()
-    }
-
-    if (!judgeNameInput.trim()) {
-      setJudgeNameError("Judge name is required")
-      return
-    }
-
-    setCheckingJudge(true)
-    setJudgeNameError("")
-
-    try {
-      const trimmedJudgeName = judgeNameInput.trim()
-      
-      // Check if judge exists in Supabase
-      const { data: judgesData, error: judgesError } = await supabase
-        .from("judges")
-        .select("id, name, email")
-        .eq("name", trimmedJudgeName)
-        .single()
-
-      if (judgesError) {
-        setJudgeNameError("Judge not found. Please contact admin to be added as a judge.")
-        setCheckingJudge(false)
-        return
+    if (!hasAccess) return
+    const loadJudgesList = async () => {
+      try {
+        setLoadingJudgesList(true)
+        const { data, error } = await supabase
+          .from("judges")
+          .select("id, name")
+          .order("name", { ascending: true })
+        if (error) throw error
+        const list = (data ?? []).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }))
+        setJudgesList(list)
+        if (list.length > 0) {
+          setSelectedJudgeId((prev) => prev ?? list[0].id)
+        }
+      } catch (e) {
+        toast.error("Failed to load judges")
+      } finally {
+        setLoadingJudgesList(false)
       }
-
-      if (!judgesData) {
-        setJudgeNameError("Judge not found. Please contact admin to be added as a judge.")
-        setCheckingJudge(false)
-        return
-      }
-
-      // Judge found, proceed (no localStorage storage)
-      const trimmedName = trimmedJudgeName
-      setJudgeName(trimmedName)
-      setJudgeNameDialogOpen(false)
-      setJudgeNameInput("")
-      setHasAccess(true)
-    } catch (error) {
-      setJudgeNameError("An error occurred. Please try again.")
-    } finally {
-      setCheckingJudge(false)
     }
-  }
-
-  const handleClearJudgeName = () => {
-    setJudgeName("")
-    setJudge(null)
-    setSubmissions([])
-    setInvestments({})
-    setJudgeNameInput("")
-    setJudgeNameError("")
-    setJudgeNameDialogOpen(true)
-    setHasAccess(false)
-  }
+    void loadJudgesList()
+  }, [hasAccess])
 
   React.useEffect(() => {
-    if (!judgeName) return
+    if (!selectedJudgeId) return
 
     const loadJudgeData = async () => {
       try {
         setLoading(true)
 
-        // Load judge from Supabase
-        // Note: Using snake_case column names as per database schema (assigned_projects, total_invested)
-
         const { data: judgesData, error: judgesError } = await supabase
           .from("judges")
           .select("id, name, email, assigned_projects, total_invested, tracks")
-          .eq("name", judgeName)
+          .eq("id", selectedJudgeId)
           .single()
 
-        // Better error inspection
-        if (judgesError) {
-          // Judge not found - show dialog again
-          setJudgeName("")
-          setJudgeNameDialogOpen(true)
-          setJudgeNameInput(judgeName)
-          setJudgeNameError("Judge not found. Please contact admin to be added as a judge.")
-          setHasAccess(false)
-          return
-        }
-
-        if (!judgesData) {
-
-          // Judge not found - show dialog again
-          setJudgeName("")
-          setJudgeNameDialogOpen(true)
-          setJudgeNameInput(judgeName)
-          setJudgeNameError("Judge not found. Please contact admin to be added as a judge.")
-          setHasAccess(false)
+        if (judgesError || !judgesData) {
+          setJudge(null)
           return
         }
 
@@ -279,50 +215,48 @@ export default function JudgesPage() {
 
         }
 
-        // Load assigned submissions for this judge from calendar_schedule_slots
-        // Filter calendar slots where judge_ids array contains this judge's ID
+        // Load assigned submissions from BOTH sources:
+        // 1) calendar_schedule_slots (when a schedule has been built/saved)
+        // 2) judge_project_assignments (Admin-assigned judge to project, even before schedule exists)
+        const judgeIdStr = String(judgeData.id).toLowerCase()
 
-        // Fetch all calendar slots with full schedule info and filter for ones that contain this judge's ID
-        // Note: We'll sort in JavaScript to ensure proper chronological order
-        const { data: calendarSlotsData, error: calendarSlotsError } = await supabase
-          .from("calendar_schedule_slots")
-          .select("submission_id, judge_ids, date, start_time, end_time, room_id")
+        const [
+          { data: calendarSlotsData, error: calendarSlotsError },
+          { data: assignmentData, error: assignmentError },
+        ] = await Promise.all([
+          supabase
+            .from("calendar_schedule_slots")
+            .select("submission_id, judge_ids, date, start_time, end_time, room_id"),
+          supabase
+            .from("judge_project_assignments")
+            .select("submission_id")
+            .eq("judge_id", judgeData.id),
+        ])
 
         if (calendarSlotsError) {
-
-
+          console.warn("calendar_schedule_slots fetch error:", calendarSlotsError)
+        }
+        if (assignmentError) {
+          console.warn("judge_project_assignments fetch error:", assignmentError)
         }
 
-        // Filter slots where judge_ids array contains the current judge's ID
-        // Convert judge ID to string for comparison (it might be UUID or string)
-        const judgeIdStr = String(judgeData.id)
-
+        // Filter calendar slots where judge_ids array contains this judge's ID (case-insensitive UUID)
         const assignedSlots = (calendarSlotsData || []).filter(slot => {
           const judgeIds = slot.judge_ids || []
-
-          // Loop through judge_ids array to check if current judge's ID exists
-          if (!Array.isArray(judgeIds)) {
-
-            return false
-          }
-          
-          // Loop through each ID in the array and compare
+          if (!Array.isArray(judgeIds)) return false
           for (let i = 0; i < judgeIds.length; i++) {
-            const slotJudgeId = judgeIds[i]
-            const slotJudgeIdStr = String(slotJudgeId)
-
-            if (slotJudgeIdStr === judgeIdStr) {
-
-              return true
-            }
+            const slotJudgeIdStr = String(judgeIds[i]).toLowerCase()
+            if (slotJudgeIdStr === judgeIdStr) return true
           }
-          
           return false
         })
 
-        // Extract unique submission IDs
+        // Submission IDs from calendar schedule
+        const idsFromCalendar = assignedSlots.map(slot => slot.submission_id)
+        // Submission IDs from Admin assignments (fallback when no schedule yet)
+        const idsFromAssignments = (assignmentData || []).map((row: any) => row.submission_id)
         const assignedSubmissionIds = Array.from(
-          new Set(assignedSlots.map(slot => slot.submission_id))
+          new Set([...idsFromCalendar, ...idsFromAssignments])
         )
 
         setAssignedSubmissionIds(assignedSubmissionIds)
@@ -524,7 +458,7 @@ export default function JudgesPage() {
     }
 
     void loadJudgeData()
-  }, [judgeName])
+  }, [selectedJudgeId, refreshKey])
 
   const handleInvestmentChange = (submissionId: string, value: string) => {
     setInvestmentInput(value)
@@ -649,63 +583,7 @@ export default function JudgesPage() {
 
   return (
     <>
-      {/* Judge Name Dialog */}
-      <Dialog open={judgeNameDialogOpen} onOpenChange={(open) => {
-        if (!open && !judgeName) {
-          // Don't allow closing dialog if no judge name is set
-          router.push("/")
-        } else {
-          setJudgeNameDialogOpen(open)
-        }
-      }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Judge Authentication</DialogTitle>
-            <DialogDescription>
-              Please enter your judge name to access the judging dashboard
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleJudgeNameSubmit}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="judge-name">
-                  Judge Name <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="judge-name"
-                  value={judgeNameInput}
-                  onChange={(e) => {
-                    setJudgeNameInput(e.target.value)
-                    setJudgeNameError("")
-                  }}
-                  placeholder="Enter your judge name"
-                  disabled={checkingJudge}
-                  autoFocus
-                  className={judgeNameError ? "border-destructive" : ""}
-                />
-                {judgeNameError && (
-                  <p className="text-sm text-destructive">{judgeNameError}</p>
-                )}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push("/")}
-                disabled={checkingJudge}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={checkingJudge || !judgeNameInput.trim()}>
-                {checkingJudge ? "Checking..." : "Continue"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {hasAccess && judge && (
+      {hasAccess && (
         <div suppressHydrationWarning className="relative">
       <div className="animated-grid fixed inset-0 z-0" />
       <SidebarProvider
@@ -725,23 +603,61 @@ export default function JudgesPage() {
                 <div className="px-4 lg:px-6">
                   <Card>
                     <CardHeader>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <CardTitle>Welcome, {judge.name}</CardTitle>
+                          <CardTitle>
+                            {loadingJudgesList
+                              ? "Loading..."
+                              : judgesList.length === 0
+                                ? "No judges"
+                                : "Judge dashboard"}
+                          </CardTitle>
                           <CardDescription>
-                            View and allocate funding to your assigned submissions
+                            {judgesList.length > 0
+                              ? "Select a judge to view and allocate funding to assigned submissions"
+                              : "No judges have been added yet."}
                           </CardDescription>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleClearJudgeName}
-                        >
-                          Switch Judge
-                        </Button>
+                        {judgesList.length > 0 && (
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                            <div className="space-y-2">
+                              <Label htmlFor="judge-select" className="text-xs text-muted-foreground">Judge</Label>
+                              <Select
+                                value={selectedJudgeId ?? ""}
+                                onValueChange={(value) => setSelectedJudgeId(value)}
+                              >
+                                <SelectTrigger id="judge-select" className="w-full min-w-[180px] sm:w-[200px]">
+                                  <SelectValue placeholder="Select a judge" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {judgesList.map((j) => (
+                                    <SelectItem key={j.id} value={j.id}>
+                                      {j.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={loading || !selectedJudgeId}
+                              onClick={() => setRefreshKey((k) => k + 1)}
+                            >
+                              {loading ? "Refreshing…" : "Refresh timings"}
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </CardHeader>
                     <CardContent>
+                      {!judge ? (
+                        selectedJudgeId && loading ? (
+                          <p className="text-sm text-muted-foreground">Loading judge data...</p>
+                        ) : judgesList.length > 0 && selectedJudgeId ? (
+                          <p className="text-sm text-muted-foreground">No judge data found.</p>
+                        ) : null
+                      ) : (
                       <div className="grid gap-4 md:grid-cols-4">
                         <div>
                           <Label className="text-muted-foreground">Your Allocation</Label>
@@ -784,12 +700,13 @@ export default function JudgesPage() {
                           </div>
                         </div>
                       </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
 
                 <div className="px-4 lg:px-6">
-                  {loading ? (
+                  {!judge ? null : loading ? (
                     <div className="text-center py-8 text-muted-foreground">
                       Loading submissions...
                     </div>
@@ -802,17 +719,10 @@ export default function JudgesPage() {
                       <JudgesDataTable 
                         data={dashboardEntries}
                         onInvestmentChange={async (entryId: number, investment: number) => {
-                          // Find the entry and get submission ID
                           const entry = dashboardEntries.find(e => e.id === entryId)
                           if (!entry || !(entry as any).submissionId) return
-                          
                           const submissionId = (entry as any).submissionId
-                          
-                          // Save to Supabase - this will update judge.totalInvested
                           await handleSaveInvestment(submissionId, investment)
-                          
-                          // Update entries in place to preserve pagination
-                          // Only update the specific entry that changed, don't re-sort to avoid pagination reset
                           setDashboardEntries(prev => prev.map(e => {
                             if (e.id === entryId) {
                               return {
