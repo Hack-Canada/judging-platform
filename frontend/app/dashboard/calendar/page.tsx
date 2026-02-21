@@ -211,7 +211,7 @@ export default function CalendarPage() {
           setSubmissions(mappedSubmissions)
         }
 
-        // Note: Scheduled slots will be loaded separately when date changes
+        // Slots for selectedDate are loaded in loadSlotsForDate effect below
       } catch (error) {
 
       }
@@ -243,6 +243,64 @@ export default function CalendarPage() {
     }
   }, [selectedDate, router])
   
+  // Load slots from Supabase for selectedDate (so Admin-published schedule shows up)
+  const loadSlotsForDate = React.useCallback(async (date: string) => {
+    const { data: rows, error } = await supabase
+      .from("calendar_schedule_slots")
+      .select("id, date, start_time, end_time, submission_id, room_id, judge_ids")
+      .eq("date", date)
+      .order("start_time", { ascending: true })
+
+    if (error) {
+      setSlots([])
+      return
+    }
+    if (!rows || rows.length === 0) {
+      setSlots([])
+      return
+    }
+    const timeSlotsMapped: TimeSlot[] = rows.map((row: any) => {
+      const startTime = typeof row.start_time === "string"
+        ? row.start_time.slice(0, 5)
+        : row.start_time
+      const endTime = typeof row.end_time === "string"
+        ? row.end_time.slice(0, 5)
+        : row.end_time
+      const sub = submissions.find((s) => s.id === row.submission_id)
+      const room = rooms.find((r) => r.id === row.room_id)
+      const judgeIds = Array.isArray(row.judge_ids) ? row.judge_ids : []
+      const judgeNames = judgeIds
+        .map((id: string) => judges.find((j) => String(j.id) === String(id))?.name)
+        .filter(Boolean) as string[]
+      return {
+        id: row.id,
+        startTime,
+        endTime,
+        projectId: row.submission_id,
+        projectName: sub?.project_name ?? "Unknown",
+        judgeIds,
+        judgeNames,
+        roomId: row.room_id,
+        roomName: room?.name ?? `Room ${row.room_id}`,
+      }
+    })
+    setSlots(timeSlotsMapped)
+  }, [submissions, rooms, judges])
+
+  React.useEffect(() => {
+    if (!hasAccess) return
+    void loadSlotsForDate(selectedDate)
+  }, [hasAccess, selectedDate, loadSlotsForDate])
+
+  // When Admin publishes schedule, refetch slots for current date
+  React.useEffect(() => {
+    const onSchedulePublished = () => {
+      void loadSlotsForDate(selectedDate)
+    }
+    window.addEventListener("schedulePublished", onSchedulePublished)
+    return () => window.removeEventListener("schedulePublished", onSchedulePublished)
+  }, [selectedDate, loadSlotsForDate])
+
   // Update time slots when time range changes
   React.useEffect(() => {
     // This will cause timeSlots to recalculate when settings change
@@ -405,177 +463,10 @@ export default function CalendarPage() {
     })
   }
 
-  const handleAutoSchedule = () => {
-    const activeSubmissions = submissions
-    
-    // Helper function to check if a judge can judge a submission's tracks
-    // Rules:
-    // - If the submission is General-only, any judge can judge it.
-    // - If the submission has sponsor tracks (e.g. RBC, Uber), only judges
-    //   who have at least one of those sponsor tracks can judge it.
-    const canJudgeSubmission = (judge: typeof judges[0], submissionTracks: string[]): boolean => {
-      const sponsorTracks = submissionTracks.filter((t) => t !== "General")
-      if (sponsorTracks.length === 0) {
-        // General-only submission
-        return true
-      }
-      // Sponsor submission: judge must have at least one sponsor track
-      return sponsorTracks.some((track) => judge.tracks?.includes(track))
-    }
-    
-    const newSlots: TimeSlot[] = []
-    let currentTime = scheduleStartTime
-    let submissionIndex = 0
-    const usedSubmissions = new Set<string>() // Track which submissions have been scheduled (UUIDs)
-
-    // Helper to get available rooms at a specific time
-    const getAvailableRooms = (time: string): Room[] => {
-      const bookedRoomIds = new Set(
-        newSlots
-          .filter(s => s.startTime === time)
-          .map(s => s.roomId)
-      )
-      return rooms.filter(room => !bookedRoomIds.has(room.id))
-    }
-
-    // Helper to get next time slot
-    const getNextTime = (time: string): string | null => {
-      const [hours, minutes] = time.split(":").map(Number)
-      const totalMinutes = hours * 60 + minutes + slotDuration
-      const nextHours = Math.floor(totalMinutes / 60)
-      const nextMinutes = totalMinutes % 60
-      const nextTime = `${nextHours.toString().padStart(2, "0")}:${nextMinutes.toString().padStart(2, "0")}`
-      
-      // Check if we exceed the end time
-      const [endHour, endMin] = scheduleEndTime.split(":").map(Number)
-      if (nextHours > endHour || (nextHours === endHour && nextMinutes > endMin)) {
-        return null
-      }
-      return nextTime
-    }
-
-    // Main scheduling loop: for each time slot, try to fill all rooms
-    while (currentTime && submissionIndex < activeSubmissions.length) {
-      const availableRooms = getAvailableRooms(currentTime)
-      
-      // If all rooms are filled at this time, move to next time slot
-      if (availableRooms.length === 0) {
-        const nextTime = getNextTime(currentTime)
-        if (!nextTime) break
-        currentTime = nextTime
-        continue
-      }
-
-      // Try to fill each available room at this time slot
-      let scheduledAtThisTime = false
-      
-      for (const room of availableRooms) {
-        // Find next available submission that can be scheduled in this room
-        let submissionAssigned = false
-        
-        for (let i = submissionIndex; i < activeSubmissions.length; i++) {
-          const submission = activeSubmissions[i]
-          
-          // Skip if already used
-          if (usedSubmissions.has(submission.id)) continue
-          
-          const submissionTracks = submission.tracks && submission.tracks.length > 0
-            ? submission.tracks
-            : ["General"]
-          
-          // Filter judges who can judge this submission based on its tracks
-          const eligibleJudges = judges.filter(judge =>
-            canJudgeSubmission(judge, submissionTracks)
-          )
-          
-          if (eligibleJudges.length === 0) continue
-
-          // Get judges already used at this time across all rooms
-          // Note: Judge IDs are UUIDs (strings) from Supabase, but TimeSlot expects string[]
-          const usedJudgeIdsAtTime = new Set<string>()
-          newSlots
-            .filter(s => s.startTime === currentTime)
-            .forEach(s => {
-              // Convert judgeIds to strings if they're not already
-              s.judgeIds.forEach(id => usedJudgeIdsAtTime.add(String(id)))
-            })
-
-          // Filter eligible judges that are free at this time
-          const availableEligibleJudges = eligibleJudges.filter(judge => {
-            const judgeIdStr = String(judge.id)
-            return !usedJudgeIdsAtTime.has(judgeIdStr)
-          })
-          
-          if (availableEligibleJudges.length < judgesPerProject) {
-            // Not enough free judges to schedule this submission at this time
-            continue
-          }
-          
-          // Select judges for this submission from available pool
-          // Store as strings since judge IDs from Supabase are UUIDs
-          const submissionJudges: string[] = []
-          for (let j = 0; j < judgesPerProject; j++) {
-            const judge = availableEligibleJudges[j % availableEligibleJudges.length]
-            const judgeIdStr = String(judge.id)
-            if (!submissionJudges.includes(judgeIdStr)) {
-              submissionJudges.push(judgeIdStr)
-            }
-          }
-
-          // Assign this submission to this room at this time
-          const selectedJudgesList = judges.filter(j => submissionJudges.includes(String(j.id)))
-          
-          newSlots.push({
-            id: `${selectedDate}-${currentTime}-${submission.id}-${room.id}`,
-            startTime: currentTime,
-            endTime: getEndTime(currentTime, slotDuration),
-            projectId: submission.id,
-            projectName: submission.project_name,
-            judgeIds: submissionJudges as any, // Store as string array (UUIDs)
-            judgeNames: selectedJudgesList.map(j => j.name),
-            roomId: room.id,
-            roomName: room.name,
-          })
-
-          usedSubmissions.add(submission.id)
-          submissionAssigned = true
-          scheduledAtThisTime = true
-          break // Move to next room
-        }
-
-        // If we couldn't assign a submission to this room, continue to next room
-        if (!submissionAssigned) continue
-      }
-
-      // If we scheduled something at this time, check if all rooms are filled
-      // If not all rooms filled and no more submissions can be scheduled, move to next time
-      if (!scheduledAtThisTime || getAvailableRooms(currentTime).length === 0) {
-        const nextTime = getNextTime(currentTime)
-        if (!nextTime) break
-        currentTime = nextTime
-      }
-      
-      // Update submission index to continue from where we left off
-      while (submissionIndex < activeSubmissions.length && usedSubmissions.has(activeSubmissions[submissionIndex].id)) {
-        submissionIndex++
-      }
-    }
-
-    saveSchedule(newSlots)
-    const filledSlots = timeSlots.filter(time => {
-      const slotsAtTime = newSlots.filter(s => s.startTime === time)
-      return slotsAtTime.length === rooms.length
-    }).length
-    
-    toast.success("Auto-scheduled!", {
-      description: `Scheduled ${newSlots.length} submissions across ${timeSlots.length} time slots. ${filledSlots} time slots have all rooms occupied.`,
-    })
-  }
-
   const handleSaveScheduleToSupabase = async () => {
     if (slots.length === 0) {
       toast.error("No schedule to save", {
-        description: "Please create a schedule first using Auto Schedule",
+        description: "Publish a schedule from the Admin page first, or add slots manually.",
       })
       return
     }
@@ -805,21 +696,16 @@ export default function CalendarPage() {
                         Schedule judge assignments for submissions
                       </p>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <Button onClick={handleAutoSchedule} variant="outline">
-                        Auto Schedule
+                    {slots.length > 0 && (
+                      <Button 
+                        onClick={handleSaveScheduleToSupabase} 
+                        disabled={saving}
+                        variant="default"
+                      >
+                        <IconDeviceFloppy className="mr-2 h-4 w-4" />
+                        {saving ? "Saving..." : "Save Schedule"}
                       </Button>
-                      {slots.length > 0 && (
-                        <Button 
-                          onClick={handleSaveScheduleToSupabase} 
-                          disabled={saving}
-                          variant="default"
-                        >
-                          <IconDeviceFloppy className="mr-2 h-4 w-4" />
-                          {saving ? "Saving..." : "Save Schedule"}
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   {/* Date Navigation */}
