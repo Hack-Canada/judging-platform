@@ -49,13 +49,18 @@ import type { AdminProject } from "@/lib/admin-projects-data"
 import { defaultTracks, type Track } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { supabase } from "@/lib/supabase-client"
+import {
+  autoAssignProjectsByTrack,
+  buildScheduleWithMinimalRoomMoves,
+  clampJudgesPerProject,
+} from "@/lib/judging-autoassign"
 
 
 export default function AdminPage() {
+  const TARGET_JUDGES_PER_PROJECT = 3
   const [investmentFund, setInvestmentFund] = React.useState("10000")
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
-  const [judgesPerProject, setJudgesPerProject] = React.useState(2) // Default: 2 judges per project
   const [slotDuration, setSlotDuration] = React.useState(5) // Calendar slot duration in minutes
   const [scheduleStartTime, setScheduleStartTime] = React.useState("13:00") // Default 1 PM
   const [scheduleEndTime, setScheduleEndTime] = React.useState("16:00") // Default 4 PM
@@ -89,6 +94,13 @@ export default function AdminPage() {
   // Track if assignments have been modified and need saving
   const [assignmentsModified, setAssignmentsModified] = React.useState(false)
   const [savingAssignments, setSavingAssignments] = React.useState(false)
+  const [scheduleQuality, setScheduleQuality] = React.useState({
+    slots: 0,
+    roomMoves: 0,
+    unscheduled: 0,
+  })
+  const [manualAssignmentDialogOpen, setManualAssignmentDialogOpen] = React.useState(false)
+  const [manualProjectsList, setManualProjectsList] = React.useState<AdminProject[]>([])
 
   // Room editing helpers
   const handleRoomChange = (id: number, updates: Partial<Room>) => {
@@ -274,11 +286,6 @@ export default function AdminPage() {
               setSlotDuration(parseInt(slotDuration) || 5)
             }
 
-            const judgesPerProject = settingsMap.get("calendar_judges_per_project")
-            if (judgesPerProject) {
-              setJudgesPerProject(parseInt(judgesPerProject) || 2)
-            }
-
             const startTime = settingsMap.get("calendar_start_time")
             if (startTime) {
               setScheduleStartTime(startTime)
@@ -392,16 +399,20 @@ export default function AdminPage() {
         if (!submissionsError && supabaseSubmissions && supabaseSubmissions.length > 0) {
           // Load assignments and map judge names to submissions
           const assignmentMap = new Map<string, string[]>() // submission_id -> judge names
+          const assignmentSetBySubmission = new Map<string, Set<string>>()
           if (!assignmentsError && assignmentsData) {
             assignmentsData.forEach((assignment: any) => {
               const submissionId = assignment.submission_id
               const judge = supabaseJudges?.find((j: any) => j.id === assignment.judge_id)
               if (judge && submissionId) {
-                if (!assignmentMap.has(submissionId)) {
-                  assignmentMap.set(submissionId, [])
+                if (!assignmentSetBySubmission.has(submissionId)) {
+                  assignmentSetBySubmission.set(submissionId, new Set())
                 }
-                assignmentMap.get(submissionId)?.push(judge.name)
+                assignmentSetBySubmission.get(submissionId)?.add(judge.name)
               }
+            })
+            assignmentSetBySubmission.forEach((judgeNames, submissionId) => {
+              assignmentMap.set(submissionId, Array.from(judgeNames))
             })
           }
           
@@ -601,7 +612,7 @@ export default function AdminPage() {
     try {
       const settingsToSave = [
         { setting_key: "calendar_slot_duration", setting_value: slotDuration.toString() },
-        { setting_key: "calendar_judges_per_project", setting_value: judgesPerProject.toString() },
+        { setting_key: "calendar_judges_per_project", setting_value: String(TARGET_JUDGES_PER_PROJECT) },
         { setting_key: "calendar_start_time", setting_value: scheduleStartTime },
         { setting_key: "calendar_end_time", setting_value: scheduleEndTime },
       ]
@@ -623,7 +634,7 @@ export default function AdminPage() {
       }
 
       toast.success("Calendar settings saved!", {
-        description: `Schedule: ${scheduleStartTime} - ${scheduleEndTime}, Slot duration: ${slotDuration}min, Judges per project: ${judgesPerProject}`,
+        description: `Schedule: ${scheduleStartTime} - ${scheduleEndTime}, Slot duration: ${slotDuration}min, Judges per project: ${TARGET_JUDGES_PER_PROJECT}`,
       })
     } catch (error) {
 
@@ -835,84 +846,36 @@ export default function AdminPage() {
       return
     }
     
-    // Track-aware assignment: assign judges based on their track assignments
     const activeProjects = projectsList
-
-    // Reset all project assignments
-    const updatedProjects = projectsList.map(project => ({
-      ...project,
-      assignedJudges: [] as string[]
-    }))
-
-    // Helper to get a project's tracks, always including at least "General"
-    const getProjectTracks = (project: AdminProject): string[] => {
-      const rawTracks = (project as any).tracks
-      if (Array.isArray(rawTracks) && rawTracks.length > 0) {
-        return rawTracks as string[]
-      }
-      return ["General"]
-    }
-
-    // Helper function to check if a judge can judge a project's tracks
-    // Rules:
-    // - If the submission is General-only, any judge can judge it.
-    // - If the submission has sponsor tracks (e.g. RBC, Uber), only judges
-    //   who have at least one of those sponsor tracks can judge it.
-    const canJudgeSubmission = (judge: Judge, projectTracks: string[]): boolean => {
-      const sponsorTracks = projectTracks.filter((t) => t !== "General")
-      if ( sponsorTracks.length === 0) {
-        // General-only submission: any judge (all have General)
-        return true
-      }
-      // Sponsor submission: judge must have at least one sponsor track
-      return sponsorTracks.some((track) => judge.tracks?.includes(track))
-    }
-
-    // Track how many projects each judge is assigned to (for balanced distribution)
-    const judgeAssignmentCount = new Map<string, number>()
-    judgesList.forEach((j) => judgeAssignmentCount.set(j.name, 0))
-
-    // Assign judges to active projects respecting track restrictions.
-    // Prefer judges with the fewest current assignments so load is balanced.
-    activeProjects.forEach((project) => {
-      const projectInList = updatedProjects.find(p => p.id === project.id)
-      if (projectInList) {
-        const projectTracks = getProjectTracks(project)
-        const eligibleJudges = judgesList.filter(judge =>
-          canJudgeSubmission(judge, projectTracks)
-        )
-        // Sort by current assignment count (ascending) so least-loaded judges are picked first
-        const sortedEligible = [...eligibleJudges].sort(
-          (a, b) => (judgeAssignmentCount.get(a.name) ?? 0) - (judgeAssignmentCount.get(b.name) ?? 0)
-        )
-        let added = 0
-        for (const judge of sortedEligible) {
-          if (added >= judgesPerProject) break
-          if (projectInList.assignedJudges.includes(judge.name)) continue
-          projectInList.assignedJudges.push(judge.name)
-          judgeAssignmentCount.set(judge.name, (judgeAssignmentCount.get(judge.name) ?? 0) + 1)
-          added++
-        }
-      }
-    })
+    const targetJudgesPerProject = clampJudgesPerProject(TARGET_JUDGES_PER_PROJECT)
+    const assignmentResult = autoAssignProjectsByTrack(
+      judgesList,
+      projectsList,
+      targetJudgesPerProject,
+    )
+    const updatedProjects = assignmentResult.updatedProjects
 
     setProjectsList(updatedProjects)
     
     // Update judge assignedProjects count - use functional update to ensure we have latest state
+    const updatedJudges = judgesList.map((judge) => {
+      const assignedCount = assignmentResult.judgeAssignedCountByName.get(judge.name) ?? 0
+      return {
+        ...judge,
+        assignedProjects: assignedCount,
+      }
+    })
+
     setJudgesList(currentJudges => {
-      const updatedJudges = currentJudges.map(judge => {
-        const assignedCount = updatedProjects.filter(p =>
-          p.assignedJudges.includes(judge.name)
-        ).length
+      const merged = currentJudges.map(judge => {
+        const assignedCount = assignmentResult.judgeAssignedCountByName.get(judge.name) ?? 0
         return {
           ...judge,
-          assignedProjects: assignedCount
+          assignedProjects: assignedCount,
         }
       })
 
-      // Don't save automatically - wait for user to press save button
-      
-      return updatedJudges
+      return merged
     })
     
     // Show toast notification if requested
@@ -921,14 +884,29 @@ export default function AdminPage() {
       const totalAssignments = updatedProjects.reduce((sum, p) => sum + p.assignedJudges.length, 0)
       if (totalAssignments > 0) {
         toast.success("Judges auto-assigned!", {
-          description: `${totalAssignments} judge assignment(s) across ${activeProjectsCount} active submission(s)`,
+          description: `${totalAssignments} judge assignment(s) across ${activeProjectsCount} active submission(s) (target: 2-3 per project).`,
         })
       }
     }
+
+    if (assignmentResult.underAssignedProjects.length > 0) {
+      toast.warning("Some projects need more eligible judges", {
+        description: `${assignmentResult.underAssignedProjects.length} project(s) received fewer than 2 judges due to track/availability constraints.`,
+      })
+    }
+
+    return {
+      updatedProjects,
+      updatedJudges,
+      underAssignedProjects: assignmentResult.underAssignedProjects,
+    }
   }
 
-  const handleSaveAssignments = async () => {
-    if (projectsList.length === 0) {
+  const handleSaveAssignments = async (projectsOverride?: AdminProject[], judgesOverride?: Judge[]) => {
+    const sourceProjects = projectsOverride ?? projectsList
+    const sourceJudges = judgesOverride ?? judgesList
+
+    if (sourceProjects.length === 0) {
       toast.error("No assignments to save")
       return
     }
@@ -937,8 +915,8 @@ export default function AdminPage() {
       setSavingAssignments(true)
       
       // Get all submission IDs that have assignments
-      const submissionIds = projectsList
-        .filter(p => (p as any).submissionId && p.assignedJudges.length > 0)
+      const submissionIds = sourceProjects
+        .filter(p => (p as any).submissionId)
         .map(p => (p as any).submissionId)
       
       if (submissionIds.length > 0) {
@@ -956,14 +934,14 @@ export default function AdminPage() {
       // Create new assignments (with deduplication)
       const assignmentsMap = new Map<string, { judge_id: string; submission_id: string }>()
       
-      projectsList.forEach((project) => {
+      sourceProjects.forEach((project) => {
         const submissionId = (project as any).submissionId
         if (submissionId && project.assignedJudges.length > 0) {
           // Remove duplicate judge names from assignedJudges
           const uniqueJudgeNames = Array.from(new Set(project.assignedJudges))
           
           uniqueJudgeNames.forEach((judgeName) => {
-            const judge = judgesList.find((j: Judge) => j.name === judgeName)
+            const judge = sourceJudges.find((j: Judge) => j.name === judgeName)
             if (judge) {
               // Convert judge.id to string (it's a UUID from Supabase)
               const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
@@ -998,7 +976,7 @@ export default function AdminPage() {
       }
       
       // Update judge assigned_projects count in Supabase
-      for (const judge of judgesList) {
+      for (const judge of sourceJudges) {
         const judgeId = typeof judge.id === 'string' ? judge.id : String(judge.id)
         await supabase
           .from("judges")
@@ -1020,11 +998,81 @@ export default function AdminPage() {
     }
   }
 
+  const buildJudgesWithAssignedCounts = (sourceProjects: AdminProject[], sourceJudges: Judge[]) => {
+    return sourceJudges.map((judge) => {
+      const assignedCount = sourceProjects.filter((project) =>
+        project.assignedJudges.includes(judge.name),
+      ).length
+      return {
+        ...judge,
+        assignedProjects: assignedCount,
+      }
+    })
+  }
+
+  const handleOpenManualAssignmentDialog = () => {
+    const snapshot = projectsList.map((project) => ({
+      ...project,
+      assignedJudges: [...project.assignedJudges],
+    }))
+    setManualProjectsList(snapshot)
+    setManualAssignmentDialogOpen(true)
+  }
+
+  const handleToggleManualJudge = (projectId: number, judgeName: string) => {
+    setManualProjectsList((prev) =>
+      prev.map((project) => {
+        if (project.id !== projectId) return project
+
+        const hasJudge = project.assignedJudges.includes(judgeName)
+        if (hasJudge) {
+          return {
+            ...project,
+            assignedJudges: project.assignedJudges.filter((name) => name !== judgeName),
+          }
+        }
+
+        if (project.assignedJudges.length >= 3) {
+          toast.error("Max 3 judges per project", {
+            description: "Remove one assigned judge before adding another.",
+          })
+          return project
+        }
+
+        return {
+          ...project,
+          assignedJudges: [...project.assignedJudges, judgeName],
+        }
+      }),
+    )
+  }
+
+  const handleSaveManualAssignments = async () => {
+    const manualProjectsWithSubmission = manualProjectsList.filter((project) => Boolean(project.submissionId))
+    const missingJudgeProjects = manualProjectsWithSubmission.filter((project) => project.assignedJudges.length < 1)
+
+    if (missingJudgeProjects.length > 0) {
+      toast.error("Every project needs at least 1 judge", {
+        description: `${missingJudgeProjects.length} project(s) currently have no assigned judge.`,
+      })
+      return
+    }
+
+    const updatedJudges = buildJudgesWithAssignedCounts(manualProjectsList, judgesList)
+    setProjectsList(manualProjectsList)
+    setJudgesList(updatedJudges)
+    await handleSaveAssignments(manualProjectsList, updatedJudges)
+    setManualAssignmentDialogOpen(false)
+  }
+
   /** One-click: auto-assign judges then save to DB. */
   const handleAutoAssignAndSave = async () => {
-    autoAssignJudges(false)
+    const assignmentResult = autoAssignJudges(false)
+    if (!assignmentResult) {
+      return
+    }
     setAssignmentsModified(true)
-    await handleSaveAssignments()
+    await handleSaveAssignments(assignmentResult.updatedProjects, assignmentResult.updatedJudges)
   }
 
   /** Build calendar_schedule_slots from current assignments and publish. */
@@ -1047,12 +1095,15 @@ export default function AdminPage() {
       .map((p) => {
         const submissionId = (p as any).submissionId
         const judgeIds = p.assignedJudges
-          .map((name) => judgesList.find((j) => j.name === name)?.id)
-          .filter(Boolean) as string[]
+          .map((name) => {
+            const id = judgesList.find((j) => j.name === name)?.id
+            return id !== undefined && id !== null ? String(id) : null
+          })
+          .filter((id): id is string => id !== null)
         return {
           submissionId,
           projectName: p.name,
-          judgeIds: judgeIds.map((id) => String(id)),
+          judgeIds,
         }
       })
       .filter((s) => s.judgeIds.length > 0)
@@ -1064,50 +1115,23 @@ export default function AdminPage() {
       return
     }
 
-    const getEndTime = (start: string, durationMin: number) => {
-      const [h, m] = start.split(":").map(Number)
-      const total = h * 60 + m + durationMin
-      const eh = Math.floor(total / 60)
-      const em = total % 60
-      return `${eh.toString().padStart(2, "0")}:${em.toString().padStart(2, "0")}`
-    }
-    const getNextTime = (time: string) => {
-      const [h, m] = time.split(":").map(Number)
-      const total = h * 60 + m + slotDuration
-      const nh = Math.floor(total / 60)
-      const nm = total % 60
-      const [eh, em] = scheduleEndTime.split(":").map(Number)
-      if (nh > eh || (nh === eh && nm > em)) return null
-      return `${nh.toString().padStart(2, "0")}:${nm.toString().padStart(2, "0")}`
-    }
+      const { slots, unscheduledSubmissionIds, roomMoveCount } = buildScheduleWithMinimalRoomMoves({
+      submissions: subsWithJudges.map((submission) => ({
+        submissionId: submission.submissionId,
+        judgeIds: submission.judgeIds,
+      })),
+      rooms: roomsList,
+      scheduleDate,
+      startTime: scheduleStartTime,
+      endTime: scheduleEndTime,
+      slotDurationMinutes: slotDuration,
+    })
 
-    // Build slots so that at each time slot, no judge is assigned to more than one project.
-    const slots: { date: string; start_time: string; end_time: string; submission_id: string; room_id: number; judge_ids: string[] }[] = []
-    const scheduledSubmissionIds = new Set<string>()
-    let currentTime = scheduleStartTime
-
-    while (currentTime) {
-      const judgesUsedThisTime = new Set<string>()
-      for (const room of roomsList) {
-        const sub = subsWithJudges.find(
-          (s) =>
-            !scheduledSubmissionIds.has(s.submissionId) &&
-            !s.judgeIds.some((jid) => judgesUsedThisTime.has(jid))
-        )
-        if (!sub) continue
-        slots.push({
-          date: scheduleDate,
-          start_time: currentTime,
-          end_time: getEndTime(currentTime, slotDuration),
-          submission_id: sub.submissionId,
-          room_id: room.id,
-          judge_ids: sub.judgeIds,
-        })
-        scheduledSubmissionIds.add(sub.submissionId)
-        sub.judgeIds.forEach((jid) => judgesUsedThisTime.add(jid))
-      }
-      if (scheduledSubmissionIds.size >= subsWithJudges.length) break
-      currentTime = getNextTime(currentTime)
+    if (slots.length === 0) {
+      toast.error("No schedulable slots", {
+        description: "No valid schedule could be generated for the selected date/time window.",
+      })
+      return
     }
 
     try {
@@ -1122,7 +1146,7 @@ export default function AdminPage() {
       await supabase.from("admin_settings").upsert(
         [
           { setting_key: "calendar_slot_duration", setting_value: String(slotDuration), updated_at: new Date().toISOString() },
-          { setting_key: "calendar_judges_per_project", setting_value: String(judgesPerProject), updated_at: new Date().toISOString() },
+          { setting_key: "calendar_judges_per_project", setting_value: String(TARGET_JUDGES_PER_PROJECT), updated_at: new Date().toISOString() },
           { setting_key: "calendar_start_time", setting_value: scheduleStartTime, updated_at: new Date().toISOString() },
           { setting_key: "calendar_end_time", setting_value: scheduleEndTime, updated_at: new Date().toISOString() },
         ],
@@ -1132,6 +1156,16 @@ export default function AdminPage() {
       toast.success("Schedule published!", {
         description: `${slots.length} slot(s) for ${scheduleDate}. Judges and Calendar view updated.`,
       })
+      setScheduleQuality({
+        slots: slots.length,
+        roomMoves: roomMoveCount,
+        unscheduled: unscheduledSubmissionIds.length,
+      })
+      if (unscheduledSubmissionIds.length > 0) {
+        toast.warning("Some submissions were not scheduled", {
+          description: `${unscheduledSubmissionIds.length} submission(s) could not fit time/room/judge constraints for this window.`,
+        })
+      }
       window.dispatchEvent(new CustomEvent("schedulePublished", { detail: { date: scheduleDate } }))
     } catch (error) {
       toast.error("Failed to publish schedule", {
@@ -1210,6 +1244,21 @@ export default function AdminPage() {
   const totalJudgesInvestment = judgesList.reduce((sum, judge) => sum + judge.totalInvested, 0)
   const totalProjectsInvestment = projectsList.reduce((sum, project) => sum + project.totalInvestment, 0)
   const remainingFund = parseFloat(investmentFund) - totalJudgesInvestment
+  const projectsWithSubmission = projectsList.filter((project) => Boolean((project as any).submissionId))
+  const projectsUnderMin = projectsWithSubmission.filter((project) => project.assignedJudges.length < 2).length
+  const projectsOverMax = projectsWithSubmission.filter((project) => project.assignedJudges.length > 3).length
+  const projectsInRange = projectsWithSubmission.filter(
+    (project) => project.assignedJudges.length >= 2 && project.assignedJudges.length <= 3,
+  ).length
+  const assignedJudgesBySubmission = React.useMemo(() => {
+    const map = new Map<string, string[]>()
+    projectsList.forEach((project) => {
+      if (project.submissionId) {
+        map.set(project.submissionId, project.assignedJudges)
+      }
+    })
+    return map
+  }, [projectsList])
 
   if (!isInitialized) {
     return (
@@ -1319,22 +1368,11 @@ export default function AdminPage() {
                     <CardHeader>
                       <CardTitle>Step 1: Auto-assign judges to submissions</CardTitle>
                       <CardDescription>
-                        Assign judges to every submission by track (round-robin). Then publish the schedule in Step 2.
+                        Assign judges to every submission by track (round-robin), targeting 2-3 judges per submission. Then publish the schedule in Step 2.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col gap-4 md:flex-row md:items-end">
-                        <div className="flex-1 max-w-xs">
-                          <Label htmlFor="judges-per-project">Judges per submission</Label>
-                          <Input
-                            id="judges-per-project"
-                            type="number"
-                            min="1"
-                            max="10"
-                            value={judgesPerProject}
-                            onChange={(e) => setJudgesPerProject(Math.max(1, parseInt(e.target.value) || 2))}
-                          />
-                        </div>
                         <Button onClick={handleAutoAssignAndSave} disabled={savingAssignments}>
                           {savingAssignments ? "Saving..." : "Auto-assign judges"}
                         </Button>
@@ -1346,6 +1384,49 @@ export default function AdminPage() {
                         >
                           {clearingAssignments ? "Clearing..." : "Clear judge assignments"}
                         </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle>Assignment Quality</CardTitle>
+                          <CardDescription>
+                            Priority checks for assignment and schedule quality.
+                          </CardDescription>
+                        </div>
+                        <Button type="button" variant="outline" onClick={handleOpenManualAssignmentDialog}>
+                          Manually Edit Assignments
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                        <div className="rounded-md border p-3">
+                          <p className="text-xs text-muted-foreground">Target judges/project</p>
+                          <p className="text-lg font-semibold">2-3</p>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <p className="text-xs text-muted-foreground">Projects in 2-3 range</p>
+                          <p className="text-lg font-semibold">{projectsInRange} / {projectsWithSubmission.length}</p>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <p className="text-xs text-muted-foreground">Projects under 2 judges</p>
+                          <p className="text-lg font-semibold">{projectsUnderMin}</p>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <p className="text-xs text-muted-foreground">Projects over 3 judges</p>
+                          <p className="text-lg font-semibold">{projectsOverMax}</p>
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <p className="text-xs text-muted-foreground">Last schedule room moves</p>
+                          <p className="text-lg font-semibold">{scheduleQuality.roomMoves}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-xs text-muted-foreground">
+                        Last publish: {scheduleQuality.slots} slot(s), {scheduleQuality.unscheduled} unscheduled submission(s).
                       </div>
                     </CardContent>
                   </Card>
@@ -1627,6 +1708,7 @@ export default function AdminPage() {
                               <TableHead>Project Name</TableHead>
                               <TableHead>Team Name</TableHead>
                               <TableHead>Members</TableHead>
+                              <TableHead>Assigned Judges</TableHead>
                               <TableHead>Devpost Link</TableHead>
                               <TableHead>Tracks</TableHead>
                               <TableHead>Submitted</TableHead>
@@ -1649,6 +1731,17 @@ export default function AdminPage() {
                                       .map((member: string, i: number) => (
                                         <Badge key={i} variant="outline">{member}</Badge>
                                       ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {(assignedJudgesBySubmission.get(submission.id) || []).length > 0 ? (
+                                      (assignedJudgesBySubmission.get(submission.id) || []).map((judgeName, i) => (
+                                        <Badge key={i} variant="secondary">{judgeName}</Badge>
+                                      ))
+                                    ) : (
+                                      <span className="text-muted-foreground">-</span>
+                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -1691,6 +1784,72 @@ export default function AdminPage() {
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* Add/Edit Judge Dialog */}
+      <Dialog open={manualAssignmentDialogOpen} onOpenChange={setManualAssignmentDialogOpen}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Manual Judge Assignment</DialogTitle>
+            <DialogDescription>
+              Adjust judge assignments per project when needed. Keep 2-3 judges when possible; each project must have at least 1.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[220px]">Project</TableHead>
+                  <TableHead>Assigned</TableHead>
+                  <TableHead>Available Judges</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {manualProjectsList.filter((project) => Boolean(project.submissionId)).map((project) => (
+                  <TableRow key={project.id}>
+                    <TableCell className="font-medium">{project.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {project.assignedJudges.length > 0 ? (
+                          project.assignedJudges.map((judgeName, idx) => (
+                            <Badge key={idx} variant="secondary">{judgeName}</Badge>
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground">None</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        {judgesList.map((judge) => {
+                          const checked = project.assignedJudges.includes(judge.name)
+                          return (
+                            <label key={`${project.id}-${judge.id}`} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => handleToggleManualJudge(project.id, judge.name)}
+                              />
+                              <span>{judge.name}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setManualAssignmentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveManualAssignments} disabled={savingAssignments}>
+              {savingAssignments ? "Saving..." : "Save assignments"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Judge Dialog */}
       <Dialog open={isJudgeDialogOpen} onOpenChange={setIsJudgeDialogOpen}>
