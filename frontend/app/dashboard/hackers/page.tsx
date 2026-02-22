@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -16,7 +17,7 @@ import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { supabase } from "@/lib/supabase-client"
 
 
-export default function HackersPage() {
+function HackersPageContent() {
   const searchParams = useSearchParams()
   const [submitting, setSubmitting] = React.useState(false)
   const [currentStep, setCurrentStep] = React.useState<1 | 2 | 3>(1)
@@ -676,5 +677,13 @@ export default function HackersPage() {
         </SidebarInset>
       </SidebarProvider>
     </div>
+  )
+}
+
+export default function HackersPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <HackersPageContent />
+    </Suspense>
   )
 }
