@@ -20,6 +20,39 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Fredoka](https://fonts.google.com/specimen/Fredoka) and [Rubik](https://fonts.google.com/specimen/Rubik) fonts from Google Fonts.
 
+## Pre-commit hooks
+
+The repo uses [pre-commit](https://pre-commit.com/) to run checks before each commit. The config lives in the **project root** (`.pre-commit-config.yaml`) and currently runs [Gitleaks](https://github.com/gitleaks/gitleaks) to scan for secrets.
+
+**If you want to use it:**
+
+1. Install the pre-commit dependency (from the **repo root**, not the frontend folder):
+
+   ```bash
+   cd ..   # if you're in frontend/
+   pip install -r requirements-dev.txt
+   ```
+
+   Or install pre-commit directly:
+
+   ```bash
+   pip install pre-commit
+   ```
+
+2. Install the git hooks (from the repo root):
+
+   ```bash
+   pre-commit install
+   ```
+
+3. After that, every `git commit` will run the hooks automatically. To run them once without committing:
+
+   ```bash
+   pre-commit run --all-files
+   ```
+
+The first run may take a minute while pre-commit downloads the Gitleaks environment; later runs are fast.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

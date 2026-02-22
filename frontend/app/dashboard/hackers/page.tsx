@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -16,7 +17,7 @@ import { defaultRooms, type Room } from "@/lib/rooms-data"
 import { supabase } from "@/lib/supabase-client"
 
 
-export default function HackersPage() {
+function HackersPageContent() {
   const searchParams = useSearchParams()
   const [submitting, setSubmitting] = React.useState(false)
   const [currentStep, setCurrentStep] = React.useState<1 | 2 | 3>(1)
@@ -30,9 +31,8 @@ export default function HackersPage() {
   const [scheduleProjects, setScheduleProjects] = React.useState<{ id: string; name: string }[]>([])
   const [currentProjectIndex, setCurrentProjectIndex] = React.useState(0)
   const [formData, setFormData] = React.useState({
-    name: "",
     teamName: "",
-    members: ["", "", "", ""], // Up to 4 members
+    members: ["", "", "", ""], // Up to 4 members (first = primary contact)
     devpostLink: "",
     projectName: "",
     tracks: [] as string[], // Selected tracks/categories
@@ -217,13 +217,6 @@ export default function HackersPage() {
     e.preventDefault()
 
     // Validation
-    if (!formData.name.trim()) {
-      toast.error("Validation error", {
-        description: "Your name is required",
-      })
-      return
-    }
-
     if (!formData.teamName.trim()) {
       toast.error("Validation error", {
         description: "Team name is required",
@@ -231,10 +224,9 @@ export default function HackersPage() {
       return
     }
 
-    // First team member must be provided
     if (!formData.members[0].trim()) {
       toast.error("Validation error", {
-        description: "Member 1 is required. Please enter the first team member's name.",
+        description: "At least one team member name is required (list yourself first).",
       })
       return
     }
@@ -276,9 +268,9 @@ export default function HackersPage() {
       // Filter out empty members
       const validMembers = formData.members.filter((m) => m.trim() !== "")
 
-      // Create submission in Supabase
+      // Create submission in Supabase (primary contact = first team member)
       const submissionData = {
-        name: formData.name.trim(),
+        name: validMembers[0].trim(),
         team_name: formData.teamName.trim(),
         members: validMembers,
         devpost_link: formData.devpostLink.trim(),
@@ -307,7 +299,6 @@ export default function HackersPage() {
 
       // Reset form
       setFormData({
-        name: "",
         teamName: "",
         members: ["", "", "", ""],
         devpostLink: "",
@@ -413,43 +404,28 @@ export default function HackersPage() {
 
                       {!createdSubmissionId ? (
                         <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor="name">
-                              Your Name <span className="text-destructive">*</span>
-                            </Label>
-                            <Input
-                              id="name"
-                              value={formData.name}
-                              onChange={(e) =>
-                                setFormData({ ...formData, name: e.target.value })
-                              }
-                              placeholder="John Doe"
-                              required
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="teamName">
-                              Team Name <span className="text-destructive">*</span>
-                            </Label>
-                            <Input
-                              id="teamName"
-                              value={formData.teamName}
-                              onChange={(e) =>
-                                setFormData({ ...formData, teamName: e.target.value })
-                              }
-                              placeholder="Team Awesome"
-                              required
-                            />
-                          </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="teamName">
+                            Team Name <span className="text-destructive">*</span>
+                          </Label>
+                          <Input
+                            id="teamName"
+                            value={formData.teamName}
+                            onChange={(e) =>
+                              setFormData({ ...formData, teamName: e.target.value })
+                            }
+                            placeholder="Team Awesome"
+                            required
+                          />
                         </div>
 
                         <div className="space-y-2">
                           <Label>
-                            Team Members (up to 4 members, including yourself).{" "}
-                            <span className="text-destructive font-medium">Member 1 is required.</span>
+                            Team members <span className="text-destructive">*</span>
                           </Label>
+                          <p className="text-xs text-muted-foreground">
+                            List yourself first, then add up to 3 more (optional).
+                          </p>
                           <div className="grid gap-2">
                             {formData.members.map((member, index) => (
                               <Input
@@ -458,8 +434,8 @@ export default function HackersPage() {
                                 onChange={(e) => handleMemberChange(index, e.target.value)}
                                 placeholder={
                                   index === 0
-                                    ? "Member 1 name (required)"
-                                    : `Member ${index + 1} name (optional)`
+                                    ? "Your name (required)"
+                                    : `Teammate ${index + 1} (optional)`
                                 }
                                 required={index === 0}
                               />
@@ -539,7 +515,6 @@ export default function HackersPage() {
                             variant="outline"
                             onClick={() => {
                               setFormData({
-                                name: "",
                                 teamName: "",
                                 members: ["", "", "", ""],
                                 devpostLink: "",
@@ -702,5 +677,13 @@ export default function HackersPage() {
         </SidebarInset>
       </SidebarProvider>
     </div>
+  )
+}
+
+export default function HackersPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <HackersPageContent />
+    </Suspense>
   )
 }
