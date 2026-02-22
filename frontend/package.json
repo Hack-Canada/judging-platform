@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "node scripts/seed-submissions.js"
+    "seed": "node scripts/seed-submissions.js",
+    "load-test": "node scripts/load-test.js"
   },
   "dependencies": {
     "@base-ui/react": "^1.0.0",
