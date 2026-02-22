@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase-client"
 import type { Judge } from "@/lib/judges-data"
@@ -94,6 +95,9 @@ export default function JudgesPage() {
   const [otherJudgeNotesMap, setOtherJudgeNotesMap] = React.useState<Record<string, string>>({})
   const [notesDialogSaving, setNotesDialogSaving] = React.useState(false)
   const [notesDialogTab, setNotesDialogTab] = React.useState<"view" | "edit">("view")
+  const [notesDialogProjectSearch, setNotesDialogProjectSearch] = React.useState("")
+  const [projectAutocompleteOpen, setProjectAutocompleteOpen] = React.useState(false)
+  const [projectAutocompleteHighlight, setProjectAutocompleteHighlight] = React.useState(0)
 
   // Load list of all judges
   React.useEffect(() => {
@@ -577,6 +581,8 @@ export default function JudgesPage() {
     const sid = preSelectSubmissionId ?? submissions[0]?.id ?? ""
     setNotesDialogSubmissionId(sid)
     setNotesDialogText(sid ? (notesMap[sid] ?? "") : "")
+    const projectName = sid ? (submissions.find((s) => s.id === sid)?.project_name ?? "") : ""
+    setNotesDialogProjectSearch(projectName)
     setNotesDialogTab(preSelectSubmissionId ? "edit" : "view")
     setIsNotesDialogOpen(true)
   }, [selectedJudgeId, submissions, notesMap])
@@ -584,9 +590,10 @@ export default function JudgesPage() {
   // When dialog shows another judge and their projects have loaded, pre-select first project if none selected
   React.useEffect(() => {
     if (notesDialogJudgeId !== selectedJudgeId && otherJudgeProjects.length > 0 && !notesDialogSubmissionId) {
-      const firstId = otherJudgeProjects[0].id
-      setNotesDialogSubmissionId(firstId)
-      setNotesDialogText(otherJudgeNotesMap[firstId] ?? "")
+      const first = otherJudgeProjects[0]
+      setNotesDialogSubmissionId(first.id)
+      setNotesDialogProjectSearch(first.project_name)
+      setNotesDialogText(otherJudgeNotesMap[first.id] ?? "")
     }
   }, [notesDialogJudgeId, selectedJudgeId, otherJudgeProjects, otherJudgeNotesMap, notesDialogSubmissionId])
 
@@ -642,6 +649,68 @@ export default function JudgesPage() {
   const notesDialogProjects = notesDialogJudgeId === selectedJudgeId
     ? submissions.map(s => ({ id: s.id, project_name: s.project_name }))
     : otherJudgeProjects
+
+  const projectAutocompleteMatches = React.useMemo(() => {
+    const q = notesDialogProjectSearch.trim().toLowerCase()
+    if (!q) return []
+    return notesDialogProjects.filter((p) =>
+      p.project_name.toLowerCase().includes(q)
+    )
+  }, [notesDialogProjectSearch, notesDialogProjects])
+
+  React.useEffect(() => {
+    setProjectAutocompleteHighlight((i) =>
+      Math.min(i, Math.max(0, projectAutocompleteMatches.length - 1))
+    )
+  }, [projectAutocompleteMatches.length])
+
+  const selectProjectFromAutocomplete = React.useCallback((p: { id: string; project_name: string }) => {
+    setNotesDialogSubmissionId(p.id)
+    setNotesDialogProjectSearch(p.project_name)
+    const text = notesDialogJudgeId === selectedJudgeId
+      ? (notesMap[p.id] ?? "")
+      : (otherJudgeNotesMap[p.id] ?? "")
+    setNotesDialogText(text)
+    setProjectAutocompleteOpen(false)
+  }, [notesDialogJudgeId, selectedJudgeId, notesMap, otherJudgeNotesMap])
+
+  const matchProjectFromSearch = React.useCallback(() => {
+    const q = notesDialogProjectSearch.trim().toLowerCase()
+    if (!q) {
+      setNotesDialogSubmissionId("")
+      return
+    }
+    const matches = notesDialogProjects.filter((p) =>
+      p.project_name.toLowerCase().includes(q)
+    )
+    if (matches.length === 1) {
+      setNotesDialogSubmissionId(matches[0].id)
+      setNotesDialogProjectSearch(matches[0].project_name)
+      const text = notesDialogJudgeId === selectedJudgeId
+        ? (notesMap[matches[0].id] ?? "")
+        : (otherJudgeNotesMap[matches[0].id] ?? "")
+      setNotesDialogText(text)
+    } else if (matches.length > 1) {
+      const exact = matches.find((p) => p.project_name.toLowerCase() === q)
+      if (exact) {
+        setNotesDialogSubmissionId(exact.id)
+        setNotesDialogProjectSearch(exact.project_name)
+        const text = notesDialogJudgeId === selectedJudgeId
+          ? (notesMap[exact.id] ?? "")
+          : (otherJudgeNotesMap[exact.id] ?? "")
+        setNotesDialogText(text)
+      } else {
+        setNotesDialogSubmissionId(matches[0].id)
+        setNotesDialogProjectSearch(matches[0].project_name)
+        const text = notesDialogJudgeId === selectedJudgeId
+          ? (notesMap[matches[0].id] ?? "")
+          : (otherJudgeNotesMap[matches[0].id] ?? "")
+        setNotesDialogText(text)
+      }
+    } else {
+      setNotesDialogSubmissionId("")
+    }
+  }, [notesDialogProjectSearch, notesDialogProjects, notesDialogJudgeId, selectedJudgeId, notesMap, otherJudgeNotesMap])
 
   const handleSaveNote = async () => {
     if (!notesDialogJudgeId || !notesDialogSubmissionId) {
@@ -896,6 +965,7 @@ export default function JudgesPage() {
                           className="mt-2 h-7 text-xs"
                           onClick={() => {
                             setNotesDialogSubmissionId(submissionId)
+                            setNotesDialogProjectSearch(projectName)
                             setNotesDialogText(map[submissionId] ?? "")
                             setNotesDialogTab("edit")
                           }}
@@ -914,18 +984,20 @@ export default function JudgesPage() {
                   <Label>Judge</Label>
                   <Select
                     value={notesDialogJudgeId ?? ""}
-                    onValueChange={(value) => {
-                      setNotesDialogJudgeId(value)
-                      const projects = value === selectedJudgeId
-                        ? submissions.map(s => ({ id: s.id, project_name: s.project_name }))
-                        : otherJudgeProjects
-                      const firstId = projects[0]?.id ?? ""
-                      setNotesDialogSubmissionId(firstId)
-                      const text = value === selectedJudgeId
-                        ? (notesMap[firstId] ?? "")
-                        : (otherJudgeNotesMap[firstId] ?? "")
-                      setNotesDialogText(text)
-                    }}
+                  onValueChange={(value) => {
+                    setNotesDialogJudgeId(value)
+                    const projects = value === selectedJudgeId
+                      ? submissions.map(s => ({ id: s.id, project_name: s.project_name }))
+                      : otherJudgeProjects
+                    const firstId = projects[0]?.id ?? ""
+                    const firstName = projects[0]?.project_name ?? ""
+                    setNotesDialogSubmissionId(firstId)
+                    setNotesDialogProjectSearch(firstName)
+                    const text = value === selectedJudgeId
+                      ? (notesMap[firstId] ?? "")
+                      : (otherJudgeNotesMap[firstId] ?? "")
+                    setNotesDialogText(text)
+                  }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select judge" />
@@ -938,26 +1010,80 @@ export default function JudgesPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Project</Label>
-                  <Select
-                    value={notesDialogSubmissionId}
-                    onValueChange={(value) => {
-                      setNotesDialogSubmissionId(value)
-                      const text = notesDialogJudgeId === selectedJudgeId
-                        ? (notesMap[value] ?? "")
-                        : (otherJudgeNotesMap[value] ?? "")
-                      setNotesDialogText(text)
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {notesDialogProjects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Project ({notesDialogProjects.length} assigned)</Label>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      placeholder="Search project..."
+                      value={notesDialogProjectSearch}
+                      onChange={(e) => {
+                        setNotesDialogProjectSearch(e.target.value)
+                        setProjectAutocompleteOpen(true)
+                        setProjectAutocompleteHighlight(0)
+                      }}
+                      onFocus={() => {
+                        if (notesDialogProjectSearch.trim()) setProjectAutocompleteOpen(true)
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setProjectAutocompleteOpen(false)
+                          matchProjectFromSearch()
+                        }, 150)
+                      }}
+                      onKeyDown={(e) => {
+                        if (!projectAutocompleteOpen || projectAutocompleteMatches.length === 0) {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            matchProjectFromSearch()
+                          }
+                          return
+                        }
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault()
+                          setProjectAutocompleteHighlight((i) =>
+                            Math.min(i + 1, projectAutocompleteMatches.length - 1)
+                          )
+                          return
+                        }
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault()
+                          setProjectAutocompleteHighlight((i) => Math.max(i - 1, 0))
+                          return
+                        }
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          const p = projectAutocompleteMatches[projectAutocompleteHighlight]
+                          if (p) selectProjectFromAutocomplete(p)
+                          return
+                        }
+                        if (e.key === "Escape") {
+                          setProjectAutocompleteOpen(false)
+                        }
+                      }}
+                      className="w-full"
+                    />
+                    {projectAutocompleteOpen && projectAutocompleteMatches.length > 0 && (
+                      <ul
+                        className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md"
+                        role="listbox"
+                      >
+                        {projectAutocompleteMatches.map((p, i) => (
+                          <li
+                            key={p.id}
+                            role="option"
+                            aria-selected={i === projectAutocompleteHighlight}
+                            className={`cursor-pointer px-3 py-2 ${i === projectAutocompleteHighlight ? "bg-accent text-accent-foreground" : ""}`}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              selectProjectFromAutocomplete(p)
+                            }}
+                          >
+                            {p.project_name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Notes</Label>
