@@ -24,7 +24,7 @@ export type ScheduleSlot = {
 
 const MIN_JUDGES_PER_PROJECT = 2
 const MIN_REQUIRED_JUDGES_PER_PROJECT = 1
-const MAX_JUDGES_PER_PROJECT = 3
+const MAX_JUDGES_PER_PROJECT = 2
 
 export const clampJudgesPerProject = (value: number): number => {
   return Math.min(MAX_JUDGES_PER_PROJECT, Math.max(MIN_JUDGES_PER_PROJECT, value))

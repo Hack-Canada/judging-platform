@@ -99,6 +99,8 @@ export default function AdminPage() {
     roomMoves: 0,
     unscheduled: 0,
   })
+  const [manualAssignmentDialogOpen, setManualAssignmentDialogOpen] = React.useState(false)
+  const [manualProjectsList, setManualProjectsList] = React.useState<AdminProject[]>([])
 
   // Room editing helpers
   const handleRoomChange = (id: number, updates: Partial<Room>) => {
@@ -996,6 +998,73 @@ export default function AdminPage() {
     }
   }
 
+  const buildJudgesWithAssignedCounts = (sourceProjects: AdminProject[], sourceJudges: Judge[]) => {
+    return sourceJudges.map((judge) => {
+      const assignedCount = sourceProjects.filter((project) =>
+        project.assignedJudges.includes(judge.name),
+      ).length
+      return {
+        ...judge,
+        assignedProjects: assignedCount,
+      }
+    })
+  }
+
+  const handleOpenManualAssignmentDialog = () => {
+    const snapshot = projectsList.map((project) => ({
+      ...project,
+      assignedJudges: [...project.assignedJudges],
+    }))
+    setManualProjectsList(snapshot)
+    setManualAssignmentDialogOpen(true)
+  }
+
+  const handleToggleManualJudge = (projectId: number, judgeName: string) => {
+    setManualProjectsList((prev) =>
+      prev.map((project) => {
+        if (project.id !== projectId) return project
+
+        const hasJudge = project.assignedJudges.includes(judgeName)
+        if (hasJudge) {
+          return {
+            ...project,
+            assignedJudges: project.assignedJudges.filter((name) => name !== judgeName),
+          }
+        }
+
+        if (project.assignedJudges.length >= 3) {
+          toast.error("Max 3 judges per project", {
+            description: "Remove one assigned judge before adding another.",
+          })
+          return project
+        }
+
+        return {
+          ...project,
+          assignedJudges: [...project.assignedJudges, judgeName],
+        }
+      }),
+    )
+  }
+
+  const handleSaveManualAssignments = async () => {
+    const manualProjectsWithSubmission = manualProjectsList.filter((project) => Boolean(project.submissionId))
+    const missingJudgeProjects = manualProjectsWithSubmission.filter((project) => project.assignedJudges.length < 1)
+
+    if (missingJudgeProjects.length > 0) {
+      toast.error("Every project needs at least 1 judge", {
+        description: `${missingJudgeProjects.length} project(s) currently have no assigned judge.`,
+      })
+      return
+    }
+
+    const updatedJudges = buildJudgesWithAssignedCounts(manualProjectsList, judgesList)
+    setProjectsList(manualProjectsList)
+    setJudgesList(updatedJudges)
+    await handleSaveAssignments(manualProjectsList, updatedJudges)
+    setManualAssignmentDialogOpen(false)
+  }
+
   /** One-click: auto-assign judges then save to DB. */
   const handleAutoAssignAndSave = async () => {
     const assignmentResult = autoAssignJudges(false)
@@ -1321,10 +1390,17 @@ export default function AdminPage() {
 
                   <Card className="mb-6">
                     <CardHeader>
-                      <CardTitle>Assignment Quality</CardTitle>
-                      <CardDescription>
-                        Priority checks for assignment and schedule quality.
-                      </CardDescription>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle>Assignment Quality</CardTitle>
+                          <CardDescription>
+                            Priority checks for assignment and schedule quality.
+                          </CardDescription>
+                        </div>
+                        <Button type="button" variant="outline" onClick={handleOpenManualAssignmentDialog}>
+                          Manually Edit Assignments
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -1708,6 +1784,72 @@ export default function AdminPage() {
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* Add/Edit Judge Dialog */}
+      <Dialog open={manualAssignmentDialogOpen} onOpenChange={setManualAssignmentDialogOpen}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Manual Judge Assignment</DialogTitle>
+            <DialogDescription>
+              Adjust judge assignments per project when needed. Keep 2-3 judges when possible; each project must have at least 1.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[220px]">Project</TableHead>
+                  <TableHead>Assigned</TableHead>
+                  <TableHead>Available Judges</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {manualProjectsList.filter((project) => Boolean(project.submissionId)).map((project) => (
+                  <TableRow key={project.id}>
+                    <TableCell className="font-medium">{project.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {project.assignedJudges.length > 0 ? (
+                          project.assignedJudges.map((judgeName, idx) => (
+                            <Badge key={idx} variant="secondary">{judgeName}</Badge>
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground">None</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        {judgesList.map((judge) => {
+                          const checked = project.assignedJudges.includes(judge.name)
+                          return (
+                            <label key={`${project.id}-${judge.id}`} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => handleToggleManualJudge(project.id, judge.name)}
+                              />
+                              <span>{judge.name}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setManualAssignmentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveManualAssignments} disabled={savingAssignments}>
+              {savingAssignments ? "Saving..." : "Save assignments"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Judge Dialog */}
       <Dialog open={isJudgeDialogOpen} onOpenChange={setIsJudgeDialogOpen}>
