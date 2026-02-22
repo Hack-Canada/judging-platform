@@ -18,6 +18,7 @@ import {
 import {
   IconCircleCheckFilled,
   IconLoader,
+  IconNotes,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { z } from "zod"
@@ -58,6 +59,7 @@ type JudgesTableProps = {
   onInvestmentChange: (entryId: number, investment: number) => Promise<void>
   remainingAllocation: number
   totalInvested: number
+  onOpenNotes?: (submissionId: string) => void
 }
 
 const createColumns = (
@@ -288,6 +290,7 @@ export function JudgesDataTable({
   onInvestmentChange,
   remainingAllocation,
   totalInvested,
+  onOpenNotes,
 }: JudgesTableProps) {
   const [data, setData] = React.useState(() => initialData)
   const [columnVisibility, setColumnVisibility] =
@@ -326,8 +329,8 @@ export function JudgesDataTable({
   }, [initialData, data])
 
   const columns = React.useMemo(
-    () => createColumns(onInvestmentChange, remainingAllocation),
-    [onInvestmentChange, remainingAllocation]
+    () => createColumns(onInvestmentChange, remainingAllocation, onOpenNotes),
+    [onInvestmentChange, remainingAllocation, onOpenNotes]
   )
 
   const table = useReactTable({
