@@ -21,12 +21,17 @@ import {
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { z } from "zod"
-
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NumberTicker } from "@/components/ui/number-ticker"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { supabase } from "@/lib/supabase-client"
 import {
   Table,
   TableBody,
@@ -63,7 +68,97 @@ const createColumns = (
     accessorKey: "entry",
     header: "Project Name",
     cell: ({ row }) => {
-      return <div className="font-medium">{row.original.entry}</div>
+      const submissionId = row.original.submissionId
+      const [open, setOpen] = React.useState(false)
+      const [details, setDetails] = React.useState<{
+        team_name: string
+        members: string[]
+        tracks: string[]
+        devpost_link: string
+      } | null>(null)
+      const [loading, setLoading] = React.useState(false)
+
+      const loadDetails = async () => {
+        if (details || !submissionId) return
+        setLoading(true)
+        const { data } = await supabase
+          .from("submissions")
+          .select("team_name, members, tracks, devpost_link")
+          .eq("id", submissionId)
+          .single()
+        if (data) setDetails(data)
+        setLoading(false)
+      }
+
+      if (!submissionId) {
+        return <div className="font-medium">{row.original.entry}</div>
+      }
+
+      return (
+        <Popover open={open} onOpenChange={(isOpen) => {
+          setOpen(isOpen)
+          if (isOpen) loadDetails()
+        }}>
+          <PopoverTrigger asChild>
+            <button className="font-medium text-primary hover:underline text-left">
+              {row.original.entry}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80">
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : details ? (
+              <div className="grid gap-4">
+                <div className="space-y-1">
+                  <h4 className="font-medium leading-none">{row.original.entry}</h4>
+                  <p className="text-sm text-muted-foreground">Team: {details.team_name}</p>
+                </div>
+                <div className="grid gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Members</p>
+                    <div className="flex flex-wrap gap-1">
+                      {details.members?.length > 0 ? (
+                        details.members.map((m, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">{m}</Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs text-muted-foreground">N/A</span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Tracks</p>
+                    <div className="flex flex-wrap gap-1">
+                      {details.tracks?.length > 0 ? (
+                        details.tracks.map((t, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">{t}</Badge>
+                        ))
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">General</Badge>
+                      )}
+                    </div>
+                  </div>
+                  {details.devpost_link && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Devpost</p>
+                      <a
+                        href={details.devpost_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        View on Devpost
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Could not load details.</p>
+            )}
+          </PopoverContent>
+        </Popover>
+      )
     },
     enableHiding: false,
   },
