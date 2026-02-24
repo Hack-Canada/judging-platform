@@ -17,7 +17,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const shortcuts = [
-  { title: "Judges", url: "/dashboard/judges", icon: IconGavel, description: "Judge dashboard and investments" },
+  { title: "Judges", url: "/dashboard/judges", icon: IconGavel, description: "Judge dashboard and points" },
   { title: "Submissions", url: "/dashboard/submissions", icon: IconFolder, description: "View all project submissions" },
   { title: "Hackers Submission", url: "/dashboard/hackers", icon: IconUsers, description: "Submit a hackathon project" },
   { title: "Hacker View", url: "/dashboard/hacker-view", icon: IconUser, description: "View team judging timings" },

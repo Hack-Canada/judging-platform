@@ -57,15 +57,16 @@ import {
 
 
 export default function AdminPage() {
+  const POINTS_PER_JUDGE = 20
   const TARGET_JUDGES_PER_PROJECT = 3
-  const [investmentFund, setInvestmentFund] = React.useState("10000")
+  const [investmentFund, setInvestmentFund] = React.useState(String(POINTS_PER_JUDGE))
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
   const [slotDuration, setSlotDuration] = React.useState(5) // Calendar slot duration in minutes
   const [scheduleStartTime, setScheduleStartTime] = React.useState("13:00") // Default 1 PM
   const [scheduleEndTime, setScheduleEndTime] = React.useState("16:00") // Default 4 PM
   const [minInvestment, setMinInvestment] = React.useState("0")
-  const [maxInvestment, setMaxInvestment] = React.useState("1000")
+  const [maxInvestment, setMaxInvestment] = React.useState(String(POINTS_PER_JUDGE))
   const [scheduleDate, setScheduleDate] = React.useState(() =>
     new Date().toISOString().slice(0, 10)
   )
@@ -277,7 +278,12 @@ export default function AdminPage() {
             // Load investment fund
             const investmentFund = settingsMap.get("investment_fund")
             if (investmentFund) {
-              setInvestmentFund(investmentFund)
+              const parsed = parseFloat(investmentFund)
+              setInvestmentFund(
+                Number.isFinite(parsed) && parsed > 0 && parsed <= 100
+                  ? String(parsed)
+                  : String(POINTS_PER_JUDGE)
+              )
             }
 
             // Load calendar settings
@@ -304,7 +310,12 @@ export default function AdminPage() {
 
             const maxInvestment = settingsMap.get("scoring_max_investment")
             if (maxInvestment) {
-              setMaxInvestment(maxInvestment)
+              const parsed = parseFloat(maxInvestment)
+              setMaxInvestment(
+                Number.isFinite(parsed) && parsed > 0 && parsed <= 100
+                  ? String(parsed)
+                  : String(POINTS_PER_JUDGE)
+              )
             }
 
             // Load tracks data
@@ -582,12 +593,20 @@ export default function AdminPage() {
   }
 
   const handleSaveFund = async () => {
+    const parsedPoints = parseFloat(investmentFund)
+    if (!Number.isFinite(parsedPoints) || parsedPoints <= 0) {
+      toast.error("Invalid points value", {
+        description: "Points per judge must be a positive number.",
+      })
+      return
+    }
+
     try {
       const { error } = await supabase
         .from("admin_settings")
         .upsert({
           setting_key: "investment_fund",
-          setting_value: investmentFund,
+          setting_value: String(parsedPoints),
           updated_at: new Date().toISOString(),
         }, {
           onConflict: "setting_key"
@@ -597,12 +616,13 @@ export default function AdminPage() {
         throw error
       }
 
-      toast.success("Investment fund saved!", {
-        description: `Total fund set to $${parseFloat(investmentFund).toLocaleString()}`,
+      setInvestmentFund(String(parsedPoints))
+      toast.success("Points setting saved!", {
+        description: `Points per judge set to ${parsedPoints.toLocaleString()} points.`,
       })
     } catch (error) {
 
-      toast.error("Failed to save investment fund", {
+      toast.error("Failed to save points setting", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
     }
@@ -668,7 +688,7 @@ export default function AdminPage() {
       }
 
       toast.success("Scoring system settings saved!", {
-        description: `Investment range: $${parseFloat(minInvestment).toLocaleString()} - $${parseFloat(maxInvestment).toLocaleString()}`,
+        description: `Points range: ${parseFloat(minInvestment).toLocaleString()} - ${parseFloat(maxInvestment).toLocaleString()} points`,
       })
     } catch (error) {
 
@@ -1241,9 +1261,11 @@ export default function AdminPage() {
   }
 
   // Calculate stats
+  const pointsPerJudge = parseFloat(investmentFund) || POINTS_PER_JUDGE
   const totalJudgesInvestment = judgesList.reduce((sum, judge) => sum + judge.totalInvested, 0)
   const totalProjectsInvestment = projectsList.reduce((sum, project) => sum + project.totalInvestment, 0)
-  const remainingFund = parseFloat(investmentFund) - totalJudgesInvestment
+  const totalPointsBudget = pointsPerJudge * judgesList.length
+  const remainingFund = totalPointsBudget - totalJudgesInvestment
   const projectsWithSubmission = projectsList.filter((project) => Boolean((project as any).submissionId))
   const projectsUnderMin = projectsWithSubmission.filter((project) => project.assignedJudges.length < 2).length
   const projectsOverMax = projectsWithSubmission.filter((project) => project.assignedJudges.length > 3).length
@@ -1298,67 +1320,67 @@ export default function AdminPage() {
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Fund</CardTitle>
+                        <CardTitle className="text-sm font-medium">Total Points Budget</CardTitle>
                         <IconCoins className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">${parseFloat(investmentFund).toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Available investment pool</p>
+                        <div className="text-2xl font-bold">{totalPointsBudget.toLocaleString()} pts</div>
+                        <p className="text-xs text-muted-foreground">Points available across all judges</p>
                       </CardContent>
                     </Card>
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Judges Investment</CardTitle>
+                        <CardTitle className="text-sm font-medium">Judge Points Used</CardTitle>
                         <IconUsers className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">${totalJudgesInvestment.toLocaleString()}</div>
+                        <div className="text-2xl font-bold">{totalJudgesInvestment.toLocaleString()} pts</div>
                         <p className="text-xs text-muted-foreground">Total from all judges</p>
                       </CardContent>
                     </Card>
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Projects Investment</CardTitle>
+                        <CardTitle className="text-sm font-medium">Project Points</CardTitle>
                         <IconCurrencyDollar className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">${totalProjectsInvestment.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Total project investments</p>
+                        <div className="text-2xl font-bold">{totalProjectsInvestment.toLocaleString()} pts</div>
+                        <p className="text-xs text-muted-foreground">Total points assigned to projects</p>
                       </CardContent>
                     </Card>
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Remaining Fund</CardTitle>
+                        <CardTitle className="text-sm font-medium">Remaining Points</CardTitle>
                         <IconTrendingUp className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">${remainingFund.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Unallocated amount</p>
+                        <div className="text-2xl font-bold">{remainingFund.toLocaleString()} pts</div>
+                        <p className="text-xs text-muted-foreground">Unallocated points</p>
                       </CardContent>
                     </Card>
                   </div>
 
-                  {/* Investment Funds Configuration */}
+                  {/* Points Configuration */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <CardTitle>Investment Funds Configuration</CardTitle>
+                      <CardTitle>Points Configuration</CardTitle>
                       <CardDescription>
-                        Set the total investment fund available for judges to allocate
+                        Set how many points each judge can allocate (default 20)
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-end gap-4">
                         <div className="flex-1 max-w-sm">
-                          <Label htmlFor="investment-fund">Total Investment Fund ($)</Label>
+                          <Label htmlFor="investment-fund">Points Per Judge</Label>
                           <Input
                             id="investment-fund"
                             type="number"
                             value={investmentFund}
                             onChange={(e) => setInvestmentFund(e.target.value)}
-                            placeholder="10000"
+                            placeholder="20"
                           />
                         </div>
-                        <Button onClick={handleSaveFund}>Save Fund</Button>
+                        <Button onClick={handleSaveFund}>Save Points</Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -1507,7 +1529,7 @@ export default function AdminPage() {
                         <div>
                           <CardTitle>Judges Management</CardTitle>
                           <CardDescription>
-                            Manage judges and track their investments
+                            Manage judges and track their point allocations
                           </CardDescription>
                         </div>
                         <Button onClick={() => handleOpenJudgeDialog()} size="sm">
@@ -1524,7 +1546,7 @@ export default function AdminPage() {
                             <TableHead>Email</TableHead>
                             <TableHead>Tracks</TableHead>
                             <TableHead>Assigned Projects</TableHead>
-                            <TableHead>Total Invested</TableHead>
+                            <TableHead>Points Used</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1550,7 +1572,7 @@ export default function AdminPage() {
                                 <TableCell>
                                   <Badge variant="secondary">{judge.assignedProjects}</Badge>
                                 </TableCell>
-                                <TableCell className="font-medium">${judge.totalInvested.toLocaleString()}</TableCell>
+                                <TableCell className="font-medium">{judge.totalInvested.toLocaleString()} pts</TableCell>
                                 <TableCell>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>

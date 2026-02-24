@@ -170,7 +170,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
     header: "Status",
     cell: ({ row }) => (
       <Badge variant="outline" className="text-muted-foreground px-1.5">
-        {row.original.status === "Invested" ? (
+        {row.original.status === "Scored" ? (
           <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
         ) : row.original.status === "Under Review" ? (
           <IconLoader />
@@ -181,7 +181,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "investment",
-    header: () => <div className="w-full text-right">Investment</div>,
+    header: () => <div className="w-full text-right">Points</div>,
     cell: ({ row }) => {
       const investment = row.original.investment
       
@@ -191,17 +191,16 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
         onSubmit={(e) => {
           e.preventDefault()
           toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-                loading: `Saving investment for ${row.original.entry}`,
+                loading: `Saving points for ${row.original.entry}`,
             success: "Done",
             error: "Error",
           })
         }}
       >
             <Label htmlFor={`${row.original.id}-investment`} className="sr-only">
-              Investment
+              Points
         </Label>
             <div className="flex items-center justify-end gap-1">
-              <span className="text-muted-foreground text-sm">$</span>
         <Input
                 className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-20 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
                 placeholder="0"
@@ -218,17 +217,16 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
         onSubmit={(e) => {
           e.preventDefault()
           toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-              loading: `Saving investment for ${row.original.entry}`,
+              loading: `Saving points for ${row.original.entry}`,
             success: "Done",
             error: "Error",
           })
         }}
       >
           <Label htmlFor={`${row.original.id}-investment`} className="sr-only">
-            Investment
+            Points
         </Label>
           <div className="flex items-center justify-end gap-1">
-            <span className="text-muted-foreground text-sm">$</span>
         <Input
               className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-20 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
               defaultValue={investment}
@@ -445,7 +443,7 @@ export function DataTable({
             <SelectItem value="outline">All Entries</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="in-review">Under Review</SelectItem>
-            <SelectItem value="invested">Invested</SelectItem>
+            <SelectItem value="invested">Scored</SelectItem>
           </SelectContent>
         </Select>
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
@@ -456,7 +454,7 @@ export function DataTable({
           <TabsTrigger value="in-review">
             Under Review <Badge variant="secondary">5</Badge>
           </TabsTrigger>
-          <TabsTrigger value="invested">Invested</TabsTrigger>
+          <TabsTrigger value="invested">Scored</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
           <DropdownMenu>
@@ -672,7 +670,7 @@ export function DataTable({
         className="flex flex-col px-4 lg:px-6"
       >
         <div className="aspect-video w-full flex-1 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground">
-          Fully invested projects view
+          Fully scored projects view
         </div>
       </TabsContent>
     </Tabs>
@@ -693,7 +691,7 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
         <DrawerHeader className="gap-1">
           <DrawerTitle>{item.entry}</DrawerTitle>
           <DrawerDescription>
-            Entry details and investment information
+            Entry details and points information
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
@@ -709,26 +707,25 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
                     <SelectValue placeholder="Select a status" />
                   </SelectTrigger>
                   <SelectContent>
-                  <SelectItem value="Invested">Invested</SelectItem>
+                  <SelectItem value="Scored">Scored</SelectItem>
                   <SelectItem value="Under Review">Under Review</SelectItem>
                   <SelectItem value="Pending">Pending</SelectItem>
                   </SelectContent>
                 </Select>
             </div>
               <div className="flex flex-col gap-3">
-              <Label htmlFor="investment">Investment Amount</Label>
+              <Label htmlFor="investment">Points</Label>
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">$</span>
                 <Input 
                   id="investment" 
                   type="number"
                   defaultValue={item.investment || ""}
-                  placeholder="Enter amount (e.g., 43)"
+                  placeholder="Enter points (e.g., 20)"
                   className="flex-1"
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Invest any amount you think the project is worth
+                Assign points based on your evaluation
               </p>
             </div>
             <div className="flex flex-col gap-3">

@@ -55,6 +55,8 @@ type ScheduleSlotInfo = {
   room_id: number
 }
 
+const POINTS_PER_JUDGE = 20
+
 export default function JudgesPage() {
   const [judgesList, setJudgesList] = React.useState<{ id: string; name: string }[]>([])
   const [selectedJudgeId, setSelectedJudgeId] = React.useState<string | null>(null)
@@ -70,7 +72,7 @@ export default function JudgesPage() {
   // Load assigned submissions for this judge
   const [assignedSubmissionIds, setAssignedSubmissionIds] = React.useState<string[]>([])
   
-  // Investment fund allocation
+  // Points allocation
   const [totalInvestmentFund, setTotalInvestmentFund] = React.useState(0)
   const [totalJudgesCount, setTotalJudgesCount] = React.useState(0)
   const [judgeAllocation, setJudgeAllocation] = React.useState(0)
@@ -154,15 +156,7 @@ export default function JudgesPage() {
 
         setJudge(judgeData)
 
-        // Load total investment fund from Supabase admin_settings
-        const { data: fundSetting } = await supabase
-          .from("admin_settings")
-          .select("setting_value")
-          .eq("setting_key", "investment_fund")
-          .single()
-        
-        const totalFund = fundSetting?.setting_value ? parseFloat(fundSetting.setting_value) : 10000
-        setTotalInvestmentFund(totalFund)
+        setTotalInvestmentFund(POINTS_PER_JUDGE)
 
         // Load rooms data for room name mapping
         const { data: roomsSetting } = await supabase
@@ -196,9 +190,8 @@ export default function JudgesPage() {
           const count = judgesCount || 0
           setTotalJudgesCount(count)
 
-          // Calculate per-judge allocation (equal distribution)
-          const allocation = count > 0 ? totalFund / count : 0
-          setJudgeAllocation(allocation)
+          // Each judge gets a fixed point budget.
+          setJudgeAllocation(POINTS_PER_JUDGE)
 
         }
 
@@ -416,7 +409,7 @@ export default function JudgesPage() {
             const investment = investmentsMap[submission.id] || 0
             let status = "Pending"
             if (investment > 0) {
-              status = "Invested"
+              status = "Scored"
             } else if (scheduleSlots.length > 0) {
               status = "Under Review"
             }
@@ -500,8 +493,8 @@ export default function JudgesPage() {
     // Check if investment exceeds judge's allocation
     if (currentTotal > judgeAllocation) {
       const remaining = judgeAllocation - (currentTotal - investment)
-      toast.error("Investment limit exceeded", {
-        description: `You have $${remaining.toFixed(2)} remaining of your $${judgeAllocation.toLocaleString()} allocation.`,
+      toast.error("Point limit exceeded", {
+        description: `You have ${remaining.toFixed(2)} points remaining of your ${judgeAllocation.toLocaleString()}-point allocation.`,
       })
       return
     }
@@ -553,7 +546,7 @@ export default function JudgesPage() {
           return {
             ...entry,
             investment: investment.toString(),
-            status: investment > 0 ? "Invested" : "Under Review",
+            status: investment > 0 ? "Scored" : "Under Review",
           }
         }
         return entry
@@ -562,7 +555,7 @@ export default function JudgesPage() {
       setEditingInvestment(null)
       setInvestmentInput("")
     } catch (error) {
-      toast.error("Failed to save investment", {
+      toast.error("Failed to save points", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
     }
@@ -774,7 +767,7 @@ export default function JudgesPage() {
                           </CardTitle>
                           <CardDescription>
                             {judgesList.length > 0
-                              ? "Select a judge to view and allocate funding to assigned submissions"
+                              ? "Select a judge to view and allocate points to assigned submissions"
                               : "No judges have been added yet."}
                           </CardDescription>
                         </div>
@@ -831,23 +824,23 @@ export default function JudgesPage() {
                         <div>
                           <Label className="text-muted-foreground">Your Allocation</Label>
                           <p className="text-2xl font-bold">
-                            $<NumberTicker value={judgeAllocation} />
+                            <NumberTicker value={judgeAllocation} /> pts
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            of $<NumberTicker value={totalInvestmentFund} /> total
+                            of <NumberTicker value={totalInvestmentFund} /> points total
                           </p>
                         </div>
                         <div>
-                          <Label className="text-muted-foreground">Total Invested</Label>
+                          <Label className="text-muted-foreground">Points Used</Label>
                           <p className="text-2xl font-bold">
-                            $<NumberTicker value={judge.totalInvested} />
+                            <NumberTicker value={judge.totalInvested} /> pts
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             {(judgeAllocation - judge.totalInvested) >= 0 ? (
-                              <>$<NumberTicker value={judgeAllocation - judge.totalInvested} decimalPlaces={2} /> remaining</>
+                              <><NumberTicker value={judgeAllocation - judge.totalInvested} decimalPlaces={2} /> points remaining</>
                             ) : (
                               <span className="text-destructive">
-                                $<NumberTicker value={Math.abs(judgeAllocation - judge.totalInvested)} decimalPlaces={2} /> over
+                                <NumberTicker value={Math.abs(judgeAllocation - judge.totalInvested)} decimalPlaces={2} /> points over
                               </span>
                             )}
                           </p>
@@ -897,7 +890,7 @@ export default function JudgesPage() {
                               return {
                                 ...e,
                                 investment: investment.toString(),
-                                status: investment > 0 ? "Invested" : "Under Review",
+                                status: investment > 0 ? "Scored" : "Under Review",
                               }
                             }
                             return e
