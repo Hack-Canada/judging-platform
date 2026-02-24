@@ -6,33 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase-client"
 import { defaultTracks } from "@/lib/tracks-data"
-import { defaultRooms, type Room } from "@/lib/rooms-data"
-
-type SlotRow = {
-  id: string
-  date: string
-  start_time: string
-  end_time: string
-  room_id: number
-  submission_id: string
-}
-
-type SubmissionRow = {
-  id: string
-  project_name: string
-}
 
 export default function SubmitPage() {
   const [submitting, setSubmitting] = React.useState(false)
-  const [refreshing, setRefreshing] = React.useState(false)
-  const [scheduleVisible, setScheduleVisible] = React.useState(false)
-  const [slots, setSlots] = React.useState<SlotRow[]>([])
-  const [submissionNames, setSubmissionNames] = React.useState<Map<string, string>>(new Map())
-  const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [formData, setFormData] = React.useState({
     teamName: "",
     members: ["", "", "", ""],
@@ -40,63 +19,6 @@ export default function SubmitPage() {
     devpostLink: "",
     tracks: [] as string[],
   })
-
-  const loadSchedule = React.useCallback(async () => {
-    setRefreshing(true)
-    try {
-      const [{ data: settingsData }, { data: roomsData }, { data: slotData }, { data: submissionsData }] =
-        await Promise.all([
-          supabase.from("admin_settings").select("setting_key, setting_value").eq("setting_key", "hacker_schedule_visibility"),
-          supabase.from("admin_settings").select("setting_key, setting_value").eq("setting_key", "rooms_data"),
-          supabase
-            .from("calendar_schedule_slots")
-            .select("id, date, start_time, end_time, room_id, submission_id")
-            .order("date", { ascending: true })
-            .order("start_time", { ascending: true }),
-          supabase.from("submissions").select("id, project_name"),
-        ])
-
-      const visibilitySetting = settingsData?.[0]?.setting_value === "enabled"
-      setScheduleVisible(visibilitySetting)
-
-      if (roomsData?.[0]?.setting_value) {
-        try {
-          const parsed = JSON.parse(roomsData[0].setting_value)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setRooms(parsed)
-          }
-        } catch {
-          // no-op
-        }
-      }
-
-      const names = new Map<string, string>()
-      ;((submissionsData as SubmissionRow[] | null) ?? []).forEach((s) => names.set(s.id, s.project_name ?? "Untitled Project"))
-      setSubmissionNames(names)
-      setSlots((slotData as SlotRow[] | null) ?? [])
-    } finally {
-      setRefreshing(false)
-    }
-  }, [])
-
-  React.useEffect(() => {
-    void loadSchedule()
-  }, [loadSchedule])
-
-  const groupedSlots = React.useMemo(() => {
-    const map = new Map<string, SlotRow[]>()
-    slots.forEach((slot) => {
-      if (!map.has(slot.date)) map.set(slot.date, [])
-      map.get(slot.date)!.push(slot)
-    })
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [slots])
-
-  const roomsById = React.useMemo(() => {
-    const map = new Map<number, Room>()
-    rooms.forEach((room) => map.set(room.id, room))
-    return map
-  }, [rooms])
 
   const handleMemberChange = (index: number, value: string) => {
     const next = [...formData.members]
@@ -147,7 +69,6 @@ export default function SubmitPage() {
         devpostLink: "",
         tracks: [],
       })
-      void loadSchedule()
     } catch (error) {
       toast.error("Failed to submit project", {
         description: error instanceof Error ? error.message : "Unknown error",
@@ -227,61 +148,6 @@ export default function SubmitPage() {
                 {submitting ? "Submitting..." : "Submit Project"}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle>Judging Schedule</CardTitle>
-                <CardDescription>
-                  {scheduleVisible
-                    ? "Schedule visibility is enabled. Showing all project schedules."
-                    : "Schedule visibility is currently disabled by admins."}
-                </CardDescription>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => void loadSchedule()} disabled={refreshing}>
-                {refreshing ? "Refreshing..." : "Refresh"}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!scheduleVisible ? (
-              <p className="text-sm text-muted-foreground">Check back later for published judging times.</p>
-            ) : groupedSlots.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No schedule published yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {groupedSlots.map(([date, dateSlots]) => (
-                  <Card key={date} className="border-dashed">
-                    <CardHeader>
-                      <CardTitle className="text-sm">
-                        {new Date(date).toLocaleDateString(undefined, {
-                          weekday: "short",
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      {dateSlots.map((slot) => (
-                        <div key={slot.id} className="flex flex-col gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                          <div className="space-y-1">
-                            <p className="break-words font-medium">{submissionNames.get(slot.submission_id) ?? "Untitled Project"}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
-                            </p>
-                          </div>
-                          <Badge variant="outline" className="self-start sm:self-auto">{roomsById.get(slot.room_id)?.name ?? `Room ${slot.room_id}`}</Badge>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
