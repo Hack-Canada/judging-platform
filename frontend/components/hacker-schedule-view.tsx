@@ -37,13 +37,14 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
   const [slots, setSlots] = React.useState<SlotRow[]>([])
   const [submissions, setSubmissions] = React.useState<SubmissionRow[]>([])
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
+  const [scheduleVisible, setScheduleVisible] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [activeSubmissionId, setActiveSubmissionId] = React.useState<string | undefined>(undefined)
 
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true)
-      const [{ data: slotData }, { data: submissionData }, { data: settingsData }] =
+      const [{ data: slotData }, { data: submissionData }, { data: settingsData }, { data: visibilityData }] =
         await Promise.all([
           supabase
             .from("calendar_schedule_slots")
@@ -55,6 +56,11 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
             .from("admin_settings")
             .select("setting_key, setting_value")
             .eq("setting_key", "rooms_data"),
+          supabase
+            .from("admin_settings")
+            .select("setting_value")
+            .eq("setting_key", "hacker_schedule_visibility")
+            .maybeSingle(),
         ])
 
       setSlots((slotData as SlotRow[]) || [])
@@ -74,6 +80,8 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
           // ignore parse errors, fall back to default rooms
         }
       }
+
+      setScheduleVisible(visibilityData?.setting_value === "enabled")
     } finally {
       setLoading(false)
     }
@@ -145,6 +153,10 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
           <CardContent className="space-y-4">
             {loading && submissions.length === 0 && slots.length === 0 ? (
               <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : !scheduleVisible ? (
+              <p className="text-sm text-muted-foreground">
+                Judging schedule is currently hidden by admins.
+              </p>
             ) : submissions.length === 0 ? (
               <p className="text-sm text-muted-foreground">No teams have submitted yet. Check back later.</p>
             ) : (
@@ -173,34 +185,32 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                     {slotsForSelectedTeam.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No judging times scheduled yet for this team.</p>
                     ) : (
-                      <div className="space-y-4">
+                      <div className="space-y-5">
                         {groupSlotsByDate.map(([date, dateSlots]) => (
-                          <Card key={date} className="border-dashed">
-                            <CardHeader>
-                              <CardTitle className="text-sm">
-                                {new Date(date).toLocaleDateString(undefined, {
-                                  weekday: "short",
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                })}
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2">
+                          <div key={date} className="space-y-2">
+                            <p className="text-sm font-semibold">
+                              {new Date(date).toLocaleDateString(undefined, {
+                                weekday: "short",
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </p>
+                            <div className="space-y-2">
                               {dateSlots.map((slot) => {
                                 const room = roomsById.get(slot.room_id)
                                 return (
                                   <div
                                     key={slot.id}
-                                    className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                                    className="flex items-center justify-between py-1 text-sm"
                                   >
                                     <p className="font-medium">{formatTimeRange(slot.start_time, slot.end_time)}</p>
                                     <p className="text-xs text-muted-foreground">Room: {room?.name ?? `Room ${slot.room_id}`}</p>
                                   </div>
                                 )
                               })}
-                            </CardContent>
-                          </Card>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     )}
