@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -59,6 +60,10 @@ import {
 export default function AdminPage() {
   const POINTS_PER_JUDGE = 20
   const TARGET_JUDGES_PER_PROJECT = 3
+  const DEFAULT_SEEDED_JUDGES = [
+    { name: "Priya Sharma", email: "priya.sharma@hackcanada.com", pin: "1234" },
+    { name: "Marcus Chen", email: "marcus.chen@hackcanada.com", pin: "1234" },
+  ] as const
   const [investmentFund, setInvestmentFund] = React.useState(String(POINTS_PER_JUDGE))
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
@@ -67,6 +72,7 @@ export default function AdminPage() {
   const [scheduleEndTime, setScheduleEndTime] = React.useState("16:00") // Default 4 PM
   const [minInvestment, setMinInvestment] = React.useState("0")
   const [maxInvestment, setMaxInvestment] = React.useState(String(POINTS_PER_JUDGE))
+  const [hackerScheduleVisibilityEnabled, setHackerScheduleVisibilityEnabled] = React.useState(false)
   const [scheduleDate, setScheduleDate] = React.useState(() =>
     new Date().toISOString().slice(0, 10)
   )
@@ -83,6 +89,7 @@ export default function AdminPage() {
   const [judgeFormData, setJudgeFormData] = React.useState({
     name: "",
     email: "",
+    pin: "",
     tracks: [] as string[],
   })
   const [tracksList, setTracksList] = React.useState<Track[]>(defaultTracks)
@@ -316,6 +323,11 @@ export default function AdminPage() {
                   ? String(parsed)
                   : String(POINTS_PER_JUDGE)
               )
+            }
+
+            const hackerScheduleVisibility = settingsMap.get("hacker_schedule_visibility")
+            if (hackerScheduleVisibility) {
+              setHackerScheduleVisibilityEnabled(hackerScheduleVisibility === "enabled")
             }
 
             // Load tracks data
@@ -698,13 +710,183 @@ export default function AdminPage() {
     }
   }
 
+  const handleSaveHackerScheduleVisibility = async () => {
+    try {
+      const { error } = await supabase
+        .from("admin_settings")
+        .upsert(
+          {
+            setting_key: "hacker_schedule_visibility",
+            setting_value: hackerScheduleVisibilityEnabled ? "enabled" : "disabled",
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "setting_key",
+          }
+        )
+
+      if (error) throw error
+
+      toast.success("Hacker schedule visibility updated", {
+        description: hackerScheduleVisibilityEnabled
+          ? "Hackers can now view the published judging schedule."
+          : "Hackers can no longer view the judging schedule.",
+      })
+    } catch (error) {
+      toast.error("Failed to update visibility", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    }
+  }
+
+  const syncJudgeAuthPin = async (payload: { name: string; email: string; pin: string }) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      throw new Error("Session expired. Please sign in again.")
+    }
+
+    const response = await fetch("/api/judges/auth", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const result = await response.json()
+    if (!response.ok) {
+      throw new Error(result.error || "Failed to configure judge login")
+    }
+  }
+
+  const upsertJudgeByEmail = async (entry: { name: string; email: string; tracks: string[] }) => {
+    const { data: existingJudge, error: selectError } = await supabase
+      .from("judges")
+      .select("id")
+      .ilike("email", entry.email)
+      .maybeSingle()
+
+    if (selectError) throw selectError
+
+    if (existingJudge?.id) {
+      const { error } = await supabase
+        .from("judges")
+        .update({
+          name: entry.name,
+          email: entry.email,
+          tracks: entry.tracks,
+        })
+        .eq("id", existingJudge.id)
+      if (error) throw error
+      return
+    }
+
+    const { error } = await supabase.from("judges").insert({
+      name: entry.name,
+      email: entry.email,
+      tracks: entry.tracks,
+      assigned_projects: 0,
+      total_invested: 0,
+    })
+    if (error) throw error
+  }
+
+  const handleSeedDefaultJudges = async () => {
+    try {
+      for (const seededJudge of DEFAULT_SEEDED_JUDGES) {
+        await upsertJudgeByEmail({
+          name: seededJudge.name,
+          email: seededJudge.email,
+          tracks: ["General"],
+        })
+        await syncJudgeAuthPin({
+          name: seededJudge.name,
+          email: seededJudge.email,
+          pin: seededJudge.pin,
+        })
+      }
+
+      const seededEmails = DEFAULT_SEEDED_JUDGES.map((judge) => judge.email.toLowerCase())
+      const { data: seededJudgeRows, error: seededJudgesError } = await supabase
+        .from("judges")
+        .select("id, email")
+      if (seededJudgesError) throw seededJudgesError
+
+      const seededJudgeIds = (seededJudgeRows ?? [])
+        .filter((row: { id: string; email: string }) => seededEmails.includes(String(row.email).toLowerCase()))
+        .map((row: { id: string }) => String(row.id))
+
+      if (seededJudgeIds.length > 0) {
+        const { data: existingAssignments, error: assignmentsError } = await supabase
+          .from("judge_project_assignments")
+          .select("judge_id")
+          .in("judge_id", seededJudgeIds)
+        if (assignmentsError) throw assignmentsError
+
+        const countsByJudge = new Map<string, number>()
+        seededJudgeIds.forEach((judgeId) => countsByJudge.set(judgeId, 0))
+        ;(existingAssignments ?? []).forEach((row: { judge_id: string }) => {
+          const judgeId = String(row.judge_id)
+          countsByJudge.set(judgeId, (countsByJudge.get(judgeId) ?? 0) + 1)
+        })
+
+        const judgesNeedingAssignments = seededJudgeIds.filter((judgeId) => (countsByJudge.get(judgeId) ?? 0) === 0)
+        if (judgesNeedingAssignments.length > 0) {
+          const { data: recentSubmissions, error: recentSubmissionsError } = await supabase
+            .from("submissions")
+            .select("id")
+            .order("submitted_at", { ascending: false })
+            .limit(60)
+          if (recentSubmissionsError) throw recentSubmissionsError
+
+          const assignmentRows: { judge_id: string; submission_id: string }[] = []
+          const submissions = (recentSubmissions ?? []) as { id: string }[]
+          submissions.forEach((submission, index) => {
+            const judgeId = judgesNeedingAssignments[index % judgesNeedingAssignments.length]
+            assignmentRows.push({
+              judge_id: judgeId,
+              submission_id: submission.id,
+            })
+          })
+
+          if (assignmentRows.length > 0) {
+            const { error: insertAssignmentsError } = await supabase
+              .from("judge_project_assignments")
+              .upsert(assignmentRows, { onConflict: "judge_id,submission_id" })
+            if (insertAssignmentsError) throw insertAssignmentsError
+
+            for (const judgeId of judgesNeedingAssignments) {
+              const judgeCount = assignmentRows.filter((row) => row.judge_id === judgeId).length
+              await supabase
+                .from("judges")
+                .update({ assigned_projects: judgeCount })
+                .eq("id", judgeId)
+            }
+          }
+        }
+      }
+
+      await loadJudgesFromSupabase()
+      toast.success("Default judges ready", {
+        description: "Priya Sharma and Marcus Chen were added/updated with PIN 1234 and assignment coverage.",
+      })
+    } catch (error) {
+      toast.error("Failed to seed default judges", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    }
+  }
+
   const handleOpenJudgeDialog = (judge?: Judge) => {
     if (judge) {
       setEditingJudge(judge)
-      setJudgeFormData({ name: judge.name, email: judge.email, tracks: judge.tracks || [] })
+      setJudgeFormData({ name: judge.name, email: judge.email, pin: "", tracks: judge.tracks || [] })
     } else {
       setEditingJudge(null)
-      setJudgeFormData({ name: "", email: "", tracks: ["General"] })
+      setJudgeFormData({ name: "", email: "", pin: "", tracks: ["General"] })
     }
     setIsJudgeDialogOpen(true)
   }
@@ -712,7 +894,7 @@ export default function AdminPage() {
   const handleCloseJudgeDialog = () => {
     setIsJudgeDialogOpen(false)
     setEditingJudge(null)
-    setJudgeFormData({ name: "", email: "", tracks: [] })
+    setJudgeFormData({ name: "", email: "", pin: "", tracks: [] })
   }
 
   const handleJudgeSubmit = async (e: React.FormEvent) => {
@@ -724,6 +906,20 @@ export default function AdminPage() {
 
       toast.error("Validation error", {
         description: "Name and email are required",
+      })
+      return
+    }
+    const normalizedEmail = judgeFormData.email.trim().toLowerCase()
+    const normalizedPin = judgeFormData.pin.trim()
+    if (!editingJudge && normalizedPin.length < 4) {
+      toast.error("Validation error", {
+        description: "PIN is required and must be at least 4 characters.",
+      })
+      return
+    }
+    if (editingJudge && editingJudge.email.trim().toLowerCase() !== normalizedEmail && normalizedPin.length < 4) {
+      toast.error("PIN required", {
+        description: "Set a PIN when changing a judge email so login is provisioned for the new email.",
       })
       return
     }
@@ -739,7 +935,7 @@ export default function AdminPage() {
           .from("judges")
           .update({
             name: judgeFormData.name,
-            email: judgeFormData.email,
+            email: normalizedEmail,
             tracks: judgeFormData.tracks.length > 0 ? judgeFormData.tracks : ["General"],
           })
           .eq("id", judgeId)
@@ -762,7 +958,7 @@ export default function AdminPage() {
         // Create new judge in Supabase
         const insertPayload = {
           name: judgeFormData.name,
-          email: judgeFormData.email,
+          email: normalizedEmail,
           tracks: judgeFormData.tracks.length > 0 ? judgeFormData.tracks : ["General"],
           assigned_projects: 0,
           total_invested: 0,
@@ -784,6 +980,14 @@ export default function AdminPage() {
 
         toast.success("Judge added!", {
           description: `${judgeFormData.name} has been added`,
+        })
+      }
+
+      if (normalizedPin.length >= 4) {
+        await syncJudgeAuthPin({
+          name: judgeFormData.name.trim(),
+          email: normalizedEmail,
+          pin: normalizedPin,
         })
       }
 
@@ -1385,6 +1589,30 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
 
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle>Hacker Schedule Visibility</CardTitle>
+                      <CardDescription>
+                        Control whether hackers can view the published judging schedule on the public submission page.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={hackerScheduleVisibilityEnabled}
+                            onCheckedChange={setHackerScheduleVisibilityEnabled}
+                            id="hacker-schedule-visibility"
+                          />
+                          <Label htmlFor="hacker-schedule-visibility">
+                            Allow hackers to view judging schedule
+                          </Label>
+                        </div>
+                        <Button onClick={handleSaveHackerScheduleVisibility}>Save Visibility</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   {/* Step 1: Auto-assign judges to submissions */}
                   <Card className="mb-6">
                     <CardHeader>
@@ -1529,13 +1757,18 @@ export default function AdminPage() {
                         <div>
                           <CardTitle>Judges Management</CardTitle>
                           <CardDescription>
-                            Manage judges and track their point allocations
+                            Manage judges, reset manual PIN login, and track point allocations
                           </CardDescription>
                         </div>
-                        <Button onClick={() => handleOpenJudgeDialog()} size="sm">
-                          <IconPlus className="mr-2 h-4 w-4" />
-                          Add Judge
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" onClick={handleSeedDefaultJudges} size="sm">
+                            Seed Priya + Marcus
+                          </Button>
+                          <Button onClick={() => handleOpenJudgeDialog()} size="sm">
+                            <IconPlus className="mr-2 h-4 w-4" />
+                            Add Judge
+                          </Button>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -1583,7 +1816,7 @@ export default function AdminPage() {
                                     <DropdownMenuContent align="end">
                                       <DropdownMenuItem onClick={() => handleOpenJudgeDialog(judge)}>
                                         <IconEdit className="mr-2 h-4 w-4" />
-                                        Edit
+                                        Edit / Reset PIN
                                       </DropdownMenuItem>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem
@@ -1880,8 +2113,8 @@ export default function AdminPage() {
             <DialogTitle>{editingJudge ? "Edit Judge" : "New Judge"}</DialogTitle>
             <DialogDescription>
               {editingJudge
-                ? "Update the judge details below."
-                : "Add a new judge by filling in the details below."}
+                ? "Update judge details and set a new PIN only if you want to reset login."
+                : "Add a new judge and set their manual PIN for /judge-login."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleJudgeSubmit}>
@@ -1906,6 +2139,22 @@ export default function AdminPage() {
                   placeholder="Enter judge email"
                   required
                 />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="judge-pin">{editingJudge ? "PIN (optional reset)" : "PIN"}</Label>
+                <Input
+                  id="judge-pin"
+                  type="password"
+                  inputMode="numeric"
+                  value={judgeFormData.pin}
+                  onChange={(e) => setJudgeFormData({ ...judgeFormData, pin: e.target.value })}
+                  placeholder={editingJudge ? "Leave blank to keep current PIN" : "Enter PIN (e.g., 1234)"}
+                  required={!editingJudge}
+                  minLength={4}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Judge login uses email + PIN only. Magic-link login is not used.
+                </p>
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Assign Tracks</Label>
