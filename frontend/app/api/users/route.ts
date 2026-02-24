@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { isAppRole } from "@/lib/rbac"
 
 // This route requires the Supabase service role key for admin access
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -19,7 +20,47 @@ const supabaseAdmin = supabaseUrl && supabaseServiceKey
     })
   : null
 
-export async function GET() {
+function getBearerToken(request: Request): string | null {
+  const authHeader = request.headers.get("authorization")
+  if (!authHeader) return null
+  if (!authHeader.toLowerCase().startsWith("bearer ")) return null
+  return authHeader.slice(7).trim() || null
+}
+
+async function requireSuperadmin(request: Request) {
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !anonKey) {
+    return { ok: false as const, response: NextResponse.json({ error: "Supabase public credentials not configured" }, { status: 500 }) }
+  }
+
+  const token = getBearerToken(request)
+  if (!token) {
+    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
+  }
+
+  const supabaseUserClient = createClient(supabaseUrl, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+
+  const { data, error } = await supabaseUserClient.auth.getUser(token)
+  if (error || !data.user) {
+    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
+  }
+
+  const roleCandidate =
+    (data.user.user_metadata?.role as string | undefined) ??
+    (data.user.app_metadata?.role as string | undefined) ??
+    (data.user.user_metadata?.user_role as string | undefined)
+  const role = isAppRole(roleCandidate) ? roleCandidate : null
+
+  if (role !== "superadmin") {
+    return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
+  }
+
+  return { ok: true as const, user: data.user }
+}
+
+export async function GET(request: Request) {
   if (!supabaseAdmin) {
     return NextResponse.json(
       { error: "Admin access not configured" },
@@ -28,6 +69,9 @@ export async function GET() {
   }
 
   try {
+    const authResult = await requireSuperadmin(request)
+    if (!authResult.ok) return authResult.response
+
     // Fetch all users from auth.users using admin API
     const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers()
 
@@ -68,6 +112,9 @@ export async function PATCH(request: Request) {
   }
 
   try {
+    const authResult = await requireSuperadmin(request)
+    if (!authResult.ok) return authResult.response
+
     const body = await request.json()
     const { userId, role } = body
 
@@ -93,14 +140,16 @@ export async function PATCH(request: Request) {
     const existingUserMetadata = currentUser.user.user_metadata || {}
 
     const updateData: {
-      app_metadata?: Record<string, any>
-      user_metadata?: Record<string, any>
+      app_metadata?: Record<string, unknown>
+      user_metadata?: Record<string, unknown>
     } = {}
 
     if (role === null || role === "") {
       // Remove role from metadata
-      const { role: _, ...appMetadataWithoutRole } = existingAppMetadata
-      const { role: __, ...userMetadataWithoutRole } = existingUserMetadata
+      const { role: roleFromAppMetadata, ...appMetadataWithoutRole } = existingAppMetadata
+      const { role: roleFromUserMetadata, ...userMetadataWithoutRole } = existingUserMetadata
+      void roleFromAppMetadata
+      void roleFromUserMetadata
       updateData.app_metadata = appMetadataWithoutRole
       updateData.user_metadata = userMetadataWithoutRole
     } else {
@@ -143,4 +192,3 @@ export async function PATCH(request: Request) {
     )
   }
 }
-

@@ -4,9 +4,9 @@ import * as React from "react"
 import Image from "next/image"
 import {
   IconGavel,
-  IconFolder,
   IconSettings,
   IconCalendar,
+  IconFolder,
   IconUser,
   IconUsers,
   IconShield,
@@ -24,9 +24,15 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { supabase } from "@/lib/supabase-client"
+import { getUserRole, isDashboardRouteAllowed } from "@/lib/rbac"
 
 const data = {
   navMain: [
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: IconSettings,
+    },
     {
       title: "Judges View",
       url: "/dashboard/judges",
@@ -72,6 +78,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     avatar?: string
     role?: string
   } | null>(null)
+  const role = getUserRole(
+    user
+      ? {
+          user_metadata: { role: user.role },
+          app_metadata: {},
+        }
+      : null
+  )
+
+  const navItems = React.useMemo(
+    () => data.navMain.filter((item) => isDashboardRouteAllowed(role, item.url)),
+    [role]
+  )
 
   const loadUser = React.useCallback(async () => {
     try {
@@ -151,7 +170,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navItems} />
       </SidebarContent>
       {user && (
         <SidebarFooter className="p-0">

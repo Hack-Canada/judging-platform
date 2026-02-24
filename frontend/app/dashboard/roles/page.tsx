@@ -9,7 +9,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
   Select,
@@ -20,6 +19,9 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase-client"
+import { getCurrentUserWithRole } from "@/lib/auth-helpers"
+import { getDefaultRouteForRole } from "@/lib/rbac"
+import { useRouter } from "next/navigation"
 
 type AuthUser = {
   id: string
@@ -33,11 +35,11 @@ type AuthUser = {
     role?: string
     avatar_url?: string
     picture?: string
-    [key: string]: any
+    [key: string]: unknown
   }
   raw_app_meta_data?: {
     role?: string
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 
@@ -47,27 +49,55 @@ const STANDARD_ROLES = [
   "judge",
   "sponsor",
   "admin",
-  "org",
-  "volunteer",
+  "superadmin",
 ] as const
 
 type StandardRole = typeof STANDARD_ROLES[number]
 
 export default function RolesPage() {
+  const router = useRouter()
   const [users, setUsers] = React.useState<AuthUser[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [authorized, setAuthorized] = React.useState(false)
   const [selectedRole, setSelectedRole] = React.useState<string>("all")
   const [updatingRoles, setUpdatingRoles] = React.useState<Set<string>>(new Set())
   const isInitialLoad = React.useRef(true)
+
+  React.useEffect(() => {
+    const checkAccess = async () => {
+      const { role } = await getCurrentUserWithRole()
+      if (role === "superadmin") {
+        setAuthorized(true)
+        return
+      }
+      if (role) {
+        router.replace(getDefaultRouteForRole(role))
+        return
+      }
+      router.replace("/login")
+    }
+    void checkAccess()
+  }, [router])
 
   const fetchUsers = React.useCallback(async (showLoading = false) => {
     try {
       if (showLoading || isInitialLoad.current) {
         setLoading(true)
       }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Session expired. Please sign in again.")
+      }
       
       // Fetch users from API route which uses Supabase Admin API
-      const response = await fetch("/api/users")
+      const response = await fetch("/api/users", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
       const result = await response.json()
 
       if (!response.ok) {
@@ -93,6 +123,8 @@ export default function RolesPage() {
   }, [])
 
   React.useEffect(() => {
+    if (!authorized) return
+
     // Initial fetch
     void fetchUsers(true)
 
@@ -105,7 +137,7 @@ export default function RolesPage() {
     return () => {
       clearInterval(intervalId)
     }
-  }, [fetchUsers])
+  }, [authorized, fetchUsers])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -171,10 +203,18 @@ export default function RolesPage() {
     setUpdatingRoles((prev) => new Set(prev).add(userId))
     
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Session expired. Please sign in again.")
+      }
+
       const response = await fetch("/api/users", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           userId,
@@ -209,8 +249,8 @@ export default function RolesPage() {
       )
 
       // Check if this is the current user and refresh their session
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user?.id === userId) {
+      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      if (currentSession?.user?.id === userId) {
         // Refresh the session to get updated metadata
         await supabase.auth.refreshSession()
         
@@ -239,6 +279,14 @@ export default function RolesPage() {
     }
   }
 
+  if (!authorized) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p className="text-sm text-muted-foreground">Checking access...</p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
@@ -263,7 +311,7 @@ export default function RolesPage() {
                   ))}
                 </p>
                 <p>
-                  Roles can be assigned using the dropdown in the Role column. Users without a role will display as "No role".
+                  Roles can be assigned using the dropdown in the Role column. Users without a role will display as &quot;No role&quot;.
                 </p>
               </div>
             </div>
@@ -384,4 +432,3 @@ export default function RolesPage() {
     </div>
   )
 }
-

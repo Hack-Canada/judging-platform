@@ -63,11 +63,11 @@ const chartData = [
 
 const chartConfig = {
   cumulative: {
-    label: "Cumulative Investment",
+    label: "Cumulative Points",
     color: "var(--primary)",
   },
   invested: {
-    label: "Daily Investment",
+    label: "Daily Points",
     color: "var(--primary)",
   },
 } satisfies ChartConfig
@@ -99,12 +99,12 @@ export function ChartAreaInteractive() {
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardTitle>Investment Tracking</CardTitle>
+        <CardTitle>Points Tracking</CardTitle>
         <CardDescription>
           <span className="hidden @[540px]/card:block">
-            Money invested in projects over time
+            Points assigned to projects over time
           </span>
-          <span className="@[540px]/card:hidden">Investment tracking</span>
+          <span className="@[540px]/card:hidden">Points tracking</span>
         </CardDescription>
         <CardAction>
           <ToggleGroup
@@ -191,7 +191,7 @@ export function ChartAreaInteractive() {
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              tickFormatter={(value) => `$${value}`}
+              tickFormatter={(value) => `${value} pts`}
             />
             <ChartTooltip
               cursor={false}
@@ -203,7 +203,7 @@ export function ChartAreaInteractive() {
                       day: "numeric",
                     })
                   }}
-                  formatter={(value) => [`$${value}`, undefined]}
+                  formatter={(value) => [`${value} pts`, undefined]}
                   indicator="dot"
                 />
               }
@@ -213,14 +213,14 @@ export function ChartAreaInteractive() {
               type="natural"
               fill="url(#fillDesktop)"
               stroke="var(--color-cumulative)"
-              name="Total Invested"
+              name="Total Points"
             />
             <Area
               dataKey="invested"
               type="natural"
               fill="url(#fillMobile)"
               stroke="var(--color-invested)"
-              name="Daily Investment"
+              name="Daily Points"
             />
           </AreaChart>
         </ChartContainer>

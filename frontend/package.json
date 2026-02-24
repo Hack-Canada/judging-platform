@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "node scripts/seed-submissions.js",
+    "seed:varied": "node scripts/seed-varied-submissions.js",
     "load-test": "node scripts/load-test.js"
   },
   "dependencies": {

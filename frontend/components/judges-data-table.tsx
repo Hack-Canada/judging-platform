@@ -179,7 +179,7 @@ function InvestmentCell({
     e.preventDefault()
     const numValue = parseFloat(inputValue)
     if (isNaN(numValue) || numValue < 0) {
-      toast.error("Invalid amount", {
+      toast.error("Invalid points", {
         description: "Please enter a valid positive number",
       })
       return
@@ -187,8 +187,8 @@ function InvestmentCell({
     const currentInvestment = parseFloat(entry.investment || "0")
     const difference = numValue - currentInvestment
     if (remainingAllocation - difference < 0) {
-      toast.error("Insufficient funds", {
-        description: `You have $${remainingAllocation.toFixed(2)} remaining. Please adjust your investment.`,
+      toast.error("Insufficient points", {
+        description: `You have ${remainingAllocation.toFixed(2)} points remaining. Please adjust your points.`,
       })
       return
     }
@@ -196,7 +196,7 @@ function InvestmentCell({
     try {
       await onInvestmentChange(entry.id, numValue)
     } catch (err) {
-      toast.error("Failed to save investment", {
+      toast.error("Failed to save points", {
         description: err instanceof Error ? err.message : "Unknown error",
       })
     } finally {
@@ -207,15 +207,14 @@ function InvestmentCell({
   return (
     <form onSubmit={handleSubmit}>
       <Label htmlFor={`${entry.id}-investment`} className="sr-only">
-        Investment
+        Points
       </Label>
       <div className="flex items-center justify-end gap-1">
-        <span className="text-muted-foreground text-sm">$</span>
         <Input
           className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-24 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
           placeholder="0"
           type="number"
-          step="10"
+          step="1"
           min="0"
           id={`${entry.id}-investment`}
           value={inputValue}
@@ -272,7 +271,7 @@ const createColumns = (
     header: "Status",
     cell: ({ row }) => (
       <Badge variant="outline" className="text-muted-foreground px-1.5">
-        {row.original.status === "Invested" ? (
+        {row.original.status === "Scored" ? (
           <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
         ) : row.original.status === "Under Review" ? (
           <IconLoader />
@@ -283,7 +282,7 @@ const createColumns = (
   },
   {
     accessorKey: "investment",
-    header: () => <div className="w-full text-right">Investment</div>,
+    header: () => <div className="w-full text-right">Points</div>,
     cell: ({ row }) => (
       <InvestmentCell
         row={row}
@@ -377,13 +376,13 @@ export function JudgesDataTable({
       <div className="rounded-lg border bg-card p-4">
         <div className="grid gap-4 md:grid-cols-3">
           <div>
-            <p className="text-sm text-muted-foreground">Total Invested</p>
-            <p className="text-2xl font-bold">$<NumberTicker value={totalInvested} /></p>
+            <p className="text-sm text-muted-foreground">Total Points Used</p>
+            <p className="text-2xl font-bold"><NumberTicker value={totalInvested} /></p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Remaining</p>
+            <p className="text-sm text-muted-foreground">Points Remaining</p>
             <p className={`text-2xl font-bold ${remainingAllocation < 0 ? "text-destructive" : ""}`}>
-              $<NumberTicker value={remainingAllocation} decimalPlaces={2} />
+              <NumberTicker value={remainingAllocation} decimalPlaces={2} />
             </p>
           </div>
           <div>
@@ -394,8 +393,8 @@ export function JudgesDataTable({
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border">
-        <Table>
+      <div className="rounded-lg border overflow-x-auto">
+        <Table className="min-w-[760px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -446,12 +445,12 @@ export function JudgesDataTable({
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between px-2">
+      <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1 text-sm text-muted-foreground">
           {table.getFilteredRowModel().rows.length} submission(s)
         </div>
-        <div className="flex items-center space-x-6 lg:space-x-8">
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-6 lg:gap-8">
+          <div className="flex items-center gap-2">
             <p className="text-sm font-medium">Rows per page</p>
             <select
               value={table.getState().pagination.pageSize}
@@ -467,11 +466,11 @@ export function JudgesDataTable({
               ))}
             </select>
           </div>
-          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+          <div className="flex min-w-[100px] items-center justify-center text-sm font-medium">
             Page {table.getState().pagination.pageIndex + 1} of{" "}
             {table.getPageCount()}
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               className="hidden h-8 w-8 p-0 lg:flex"

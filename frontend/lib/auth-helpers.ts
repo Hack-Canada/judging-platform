@@ -1,4 +1,5 @@
 import { supabase } from "./supabase-client"
+import { getUserRole } from "./rbac"
 
 export async function getSession() {
   const { data: { session } } = await supabase.auth.getSession()
@@ -10,7 +11,7 @@ export async function signOut() {
   return { error }
 }
 
-export async function signIn(email: string, password: string) {
+export async function signInAdmin(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -18,3 +19,21 @@ export async function signIn(email: string, password: string) {
   return { data, error }
 }
 
+export async function signInJudgeWithPin(email: string, pin: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password: pin,
+  })
+  return { data, error }
+}
+
+export async function getCurrentUserWithRole() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session?.user) return { session: null, user: null, role: null }
+
+  const role = getUserRole(session.user)
+  return { session, user: session.user, role }
+}

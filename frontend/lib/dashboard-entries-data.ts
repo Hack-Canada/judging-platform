@@ -10,14 +10,14 @@ export const dashboardEntries: DashboardEntry[] = [
   {
     id: 1,
     entry: "Project Alpha",
-    status: "Invested",
+    status: "Scored",
     investment: "43",
     judge: "Sarah Chen",
   },
   {
     id: 2,
     entry: "Tech Solution Beta",
-    status: "Invested",
+    status: "Scored",
     investment: "92",
     judge: "Michael Chen",
   },
@@ -38,7 +38,7 @@ export const dashboardEntries: DashboardEntry[] = [
   {
     id: 5,
     entry: "AI Innovation Hub",
-    status: "Invested",
+    status: "Scored",
     investment: "67",
     judge: "Sarah Chen",
   },
@@ -59,7 +59,7 @@ export const dashboardEntries: DashboardEntry[] = [
   {
     id: 8,
     entry: "Healthcare Innovation",
-    status: "Invested",
+    status: "Scored",
     investment: "125",
     judge: "Sophia Martinez",
   },
@@ -80,7 +80,7 @@ export const dashboardEntries: DashboardEntry[] = [
   {
     id: 11,
     entry: "Creative Design Studio",
-    status: "Invested",
+    status: "Scored",
     investment: "89",
     judge: "Leila Ahmadi",
   },
@@ -94,7 +94,7 @@ export const dashboardEntries: DashboardEntry[] = [
   {
     id: 13,
     entry: "Community Outreach",
-    status: "Invested",
+    status: "Scored",
     investment: "76",
     judge: "Carlos Rodriguez",
   },
@@ -113,4 +113,3 @@ export const dashboardEntries: DashboardEntry[] = [
     judge: "Thomas Wilson",
   },
 ]
-

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Admin",
-  description: "Admin dashboard for HackCanada. Manage judges, projects, rooms, and system settings. Configure calendar schedules, investment funds, and auto-assignment rules.",
+  description: "Admin dashboard for HackCanada. Manage judges, projects, rooms, and system settings. Configure calendar schedules, points settings, and auto-assignment rules.",
   keywords: ["admin", "administrator", "settings", "judges", "rooms", "calendar settings", "system configuration"],
 };
 

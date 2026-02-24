@@ -36,6 +36,7 @@ import { JudgesDataTable } from "@/components/judges-data-table"
 import type { DashboardEntry } from "@/lib/dashboard-entries-data"
 import { NumberTicker } from "@/components/ui/number-ticker"
 import { IconNotes } from "@tabler/icons-react"
+import { getUserRole, type AppRole } from "@/lib/rbac"
 
 
 type JudgeSubmission = {
@@ -55,22 +56,29 @@ type ScheduleSlotInfo = {
   room_id: number
 }
 
+const POINTS_PER_JUDGE = 20
+
 export default function JudgesPage() {
-  const [judgesList, setJudgesList] = React.useState<{ id: string; name: string }[]>([])
+  const [currentRole, setCurrentRole] = React.useState<AppRole | null>(null)
+  const [judgeName, setJudgeName] = React.useState<string>("")
   const [selectedJudgeId, setSelectedJudgeId] = React.useState<string | null>(null)
+  const [judgesDirectory, setJudgesDirectory] = React.useState<
+    { id: string; name: string; email: string; assignedProjects: number }[]
+  >([])
+  const [judgeAssignmentFilter, setJudgeAssignmentFilter] = React.useState<"all" | "assigned" | "unassigned">("all")
   const [judge, setJudge] = React.useState<Judge | null>(null)
   const [submissions, setSubmissions] = React.useState<JudgeSubmission[]>([])
   const [loading, setLoading] = React.useState(true)
   const [investments, setInvestments] = React.useState<Record<string, number>>({})
   const [editingInvestment, setEditingInvestment] = React.useState<string | null>(null)
   const [investmentInput, setInvestmentInput] = React.useState("")
-  const [loadingJudgesList, setLoadingJudgesList] = React.useState(true)
+  const [loadingJudgeIdentity, setLoadingJudgeIdentity] = React.useState(true)
   const [refreshKey, setRefreshKey] = React.useState(0)
   
   // Load assigned submissions for this judge
   const [assignedSubmissionIds, setAssignedSubmissionIds] = React.useState<string[]>([])
   
-  // Investment fund allocation
+  // Points allocation
   const [totalInvestmentFund, setTotalInvestmentFund] = React.useState(0)
   const [totalJudgesCount, setTotalJudgesCount] = React.useState(0)
   const [judgeAllocation, setJudgeAllocation] = React.useState(0)
@@ -87,44 +95,112 @@ export default function JudgesPage() {
   // Judge notes: submissionId -> notes for the current page judge
   const [notesMap, setNotesMap] = React.useState<Record<string, string>>({})
   const [isNotesDialogOpen, setIsNotesDialogOpen] = React.useState(false)
-  const [notesDialogJudgeId, setNotesDialogJudgeId] = React.useState<string | null>(null)
   const [notesDialogSubmissionId, setNotesDialogSubmissionId] = React.useState<string>("")
   const [notesDialogText, setNotesDialogText] = React.useState("")
-  // When dialog shows another judge: their projects and notes
-  const [otherJudgeProjects, setOtherJudgeProjects] = React.useState<{ id: string; project_name: string }[]>([])
-  const [otherJudgeNotesMap, setOtherJudgeNotesMap] = React.useState<Record<string, string>>({})
   const [notesDialogSaving, setNotesDialogSaving] = React.useState(false)
   const [notesDialogTab, setNotesDialogTab] = React.useState<"view" | "edit">("view")
   const [notesDialogProjectSearch, setNotesDialogProjectSearch] = React.useState("")
   const [projectAutocompleteOpen, setProjectAutocompleteOpen] = React.useState(false)
   const [projectAutocompleteHighlight, setProjectAutocompleteHighlight] = React.useState(0)
+  const canBrowseAllJudges = currentRole === "superadmin"
 
-  // Load list of all judges
+  const filteredJudgesDirectory = React.useMemo(() => {
+    if (judgeAssignmentFilter === "assigned") {
+      return judgesDirectory.filter((judgeRow) => judgeRow.assignedProjects > 0)
+    }
+    if (judgeAssignmentFilter === "unassigned") {
+      return judgesDirectory.filter((judgeRow) => judgeRow.assignedProjects <= 0)
+    }
+    return judgesDirectory
+  }, [judgeAssignmentFilter, judgesDirectory])
+
+  // Resolve current judge strictly by authenticated email.
   React.useEffect(() => {
-    const loadJudgesList = async () => {
+    const loadCurrentJudge = async () => {
       try {
-        setLoadingJudgesList(true)
+        setLoadingJudgeIdentity(true)
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const role = session?.user ? getUserRole(session.user) : null
+        setCurrentRole(role)
+
+        if (role === "superadmin") {
+          const { data: allJudges, error: allJudgesError } = await supabase
+            .from("judges")
+            .select("id, name, email, assigned_projects")
+            .order("name", { ascending: true })
+          if (allJudgesError) throw allJudgesError
+
+          const mapped = ((allJudges as any[]) ?? []).map((row) => ({
+            id: String(row.id),
+            name: row.name ?? "Unnamed Judge",
+            email: row.email ?? "",
+            assignedProjects: Number(row.assigned_projects ?? 0),
+          }))
+          setJudgesDirectory(mapped)
+          if (mapped.length === 0) {
+            setSelectedJudgeId(null)
+            setJudgeName("")
+            return
+          }
+          setSelectedJudgeId((prev) => (prev && mapped.some((j) => j.id === prev) ? prev : mapped[0].id))
+          setJudgeName(mapped[0].name)
+          return
+        }
+
+        const userEmail = session?.user?.email?.trim()
+        if (!userEmail) {
+          setSelectedJudgeId(null)
+          setJudgeName("")
+          toast.error("Unable to resolve your account email.")
+          return
+        }
+
         const { data, error } = await supabase
           .from("judges")
           .select("id, name")
-          .order("name", { ascending: true })
+          .ilike("email", userEmail)
+          .maybeSingle()
         if (error) throw error
-        const list = (data ?? []).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }))
-        setJudgesList(list)
-        if (list.length > 0) {
-          setSelectedJudgeId((prev) => prev ?? list[0].id)
+        if (!data?.id) {
+          setSelectedJudgeId(null)
+          setJudgeName("")
+          toast.error("No judge profile found for this account.", {
+            description: `Signed in as ${userEmail}. Ask an admin to add this email to the judges table.`,
+          })
+          return
         }
-      } catch (e) {
-        toast.error("Failed to load judges")
+
+        setSelectedJudgeId(data.id)
+        setJudgeName(data.name ?? userEmail)
+      } catch {
+        toast.error("Failed to load judge profile")
       } finally {
-        setLoadingJudgesList(false)
+        setLoadingJudgeIdentity(false)
       }
     }
-    void loadJudgesList()
+    void loadCurrentJudge()
   }, [])
 
   React.useEffect(() => {
-    if (!selectedJudgeId) return
+    if (!canBrowseAllJudges) return
+    if (filteredJudgesDirectory.length === 0) {
+      setSelectedJudgeId(null)
+      return
+    }
+    if (!selectedJudgeId || !filteredJudgesDirectory.some((judgeRow) => judgeRow.id === selectedJudgeId)) {
+      setSelectedJudgeId(filteredJudgesDirectory[0].id)
+    }
+  }, [canBrowseAllJudges, filteredJudgesDirectory, selectedJudgeId])
+
+  React.useEffect(() => {
+    if (!selectedJudgeId) {
+      setJudge(null)
+      setSubmissions([])
+      setDashboardEntries([])
+      return
+    }
 
     const loadJudgeData = async () => {
       try {
@@ -153,16 +229,9 @@ export default function JudgesPage() {
         }
 
         setJudge(judgeData)
+        setJudgeName(judgeData.name || judgeData.email || "")
 
-        // Load total investment fund from Supabase admin_settings
-        const { data: fundSetting } = await supabase
-          .from("admin_settings")
-          .select("setting_value")
-          .eq("setting_key", "investment_fund")
-          .single()
-        
-        const totalFund = fundSetting?.setting_value ? parseFloat(fundSetting.setting_value) : 10000
-        setTotalInvestmentFund(totalFund)
+        setTotalInvestmentFund(POINTS_PER_JUDGE)
 
         // Load rooms data for room name mapping
         const { data: roomsSetting } = await supabase
@@ -196,9 +265,8 @@ export default function JudgesPage() {
           const count = judgesCount || 0
           setTotalJudgesCount(count)
 
-          // Calculate per-judge allocation (equal distribution)
-          const allocation = count > 0 ? totalFund / count : 0
-          setJudgeAllocation(allocation)
+          // Each judge gets a fixed point budget.
+          setJudgeAllocation(POINTS_PER_JUDGE)
 
         }
 
@@ -416,7 +484,7 @@ export default function JudgesPage() {
             const investment = investmentsMap[submission.id] || 0
             let status = "Pending"
             if (investment > 0) {
-              status = "Invested"
+              status = "Scored"
             } else if (scheduleSlots.length > 0) {
               status = "Under Review"
             }
@@ -500,8 +568,8 @@ export default function JudgesPage() {
     // Check if investment exceeds judge's allocation
     if (currentTotal > judgeAllocation) {
       const remaining = judgeAllocation - (currentTotal - investment)
-      toast.error("Investment limit exceeded", {
-        description: `You have $${remaining.toFixed(2)} remaining of your $${judgeAllocation.toLocaleString()} allocation.`,
+      toast.error("Point limit exceeded", {
+        description: `You have ${remaining.toFixed(2)} points remaining of your ${judgeAllocation.toLocaleString()}-point allocation.`,
       })
       return
     }
@@ -553,7 +621,7 @@ export default function JudgesPage() {
           return {
             ...entry,
             investment: investment.toString(),
-            status: investment > 0 ? "Invested" : "Under Review",
+            status: investment > 0 ? "Scored" : "Under Review",
           }
         }
         return entry
@@ -562,7 +630,7 @@ export default function JudgesPage() {
       setEditingInvestment(null)
       setInvestmentInput("")
     } catch (error) {
-      toast.error("Failed to save investment", {
+      toast.error("Failed to save points", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
     }
@@ -575,9 +643,6 @@ export default function JudgesPage() {
 
   // Open notes dialog (optionally with a project pre-selected, e.g. from table row)
   const openNotesDialog = React.useCallback((preSelectSubmissionId?: string) => {
-    setNotesDialogJudgeId(selectedJudgeId)
-    setOtherJudgeProjects([])
-    setOtherJudgeNotesMap({})
     const sid = preSelectSubmissionId ?? submissions[0]?.id ?? ""
     setNotesDialogSubmissionId(sid)
     setNotesDialogText(sid ? (notesMap[sid] ?? "") : "")
@@ -585,70 +650,9 @@ export default function JudgesPage() {
     setNotesDialogProjectSearch(projectName)
     setNotesDialogTab(preSelectSubmissionId ? "edit" : "view")
     setIsNotesDialogOpen(true)
-  }, [selectedJudgeId, submissions, notesMap])
+  }, [submissions, notesMap])
 
-  // When dialog shows another judge and their projects have loaded, pre-select first project if none selected
-  React.useEffect(() => {
-    if (notesDialogJudgeId !== selectedJudgeId && otherJudgeProjects.length > 0 && !notesDialogSubmissionId) {
-      const first = otherJudgeProjects[0]
-      setNotesDialogSubmissionId(first.id)
-      setNotesDialogProjectSearch(first.project_name)
-      setNotesDialogText(otherJudgeNotesMap[first.id] ?? "")
-    }
-  }, [notesDialogJudgeId, selectedJudgeId, otherJudgeProjects, otherJudgeNotesMap, notesDialogSubmissionId])
-
-  // When dialog is open and shows another judge, fetch their assigned projects and notes
-  React.useEffect(() => {
-    if (!isNotesDialogOpen || !notesDialogJudgeId || notesDialogJudgeId === selectedJudgeId) {
-      if (notesDialogJudgeId === selectedJudgeId) {
-        setOtherJudgeProjects([])
-        setOtherJudgeNotesMap({})
-      }
-      return
-    }
-    let cancelled = false
-    const run = async () => {
-      const judgeId = notesDialogJudgeId
-      const judgeIdStr = String(judgeId).toLowerCase()
-      const [
-        { data: assignmentData },
-        { data: notesData },
-        { data: calendarSlotsData },
-      ] = await Promise.all([
-        supabase.from("judge_project_assignments").select("submission_id").eq("judge_id", judgeId),
-        supabase.from("judge_notes").select("submission_id, notes").eq("judge_id", judgeId),
-        supabase.from("calendar_schedule_slots").select("submission_id, judge_ids"),
-      ])
-      if (cancelled || notesDialogJudgeId !== judgeId) return
-      const fromCalendar = (calendarSlotsData ?? []).filter((slot: { judge_ids?: string[] }) => {
-        const ids = slot.judge_ids ?? []
-        return ids.some((id: string) => String(id).toLowerCase() === judgeIdStr)
-      }).map((slot: { submission_id: string }) => slot.submission_id)
-      const fromAssignments = (assignmentData ?? []).map((r: { submission_id: string }) => r.submission_id)
-      const submissionIds = Array.from(new Set([...fromCalendar, ...fromAssignments]))
-      const notes: Record<string, string> = {}
-      ;(notesData ?? []).forEach((row: { submission_id: string; notes: string | null }) => {
-        notes[row.submission_id] = row.notes ?? ""
-      })
-      setOtherJudgeNotesMap(notes)
-      if (submissionIds.length === 0) {
-        setOtherJudgeProjects([])
-        return
-      }
-      const { data: subs } = await supabase
-        .from("submissions")
-        .select("id, project_name")
-        .in("id", submissionIds)
-      if (cancelled || notesDialogJudgeId !== judgeId) return
-      setOtherJudgeProjects((subs ?? []).map((s: { id: string; project_name: string }) => ({ id: s.id, project_name: s.project_name })))
-    }
-    void run()
-    return () => { cancelled = true }
-  }, [isNotesDialogOpen, notesDialogJudgeId, selectedJudgeId])
-
-  const notesDialogProjects = notesDialogJudgeId === selectedJudgeId
-    ? submissions.map(s => ({ id: s.id, project_name: s.project_name }))
-    : otherJudgeProjects
+  const notesDialogProjects = submissions.map(s => ({ id: s.id, project_name: s.project_name }))
 
   const projectAutocompleteMatches = React.useMemo(() => {
     const q = notesDialogProjectSearch.trim().toLowerCase()
@@ -667,12 +671,10 @@ export default function JudgesPage() {
   const selectProjectFromAutocomplete = React.useCallback((p: { id: string; project_name: string }) => {
     setNotesDialogSubmissionId(p.id)
     setNotesDialogProjectSearch(p.project_name)
-    const text = notesDialogJudgeId === selectedJudgeId
-      ? (notesMap[p.id] ?? "")
-      : (otherJudgeNotesMap[p.id] ?? "")
+    const text = notesMap[p.id] ?? ""
     setNotesDialogText(text)
     setProjectAutocompleteOpen(false)
-  }, [notesDialogJudgeId, selectedJudgeId, notesMap, otherJudgeNotesMap])
+  }, [notesMap])
 
   const matchProjectFromSearch = React.useCallback(() => {
     const q = notesDialogProjectSearch.trim().toLowerCase()
@@ -686,35 +688,29 @@ export default function JudgesPage() {
     if (matches.length === 1) {
       setNotesDialogSubmissionId(matches[0].id)
       setNotesDialogProjectSearch(matches[0].project_name)
-      const text = notesDialogJudgeId === selectedJudgeId
-        ? (notesMap[matches[0].id] ?? "")
-        : (otherJudgeNotesMap[matches[0].id] ?? "")
+      const text = notesMap[matches[0].id] ?? ""
       setNotesDialogText(text)
     } else if (matches.length > 1) {
       const exact = matches.find((p) => p.project_name.toLowerCase() === q)
       if (exact) {
         setNotesDialogSubmissionId(exact.id)
         setNotesDialogProjectSearch(exact.project_name)
-        const text = notesDialogJudgeId === selectedJudgeId
-          ? (notesMap[exact.id] ?? "")
-          : (otherJudgeNotesMap[exact.id] ?? "")
+        const text = notesMap[exact.id] ?? ""
         setNotesDialogText(text)
       } else {
         setNotesDialogSubmissionId(matches[0].id)
         setNotesDialogProjectSearch(matches[0].project_name)
-        const text = notesDialogJudgeId === selectedJudgeId
-          ? (notesMap[matches[0].id] ?? "")
-          : (otherJudgeNotesMap[matches[0].id] ?? "")
+        const text = notesMap[matches[0].id] ?? ""
         setNotesDialogText(text)
       }
     } else {
       setNotesDialogSubmissionId("")
     }
-  }, [notesDialogProjectSearch, notesDialogProjects, notesDialogJudgeId, selectedJudgeId, notesMap, otherJudgeNotesMap])
+  }, [notesDialogProjectSearch, notesDialogProjects, notesMap])
 
   const handleSaveNote = async () => {
-    if (!notesDialogJudgeId || !notesDialogSubmissionId) {
-      toast.error("Select a judge and project")
+    if (!judge?.id || !notesDialogSubmissionId) {
+      toast.error("Select a project")
       return
     }
     setNotesDialogSaving(true)
@@ -722,17 +718,13 @@ export default function JudgesPage() {
       const { error } = await supabase
         .from("judge_notes")
         .upsert({
-          judge_id: notesDialogJudgeId,
+          judge_id: judge.id,
           submission_id: notesDialogSubmissionId,
           notes: notesDialogText.trim() || null,
           updated_at: new Date().toISOString(),
         }, { onConflict: "judge_id,submission_id" })
       if (error) throw error
-      if (notesDialogJudgeId === selectedJudgeId) {
-        setNotesMap(prev => ({ ...prev, [notesDialogSubmissionId]: notesDialogText.trim() }))
-      } else {
-        setOtherJudgeNotesMap(prev => ({ ...prev, [notesDialogSubmissionId]: notesDialogText.trim() }))
-      }
+      setNotesMap(prev => ({ ...prev, [notesDialogSubmissionId]: notesDialogText.trim() }))
       toast.success("Notes saved")
       setNotesDialogSubmissionId("")
       setNotesDialogText("")
@@ -765,39 +757,64 @@ export default function JudgesPage() {
                     <CardHeader>
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <CardTitle>
-                            {loadingJudgesList
-                              ? "Loading..."
-                              : judgesList.length === 0
-                                ? "No judges"
-                                : "Judge dashboard"}
-                          </CardTitle>
+                          <CardTitle>{loadingJudgeIdentity ? "Loading..." : "Judge dashboard"}</CardTitle>
                           <CardDescription>
-                            {judgesList.length > 0
-                              ? "Select a judge to view and allocate funding to assigned submissions"
-                              : "No judges have been added yet."}
+                            {canBrowseAllJudges
+                              ? "Superadmin view: review each judge and confirm assignment coverage."
+                              : judgeName
+                                ? `Signed in as ${judgeName}. You can only view your assigned submissions.`
+                                : "No judge profile was found for your account."}
                           </CardDescription>
                         </div>
-                        {judgesList.length > 0 && (
+                        {(selectedJudgeId || canBrowseAllJudges) && (
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                            <div className="space-y-2">
-                              <Label htmlFor="judge-select" className="text-xs text-muted-foreground">Judge</Label>
-                              <Select
-                                value={selectedJudgeId ?? ""}
-                                onValueChange={(value) => setSelectedJudgeId(value)}
-                              >
-                                <SelectTrigger id="judge-select" className="w-full min-w-[180px] sm:w-[200px]">
-                                  <SelectValue placeholder="Select a judge" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {judgesList.map((j) => (
-                                    <SelectItem key={j.id} value={j.id}>
-                                      {j.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                            {canBrowseAllJudges && (
+                              <>
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-muted-foreground">Assignment</Label>
+                                  <Select
+                                    value={judgeAssignmentFilter}
+                                    onValueChange={(value) =>
+                                      setJudgeAssignmentFilter(value as "all" | "assigned" | "unassigned")
+                                    }
+                                  >
+                                    <SelectTrigger className="w-[160px]">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="all">All judges</SelectItem>
+                                      <SelectItem value="assigned">Assigned only</SelectItem>
+                                      <SelectItem value="unassigned">Unassigned only</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-muted-foreground">Judge</Label>
+                                  <Select
+                                    value={selectedJudgeId ?? ""}
+                                    onValueChange={(value) => setSelectedJudgeId(value)}
+                                    disabled={filteredJudgesDirectory.length === 0}
+                                  >
+                                    <SelectTrigger className="w-[240px]">
+                                      <SelectValue
+                                        placeholder={
+                                          filteredJudgesDirectory.length === 0
+                                            ? "No matching judges"
+                                            : "Select a judge"
+                                        }
+                                      />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {filteredJudgesDirectory.map((judgeRow) => (
+                                        <SelectItem key={judgeRow.id} value={judgeRow.id}>
+                                          {judgeRow.name} ({judgeRow.assignedProjects})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -823,31 +840,33 @@ export default function JudgesPage() {
                       {!judge ? (
                         selectedJudgeId && loading ? (
                           <p className="text-sm text-muted-foreground">Loading judge data...</p>
-                        ) : judgesList.length > 0 && selectedJudgeId ? (
+                        ) : selectedJudgeId ? (
                           <p className="text-sm text-muted-foreground">No judge data found.</p>
+                        ) : canBrowseAllJudges ? (
+                          <p className="text-sm text-muted-foreground">No judges match the selected assignment filter.</p>
                         ) : null
                       ) : (
                       <div className="grid gap-4 md:grid-cols-4">
                         <div>
                           <Label className="text-muted-foreground">Your Allocation</Label>
                           <p className="text-2xl font-bold">
-                            $<NumberTicker value={judgeAllocation} />
+                            <NumberTicker value={judgeAllocation} /> pts
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            of $<NumberTicker value={totalInvestmentFund} /> total
+                            of <NumberTicker value={totalInvestmentFund} /> points total
                           </p>
                         </div>
                         <div>
-                          <Label className="text-muted-foreground">Total Invested</Label>
+                          <Label className="text-muted-foreground">Points Used</Label>
                           <p className="text-2xl font-bold">
-                            $<NumberTicker value={judge.totalInvested} />
+                            <NumberTicker value={judge.totalInvested} /> pts
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             {(judgeAllocation - judge.totalInvested) >= 0 ? (
-                              <>$<NumberTicker value={judgeAllocation - judge.totalInvested} decimalPlaces={2} /> remaining</>
+                              <><NumberTicker value={judgeAllocation - judge.totalInvested} decimalPlaces={2} /> points remaining</>
                             ) : (
                               <span className="text-destructive">
-                                $<NumberTicker value={Math.abs(judgeAllocation - judge.totalInvested)} decimalPlaces={2} /> over
+                                <NumberTicker value={Math.abs(judgeAllocation - judge.totalInvested)} decimalPlaces={2} /> points over
                               </span>
                             )}
                           </p>
@@ -897,7 +916,7 @@ export default function JudgesPage() {
                               return {
                                 ...e,
                                 investment: investment.toString(),
-                                status: investment > 0 ? "Invested" : "Under Review",
+                                status: investment > 0 ? "Scored" : "Under Review",
                               }
                             }
                             return e
@@ -931,10 +950,8 @@ export default function JudgesPage() {
             </TabsList>
             <TabsContent value="view" className="mt-3">
               {(() => {
-                const map = notesDialogJudgeId === selectedJudgeId ? notesMap : otherJudgeNotesMap
-                const projects = notesDialogJudgeId === selectedJudgeId
-                  ? submissions
-                  : otherJudgeProjects.map(p => ({ id: p.id, project_name: p.project_name }))
+                const map = notesMap
+                const projects = submissions
                 const nameById = Object.fromEntries(projects.map(p => [p.id, p.project_name]))
                 const entries = Object.entries(map)
                   .filter(([, text]) => text?.trim())
@@ -982,32 +999,7 @@ export default function JudgesPage() {
               <div className="grid gap-4 py-2">
                 <div className="space-y-2">
                   <Label>Judge</Label>
-                  <Select
-                    value={notesDialogJudgeId ?? ""}
-                  onValueChange={(value) => {
-                    setNotesDialogJudgeId(value)
-                    const projects = value === selectedJudgeId
-                      ? submissions.map(s => ({ id: s.id, project_name: s.project_name }))
-                      : otherJudgeProjects
-                    const firstId = projects[0]?.id ?? ""
-                    const firstName = projects[0]?.project_name ?? ""
-                    setNotesDialogSubmissionId(firstId)
-                    setNotesDialogProjectSearch(firstName)
-                    const text = value === selectedJudgeId
-                      ? (notesMap[firstId] ?? "")
-                      : (otherJudgeNotesMap[firstId] ?? "")
-                    setNotesDialogText(text)
-                  }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select judge" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {judgesList.map((j) => (
-                        <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="rounded-md border px-3 py-2 text-sm">{judgeName || "Current judge"}</div>
                 </div>
                 <div className="space-y-2">
                   <Label>Project ({notesDialogProjects.length} assigned)</Label>
@@ -1099,7 +1091,7 @@ export default function JudgesPage() {
                 <Button variant="outline" onClick={() => setIsNotesDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleSaveNote} disabled={notesDialogSaving || !notesDialogJudgeId || !notesDialogSubmissionId}>
+                <Button onClick={handleSaveNote} disabled={notesDialogSaving || !judge?.id || !notesDialogSubmissionId}>
                   {notesDialogSaving ? "Saving…" : "Save"}
                 </Button>
               </DialogFooter>
