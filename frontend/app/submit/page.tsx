@@ -232,7 +232,7 @@ export default function SubmitPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>Judging Schedule</CardTitle>
                 <CardDescription>
@@ -267,14 +267,14 @@ export default function SubmitPage() {
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {dateSlots.map((slot) => (
-                        <div key={slot.id} className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                        <div key={slot.id} className="flex flex-col gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-1">
-                            <p className="font-medium">{submissionNames.get(slot.submission_id) ?? "Untitled Project"}</p>
+                            <p className="break-words font-medium">{submissionNames.get(slot.submission_id) ?? "Untitled Project"}</p>
                             <p className="text-xs text-muted-foreground">
                               {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
                             </p>
                           </div>
-                          <Badge variant="outline">{roomsById.get(slot.room_id)?.name ?? `Room ${slot.room_id}`}</Badge>
+                          <Badge variant="outline" className="self-start sm:self-auto">{roomsById.get(slot.room_id)?.name ?? `Room ${slot.room_id}`}</Badge>
                         </div>
                       ))}
                     </CardContent>
@@ -288,4 +288,3 @@ export default function SubmitPage() {
     </div>
   )
 }
-

@@ -393,8 +393,8 @@ export function JudgesDataTable({
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border">
-        <Table>
+      <div className="rounded-lg border overflow-x-auto">
+        <Table className="min-w-[760px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -445,12 +445,12 @@ export function JudgesDataTable({
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between px-2">
+      <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1 text-sm text-muted-foreground">
           {table.getFilteredRowModel().rows.length} submission(s)
         </div>
-        <div className="flex items-center space-x-6 lg:space-x-8">
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-6 lg:gap-8">
+          <div className="flex items-center gap-2">
             <p className="text-sm font-medium">Rows per page</p>
             <select
               value={table.getState().pagination.pageSize}
@@ -466,11 +466,11 @@ export function JudgesDataTable({
               ))}
             </select>
           </div>
-          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+          <div className="flex min-w-[100px] items-center justify-center text-sm font-medium">
             Page {table.getState().pagination.pageIndex + 1} of{" "}
             {table.getPageCount()}
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               className="hidden h-8 w-8 p-0 lg:flex"

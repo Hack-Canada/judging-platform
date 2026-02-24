@@ -52,7 +52,7 @@ export default function JudgeLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-screen items-center justify-center p-4 sm:p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Judge/Sponsor Login</CardTitle>
@@ -66,7 +66,7 @@ export default function JudgeLoginPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pin">PIN Code</Label>
-              <Input id="pin" type="password" value={pin} onChange={(e) => setPin(e.target.value)} required />
+              <Input id="pin" type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} required />
             </div>
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Signing in..." : "Sign In"}
