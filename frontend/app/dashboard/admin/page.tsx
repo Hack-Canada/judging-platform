@@ -60,10 +60,6 @@ import {
 export default function AdminPage() {
   const POINTS_PER_JUDGE = 20
   const TARGET_JUDGES_PER_PROJECT = 3
-  const DEFAULT_SEEDED_JUDGES = [
-    { name: "Priya Sharma", email: "priya.sharma@hackcanada.com", pin: "1234" },
-    { name: "Marcus Chen", email: "marcus.chen@hackcanada.com", pin: "1234" },
-  ] as const
   const [investmentFund, setInvestmentFund] = React.useState(String(POINTS_PER_JUDGE))
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
@@ -759,124 +755,6 @@ export default function AdminPage() {
     const result = await response.json()
     if (!response.ok) {
       throw new Error(result.error || "Failed to configure judge login")
-    }
-  }
-
-  const upsertJudgeByEmail = async (entry: { name: string; email: string; tracks: string[] }) => {
-    const { data: existingJudge, error: selectError } = await supabase
-      .from("judges")
-      .select("id")
-      .ilike("email", entry.email)
-      .maybeSingle()
-
-    if (selectError) throw selectError
-
-    if (existingJudge?.id) {
-      const { error } = await supabase
-        .from("judges")
-        .update({
-          name: entry.name,
-          email: entry.email,
-          tracks: entry.tracks,
-        })
-        .eq("id", existingJudge.id)
-      if (error) throw error
-      return
-    }
-
-    const { error } = await supabase.from("judges").insert({
-      name: entry.name,
-      email: entry.email,
-      tracks: entry.tracks,
-      assigned_projects: 0,
-      total_invested: 0,
-    })
-    if (error) throw error
-  }
-
-  const handleSeedDefaultJudges = async () => {
-    try {
-      for (const seededJudge of DEFAULT_SEEDED_JUDGES) {
-        await upsertJudgeByEmail({
-          name: seededJudge.name,
-          email: seededJudge.email,
-          tracks: ["General"],
-        })
-        await syncJudgeAuthPin({
-          name: seededJudge.name,
-          email: seededJudge.email,
-          pin: seededJudge.pin,
-        })
-      }
-
-      const seededEmails = DEFAULT_SEEDED_JUDGES.map((judge) => judge.email.toLowerCase())
-      const { data: seededJudgeRows, error: seededJudgesError } = await supabase
-        .from("judges")
-        .select("id, email")
-      if (seededJudgesError) throw seededJudgesError
-
-      const seededJudgeIds = (seededJudgeRows ?? [])
-        .filter((row: { id: string; email: string }) => seededEmails.includes(String(row.email).toLowerCase()))
-        .map((row: { id: string }) => String(row.id))
-
-      if (seededJudgeIds.length > 0) {
-        const { data: existingAssignments, error: assignmentsError } = await supabase
-          .from("judge_project_assignments")
-          .select("judge_id")
-          .in("judge_id", seededJudgeIds)
-        if (assignmentsError) throw assignmentsError
-
-        const countsByJudge = new Map<string, number>()
-        seededJudgeIds.forEach((judgeId) => countsByJudge.set(judgeId, 0))
-        ;(existingAssignments ?? []).forEach((row: { judge_id: string }) => {
-          const judgeId = String(row.judge_id)
-          countsByJudge.set(judgeId, (countsByJudge.get(judgeId) ?? 0) + 1)
-        })
-
-        const judgesNeedingAssignments = seededJudgeIds.filter((judgeId) => (countsByJudge.get(judgeId) ?? 0) === 0)
-        if (judgesNeedingAssignments.length > 0) {
-          const { data: recentSubmissions, error: recentSubmissionsError } = await supabase
-            .from("submissions")
-            .select("id")
-            .order("submitted_at", { ascending: false })
-            .limit(60)
-          if (recentSubmissionsError) throw recentSubmissionsError
-
-          const assignmentRows: { judge_id: string; submission_id: string }[] = []
-          const submissions = (recentSubmissions ?? []) as { id: string }[]
-          submissions.forEach((submission, index) => {
-            const judgeId = judgesNeedingAssignments[index % judgesNeedingAssignments.length]
-            assignmentRows.push({
-              judge_id: judgeId,
-              submission_id: submission.id,
-            })
-          })
-
-          if (assignmentRows.length > 0) {
-            const { error: insertAssignmentsError } = await supabase
-              .from("judge_project_assignments")
-              .upsert(assignmentRows, { onConflict: "judge_id,submission_id" })
-            if (insertAssignmentsError) throw insertAssignmentsError
-
-            for (const judgeId of judgesNeedingAssignments) {
-              const judgeCount = assignmentRows.filter((row) => row.judge_id === judgeId).length
-              await supabase
-                .from("judges")
-                .update({ assigned_projects: judgeCount })
-                .eq("id", judgeId)
-            }
-          }
-        }
-      }
-
-      await loadJudgesFromSupabase()
-      toast.success("Default judges ready", {
-        description: "Priya Sharma and Marcus Chen were added/updated with PIN 1234 and assignment coverage.",
-      })
-    } catch (error) {
-      toast.error("Failed to seed default judges", {
-        description: error instanceof Error ? error.message : "Unknown error",
-      })
     }
   }
 
@@ -1760,15 +1638,10 @@ export default function AdminPage() {
                             Manage judges, reset manual PIN login, and track point allocations
                           </CardDescription>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" onClick={handleSeedDefaultJudges} size="sm">
-                            Seed Priya + Marcus
-                          </Button>
-                          <Button onClick={() => handleOpenJudgeDialog()} size="sm">
-                            <IconPlus className="mr-2 h-4 w-4" />
-                            Add Judge
-                          </Button>
-                        </div>
+                        <Button onClick={() => handleOpenJudgeDialog()} size="sm">
+                          <IconPlus className="mr-2 h-4 w-4" />
+                          Add Judge
+                        </Button>
                       </div>
                     </CardHeader>
                     <CardContent>
