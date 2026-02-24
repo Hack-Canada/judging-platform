@@ -30,7 +30,7 @@ export default function Home() {
             Submission
           </a>
           {scheduleVisible ? (
-            <a href="/submit" className="block rounded-md border px-4 py-3 text-sm hover:bg-muted/40">
+            <a href="/schedule" className="block rounded-md border px-4 py-3 text-sm hover:bg-muted/40">
               Judging Schedule
             </a>
           ) : (

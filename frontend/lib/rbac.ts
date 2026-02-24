@@ -17,7 +17,16 @@ const DASHBOARD_ALLOWLIST: Record<AppRole, string[]> = {
   judge: ["/dashboard/judges"],
   sponsor: ["/dashboard/judges"],
   admin: ["/dashboard", "/dashboard/admin", "/dashboard/calendar", "/dashboard/submissions", "/dashboard/hacker-view"],
-  superadmin: ["/dashboard", "/dashboard/admin", "/dashboard/calendar", "/dashboard/submissions", "/dashboard/hacker-view", "/dashboard/roles"],
+  superadmin: [
+    "/dashboard",
+    "/dashboard/admin",
+    "/dashboard/calendar",
+    "/dashboard/submissions",
+    "/dashboard/hackers",
+    "/dashboard/hacker-view",
+    "/dashboard/judges",
+    "/dashboard/roles",
+  ],
 }
 
 export function isAppRole(value: string | undefined | null): value is AppRole {
@@ -46,4 +55,3 @@ export function getLoginRouteForPath(pathname: string): string {
   if (pathname.startsWith("/dashboard/judges")) return "/judge-login"
   return "/login"
 }
-

@@ -7,6 +7,8 @@ import {
   IconSettings,
   IconCalendar,
   IconFolder,
+  IconUser,
+  IconUsers,
   IconShield,
 } from "@tabler/icons-react"
 
@@ -27,9 +29,24 @@ import { getUserRole, isDashboardRouteAllowed } from "@/lib/rbac"
 const data = {
   navMain: [
     {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: IconSettings,
+    },
+    {
       title: "Judges View",
       url: "/dashboard/judges",
       icon: IconGavel,
+    },
+    {
+      title: "Hackers Submission",
+      url: "/dashboard/hackers",
+      icon: IconUsers,
+    },
+    {
+      title: "Hacker View",
+      url: "/dashboard/hacker-view",
+      icon: IconUser,
     },
     {
       title: "Submissions",

@@ -11,6 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -29,6 +36,7 @@ import { JudgesDataTable } from "@/components/judges-data-table"
 import type { DashboardEntry } from "@/lib/dashboard-entries-data"
 import { NumberTicker } from "@/components/ui/number-ticker"
 import { IconNotes } from "@tabler/icons-react"
+import { getUserRole, type AppRole } from "@/lib/rbac"
 
 
 type JudgeSubmission = {
@@ -51,8 +59,13 @@ type ScheduleSlotInfo = {
 const POINTS_PER_JUDGE = 20
 
 export default function JudgesPage() {
+  const [currentRole, setCurrentRole] = React.useState<AppRole | null>(null)
   const [judgeName, setJudgeName] = React.useState<string>("")
   const [selectedJudgeId, setSelectedJudgeId] = React.useState<string | null>(null)
+  const [judgesDirectory, setJudgesDirectory] = React.useState<
+    { id: string; name: string; email: string; assignedProjects: number }[]
+  >([])
+  const [judgeAssignmentFilter, setJudgeAssignmentFilter] = React.useState<"all" | "assigned" | "unassigned">("all")
   const [judge, setJudge] = React.useState<Judge | null>(null)
   const [submissions, setSubmissions] = React.useState<JudgeSubmission[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -89,6 +102,17 @@ export default function JudgesPage() {
   const [notesDialogProjectSearch, setNotesDialogProjectSearch] = React.useState("")
   const [projectAutocompleteOpen, setProjectAutocompleteOpen] = React.useState(false)
   const [projectAutocompleteHighlight, setProjectAutocompleteHighlight] = React.useState(0)
+  const canBrowseAllJudges = currentRole === "superadmin"
+
+  const filteredJudgesDirectory = React.useMemo(() => {
+    if (judgeAssignmentFilter === "assigned") {
+      return judgesDirectory.filter((judgeRow) => judgeRow.assignedProjects > 0)
+    }
+    if (judgeAssignmentFilter === "unassigned") {
+      return judgesDirectory.filter((judgeRow) => judgeRow.assignedProjects <= 0)
+    }
+    return judgesDirectory
+  }, [judgeAssignmentFilter, judgesDirectory])
 
   // Resolve current judge strictly by authenticated email.
   React.useEffect(() => {
@@ -98,6 +122,33 @@ export default function JudgesPage() {
         const {
           data: { session },
         } = await supabase.auth.getSession()
+        const role = session?.user ? getUserRole(session.user) : null
+        setCurrentRole(role)
+
+        if (role === "superadmin") {
+          const { data: allJudges, error: allJudgesError } = await supabase
+            .from("judges")
+            .select("id, name, email, assigned_projects")
+            .order("name", { ascending: true })
+          if (allJudgesError) throw allJudgesError
+
+          const mapped = ((allJudges as any[]) ?? []).map((row) => ({
+            id: String(row.id),
+            name: row.name ?? "Unnamed Judge",
+            email: row.email ?? "",
+            assignedProjects: Number(row.assigned_projects ?? 0),
+          }))
+          setJudgesDirectory(mapped)
+          if (mapped.length === 0) {
+            setSelectedJudgeId(null)
+            setJudgeName("")
+            return
+          }
+          setSelectedJudgeId((prev) => (prev && mapped.some((j) => j.id === prev) ? prev : mapped[0].id))
+          setJudgeName(mapped[0].name)
+          return
+        }
+
         const userEmail = session?.user?.email?.trim()
         if (!userEmail) {
           setSelectedJudgeId(null)
@@ -133,7 +184,23 @@ export default function JudgesPage() {
   }, [])
 
   React.useEffect(() => {
-    if (!selectedJudgeId) return
+    if (!canBrowseAllJudges) return
+    if (filteredJudgesDirectory.length === 0) {
+      setSelectedJudgeId(null)
+      return
+    }
+    if (!selectedJudgeId || !filteredJudgesDirectory.some((judgeRow) => judgeRow.id === selectedJudgeId)) {
+      setSelectedJudgeId(filteredJudgesDirectory[0].id)
+    }
+  }, [canBrowseAllJudges, filteredJudgesDirectory, selectedJudgeId])
+
+  React.useEffect(() => {
+    if (!selectedJudgeId) {
+      setJudge(null)
+      setSubmissions([])
+      setDashboardEntries([])
+      return
+    }
 
     const loadJudgeData = async () => {
       try {
@@ -162,6 +229,7 @@ export default function JudgesPage() {
         }
 
         setJudge(judgeData)
+        setJudgeName(judgeData.name || judgeData.email || "")
 
         setTotalInvestmentFund(POINTS_PER_JUDGE)
 
@@ -691,13 +759,62 @@ export default function JudgesPage() {
                         <div>
                           <CardTitle>{loadingJudgeIdentity ? "Loading..." : "Judge dashboard"}</CardTitle>
                           <CardDescription>
-                            {judgeName
-                              ? `Signed in as ${judgeName}. You can only view your assigned submissions.`
-                              : "No judge profile was found for your account."}
+                            {canBrowseAllJudges
+                              ? "Superadmin view: review each judge and confirm assignment coverage."
+                              : judgeName
+                                ? `Signed in as ${judgeName}. You can only view your assigned submissions.`
+                                : "No judge profile was found for your account."}
                           </CardDescription>
                         </div>
-                        {selectedJudgeId && (
+                        {(selectedJudgeId || canBrowseAllJudges) && (
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                            {canBrowseAllJudges && (
+                              <>
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-muted-foreground">Assignment</Label>
+                                  <Select
+                                    value={judgeAssignmentFilter}
+                                    onValueChange={(value) =>
+                                      setJudgeAssignmentFilter(value as "all" | "assigned" | "unassigned")
+                                    }
+                                  >
+                                    <SelectTrigger className="w-[160px]">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="all">All judges</SelectItem>
+                                      <SelectItem value="assigned">Assigned only</SelectItem>
+                                      <SelectItem value="unassigned">Unassigned only</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs text-muted-foreground">Judge</Label>
+                                  <Select
+                                    value={selectedJudgeId ?? ""}
+                                    onValueChange={(value) => setSelectedJudgeId(value)}
+                                    disabled={filteredJudgesDirectory.length === 0}
+                                  >
+                                    <SelectTrigger className="w-[240px]">
+                                      <SelectValue
+                                        placeholder={
+                                          filteredJudgesDirectory.length === 0
+                                            ? "No matching judges"
+                                            : "Select a judge"
+                                        }
+                                      />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {filteredJudgesDirectory.map((judgeRow) => (
+                                        <SelectItem key={judgeRow.id} value={judgeRow.id}>
+                                          {judgeRow.name} ({judgeRow.assignedProjects})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -725,6 +842,8 @@ export default function JudgesPage() {
                           <p className="text-sm text-muted-foreground">Loading judge data...</p>
                         ) : selectedJudgeId ? (
                           <p className="text-sm text-muted-foreground">No judge data found.</p>
+                        ) : canBrowseAllJudges ? (
+                          <p className="text-sm text-muted-foreground">No judges match the selected assignment filter.</p>
                         ) : null
                       ) : (
                       <div className="grid gap-4 md:grid-cols-4">
