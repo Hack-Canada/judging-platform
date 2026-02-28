@@ -11,8 +11,10 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabase-client"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
+import { IconSearch } from "@tabler/icons-react"
 
 type SlotRow = {
   id: string
@@ -39,6 +41,8 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [scheduleVisible, setScheduleVisible] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
+  const [searchQuery, setSearchQuery] = React.useState("")
+  const [teamSelectOpen, setTeamSelectOpen] = React.useState(false)
   const [activeSubmissionId, setActiveSubmissionId] = React.useState<string | undefined>(undefined)
 
   const loadData = React.useCallback(async () => {
@@ -108,6 +112,25 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     return map
   }, [submissions])
 
+  const filteredSubmissions = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return submissions
+    return submissions.filter((sub) => {
+      const team = (sub.team_name ?? "").toLowerCase()
+      return team.includes(q)
+    })
+  }, [submissions, searchQuery])
+
+  React.useEffect(() => {
+    if (filteredSubmissions.length === 0) {
+      setActiveSubmissionId(undefined)
+      return
+    }
+    if (!activeSubmissionId || !filteredSubmissions.some((sub) => sub.id === activeSubmissionId)) {
+      setActiveSubmissionId(filteredSubmissions[0].id)
+    }
+  }, [filteredSubmissions, activeSubmissionId])
+
   const slotsForSelectedTeam = React.useMemo(() => {
     if (!activeSubmissionId) return []
     const projectSlots = slots
@@ -150,7 +173,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
             </div>
             <CardDescription>Timings are loaded from the published calendar schedule.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             {loading && submissions.length === 0 && slots.length === 0 ? (
               <p className="text-sm text-muted-foreground">Loading...</p>
             ) : !scheduleVisible ? (
@@ -163,32 +186,63 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
               <>
                 <div className="space-y-2">
                   <Label htmlFor="team-select">Team</Label>
-                  <Select value={activeSubmissionId ?? ""} onValueChange={(value) => setActiveSubmissionId(value)}>
-                    <SelectTrigger id="team-select" className="w-full max-w-sm">
-                      <SelectValue placeholder="Select a team to view their timings" />
+                  <Select
+                    value={activeSubmissionId ?? ""}
+                    onOpenChange={(open) => {
+                      setTeamSelectOpen(open)
+                      if (!open) setSearchQuery("")
+                    }}
+                    onValueChange={(value) => {
+                      setActiveSubmissionId(value)
+                      setSearchQuery("")
+                    }}
+                    disabled={filteredSubmissions.length === 0}
+                  >
+                    <SelectTrigger id="team-select" className="w-full max-w-md">
+                      <SelectValue
+                        placeholder={
+                          filteredSubmissions.length === 0
+                            ? "No matching teams"
+                            : "Select a team to view their timings"
+                        }
+                      />
                     </SelectTrigger>
-                    <SelectContent>
-                      {submissions.map((sub) => (
+                    <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)] max-h-[55vh] overflow-y-auto p-0 sm:max-h-[22rem]">
+                      {teamSelectOpen && (
+                        <div className="sticky top-0 z-10 border-b bg-popover/95 p-2 backdrop-blur-sm">
+                          <div className="relative">
+                            <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              placeholder="Search team name"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              onKeyDown={(e) => e.stopPropagation()}
+                              className="pl-8"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="px-2 pb-1 pt-2 text-xs text-muted-foreground">
+                        {filteredSubmissions.length} team{filteredSubmissions.length === 1 ? "" : "s"}
+                      </div>
+                      {filteredSubmissions.map((sub) => (
                         <SelectItem key={sub.id} value={sub.id}>
-                          {sub.team_name || sub.project_name || "Untitled"}
+                          <span className="truncate">{sub.team_name || "Unnamed Team"}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {activeSubmissionId && (
+                {activeSubmissionId && filteredSubmissions.length > 0 && (
                   <div className="space-y-3">
-                    <h3 className="text-sm font-semibold">
-                      {submissionsById.get(activeSubmissionId)?.teamName} - Judging times
-                    </h3>
                     {slotsForSelectedTeam.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No judging times scheduled yet for this team.</p>
                     ) : (
                       <div className="space-y-5">
                         {groupSlotsByDate.map(([date, dateSlots]) => (
-                          <div key={date} className="space-y-2">
-                            <p className="text-sm font-semibold">
+                          <div key={date} className="space-y-2.5">
+                            <p className="text-sm font-semibold tracking-tight">
                               {new Date(date).toLocaleDateString(undefined, {
                                 weekday: "short",
                                 year: "numeric",
@@ -196,16 +250,13 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                                 day: "numeric",
                               })}
                             </p>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               {dateSlots.map((slot) => {
                                 const room = roomsById.get(slot.room_id)
                                 return (
-                                  <div
-                                    key={slot.id}
-                                    className="flex items-center justify-between py-1 text-sm"
-                                  >
-                                    <p className="font-medium">{formatTimeRange(slot.start_time, slot.end_time)}</p>
-                                    <p className="text-xs text-muted-foreground">Room: {room?.name ?? `Room ${slot.room_id}`}</p>
+                                  <div key={slot.id} className="flex flex-col gap-1 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between">
+                                    <p className="font-medium tracking-tight">{formatTimeRange(slot.start_time, slot.end_time)}</p>
+                                    <p className="text-xs text-muted-foreground">{room?.name ?? `Room ${slot.room_id}`}</p>
                                   </div>
                                 )
                               })}
