@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { IconUsers, IconCurrencyDollar, IconTrendingUp, IconCoins, IconPlus, IconEdit, IconTrash, IconDotsVertical } from "@tabler/icons-react"
+import { IconUsers, IconCurrencyDollar, IconTrendingUp, IconCoins, IconPlus, IconEdit, IconTrash, IconDotsVertical, IconTrophy } from "@tabler/icons-react"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -58,6 +58,16 @@ import {
 
 
 export default function AdminPage() {
+  type LeaderboardEntry = {
+    submissionId: string
+    projectName: string
+    teamName: string
+    tracks: string[]
+    totalPoints: number
+    judgeCount: number
+    submittedAt: string | null
+  }
+
   const POINTS_PER_JUDGE = 20
   const TARGET_JUDGES_PER_PROJECT = 3
   const [investmentFund, setInvestmentFund] = React.useState(String(POINTS_PER_JUDGE))
@@ -94,6 +104,8 @@ export default function AdminPage() {
   // Hacker submissions state
   const [submissions, setSubmissions] = React.useState<any[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = React.useState(false)
+  const [leaderboard, setLeaderboard] = React.useState<LeaderboardEntry[]>([])
+  const [loadingLeaderboard, setLoadingLeaderboard] = React.useState(false)
   
   // Track if assignments have been modified and need saving
   const [assignmentsModified, setAssignmentsModified] = React.useState(false)
@@ -254,6 +266,65 @@ export default function AdminPage() {
 
     } catch (error) {
 
+    }
+  }, [])
+
+  const loadLeaderboard = React.useCallback(async () => {
+    try {
+      setLoadingLeaderboard(true)
+      const [{ data: submissionsData, error: submissionsError }, { data: investmentsData, error: investmentsError }] = await Promise.all([
+        supabase
+          .from("submissions")
+          .select("id, project_name, team_name, tracks, submitted_at"),
+        supabase
+          .from("judge_investments")
+          .select("submission_id, judge_id, amount"),
+      ])
+
+      if (submissionsError) throw submissionsError
+      if (investmentsError) throw investmentsError
+
+      const bySubmission = new Map<string, { totalPoints: number; judges: Set<string> }>()
+      ;(investmentsData || []).forEach((investment: any) => {
+        const amount = parseFloat(String(investment.amount || 0))
+        if (!Number.isFinite(amount)) return
+
+        const existing = bySubmission.get(investment.submission_id) || {
+          totalPoints: 0,
+          judges: new Set<string>(),
+        }
+        existing.totalPoints += amount
+        if (investment.judge_id) {
+          existing.judges.add(String(investment.judge_id))
+        }
+        bySubmission.set(investment.submission_id, existing)
+      })
+
+      const nextLeaderboard: LeaderboardEntry[] = (submissionsData || []).map((submission: any) => {
+        const pointsData = bySubmission.get(submission.id)
+        return {
+          submissionId: submission.id,
+          projectName: submission.project_name || "Untitled Project",
+          teamName: submission.team_name || "-",
+          tracks: Array.isArray(submission.tracks) ? submission.tracks : ["General"],
+          totalPoints: pointsData?.totalPoints || 0,
+          judgeCount: pointsData?.judges.size || 0,
+          submittedAt: submission.submitted_at || null,
+        }
+      })
+
+      nextLeaderboard.sort((a, b) => {
+        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints
+        return (a.submittedAt || "").localeCompare(b.submittedAt || "")
+      })
+
+      setLeaderboard(nextLeaderboard)
+    } catch (error) {
+      toast.error("Failed to load leaderboard", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setLoadingLeaderboard(false)
     }
   }, [])
 
@@ -533,6 +604,34 @@ export default function AdminPage() {
 
     void loadSubmissions()
   }, [isInitialized])
+
+  React.useEffect(() => {
+    if (!isInitialized) return
+
+    void loadLeaderboard()
+
+    const channel = supabase
+      .channel("admin-live-leaderboard")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "judge_investments" },
+        () => {
+          void loadLeaderboard()
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "submissions" },
+        () => {
+          void loadLeaderboard()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [isInitialized, loadLeaderboard])
 
   const loadJudgesFromSupabase = async () => {
 
@@ -1345,7 +1444,7 @@ export default function AdminPage() {
   // Calculate stats
   const pointsPerJudge = parseFloat(investmentFund) || POINTS_PER_JUDGE
   const totalJudgesInvestment = judgesList.reduce((sum, judge) => sum + judge.totalInvested, 0)
-  const totalProjectsInvestment = projectsList.reduce((sum, project) => sum + project.totalInvestment, 0)
+  const totalProjectsInvestment = leaderboard.reduce((sum, project) => sum + project.totalPoints, 0)
   const totalPointsBudget = pointsPerJudge * judgesList.length
   const remainingFund = totalPointsBudget - totalJudgesInvestment
   const projectsWithSubmission = projectsList.filter((project) => Boolean((project as any).submissionId))
@@ -1441,6 +1540,75 @@ export default function AdminPage() {
                       </CardContent>
                     </Card>
                   </div>
+
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <IconTrophy className="h-5 w-5 text-amber-500" />
+                            Live Leaderboard
+                          </CardTitle>
+                          <CardDescription>
+                            Projects ranked by total points invested by judges.
+                          </CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => void loadLeaderboard()}>
+                          Refresh
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingLeaderboard ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Loading leaderboard...
+                        </div>
+                      ) : leaderboard.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No projects yet.
+                        </div>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[70px]">Rank</TableHead>
+                              <TableHead>Project</TableHead>
+                              <TableHead>Team</TableHead>
+                              <TableHead>Tracks</TableHead>
+                              <TableHead className="text-right">Points</TableHead>
+                              <TableHead className="text-right">Judges</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {leaderboard.slice(0, 10).map((entry, index) => (
+                              <TableRow key={entry.submissionId}>
+                                <TableCell>
+                                  <Badge variant={index < 3 ? "default" : "secondary"}>
+                                    #{index + 1}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-medium">{entry.projectName}</TableCell>
+                                <TableCell>{entry.teamName}</TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {entry.tracks.map((track) => (
+                                      <Badge key={`${entry.submissionId}-${track}`} variant="outline">{track}</Badge>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                  {entry.totalPoints.toLocaleString()} pts
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {entry.judgeCount}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </CardContent>
+                  </Card>
 
                   {/* Points Configuration */}
                   <Card className="mb-6">
