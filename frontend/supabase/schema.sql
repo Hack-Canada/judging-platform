@@ -75,3 +75,17 @@ CREATE TABLE public.submissions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT submissions_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.db_backups (
+  id             uuid                     NOT NULL DEFAULT gen_random_uuid(),
+  snapshot_at    timestamp with time zone NOT NULL DEFAULT now(),
+  triggered_by   text                     NOT NULL DEFAULT 'pg_cron',
+  judge_investments          jsonb,
+  judge_notes                jsonb,
+  judge_project_assignments  jsonb,
+  submissions                jsonb,
+  calendar_schedule_slots    jsonb,
+  row_counts     jsonb,
+  error_info     text,
+  CONSTRAINT db_backups_pkey PRIMARY KEY (id)
+);
+CREATE INDEX db_backups_snapshot_at_idx ON public.db_backups (snapshot_at DESC);

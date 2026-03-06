@@ -120,6 +120,17 @@ export default function AdminPage() {
   const [manualAssignmentDialogOpen, setManualAssignmentDialogOpen] = React.useState(false)
   const [manualProjectsList, setManualProjectsList] = React.useState<AdminProject[]>([])
 
+  // Backup state
+  type BackupSnapshot = {
+    id: string
+    snapshot_at: string
+    triggered_by: string
+    row_counts: Record<string, number> | null
+    error_info: string | null
+  }
+  const [backupSnapshots, setBackupSnapshots] = React.useState<BackupSnapshot[]>([])
+  const [backupLoading, setBackupLoading] = React.useState(false)
+
   // Room editing helpers
   const handleRoomChange = (id: number, updates: Partial<Room>) => {
     setRoomsList((prev) =>
@@ -639,6 +650,71 @@ export default function AdminPage() {
       void supabase.removeChannel(channel)
     }
   }, [isInitialized, loadLeaderboard])
+
+  // Backup helpers
+  const fetchBackupSnapshots = React.useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return
+    const res = await fetch("/api/admin/backup", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      const json = await res.json()
+      setBackupSnapshots(json.snapshots ?? [])
+    }
+  }, [])
+
+  const triggerBackupSnapshot = async () => {
+    setBackupLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error("Not authenticated")
+      const res = await fetch("/api/admin/backup/trigger", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error ?? "Unknown error")
+      }
+      toast.success("Backup snapshot created")
+      await fetchBackupSnapshots()
+    } catch (err) {
+      toast.error("Backup failed", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    } finally {
+      setBackupLoading(false)
+    }
+  }
+
+  const downloadBackupSnapshot = async (id: string, snapshotAt: string) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return
+    const res = await fetch(`/api/admin/backup?id=${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      toast.error("Failed to download snapshot")
+      return
+    }
+    const json = await res.json()
+    const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `backup-${snapshotAt.replace(/[:.]/g, "-")}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  React.useEffect(() => {
+    if (!isInitialized) return
+    void fetchBackupSnapshots()
+  }, [isInitialized, fetchBackupSnapshots])
 
   const loadJudgesFromSupabase = async () => {
 
@@ -2115,6 +2191,87 @@ export default function AdminPage() {
                                   {submission.submitted_at
                                     ? new Date(submission.submitted_at).toLocaleDateString()
                                     : "-"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Database Backups */}
+                  <Card className="mt-6">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle>Database Backups</CardTitle>
+                        <CardDescription>
+                          Automatic snapshots every 10 minutes via pg_cron. Download any snapshot as JSON.
+                        </CardDescription>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={triggerBackupSnapshot}
+                        disabled={backupLoading}
+                      >
+                        {backupLoading ? "Creating..." : "Take Snapshot Now"}
+                      </Button>
+                    </CardHeader>
+                    <CardContent>
+                      {backupSnapshots.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">
+                          No snapshots yet. Snapshots will appear here once pg_cron is configured or you take one manually.
+                        </p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Time</TableHead>
+                              <TableHead>Source</TableHead>
+                              <TableHead>Row Counts</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Download</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {backupSnapshots.slice(0, 10).map((snap) => (
+                              <TableRow key={snap.id}>
+                                <TableCell className="text-sm">
+                                  {new Date(snap.snapshot_at).toLocaleString()}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={snap.triggered_by === "pg_cron" ? "secondary" : "outline"}>
+                                    {snap.triggered_by}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {snap.row_counts ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {Object.entries(snap.row_counts).map(([table, count]) => (
+                                        <Badge key={table} variant="outline" className="text-xs font-normal">
+                                          {table.replace("judge_", "").replace("calendar_", "cal_")}: {count}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {snap.error_info ? (
+                                    <Badge variant="destructive">Partial</Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-green-700 bg-green-100">OK</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => downloadBackupSnapshot(snap.id, snap.snapshot_at)}
+                                  >
+                                    Download
+                                  </Button>
                                 </TableCell>
                               </TableRow>
                             ))}

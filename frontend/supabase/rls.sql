@@ -541,4 +541,34 @@ using (
   public.is_admin_or_superadmin()
 );
 
+-- ============================================================
+-- db_backups
+-- Contains full JSONB snapshots of all critical tables.
+-- Written exclusively by create_backup_snapshot() (SECURITY DEFINER)
+-- and the service-role API routes — both bypass RLS.
+-- Authenticated users may read and delete (for pruning) if admin/superadmin.
+-- No INSERT or UPDATE policies: direct writes from authenticated users are blocked.
+-- ============================================================
+
+alter table public.db_backups enable row level security;
+
+drop policy if exists "db_backups_admin_read" on public.db_backups;
+drop policy if exists "db_backups_admin_delete" on public.db_backups;
+
+create policy "db_backups_admin_read"
+on public.db_backups
+for select
+to authenticated
+using (
+  public.is_admin_or_superadmin()
+);
+
+create policy "db_backups_admin_delete"
+on public.db_backups
+for delete
+to authenticated
+using (
+  public.is_admin_or_superadmin()
+);
+
 commit;

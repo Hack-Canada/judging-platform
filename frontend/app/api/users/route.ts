@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { isAppRole } from "@/lib/rbac"
+import { requireSuperadmin } from "@/lib/api-auth"
 
 // This route requires the Supabase service role key for admin access
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  // Supabase admin credentials missing
-}
 
 // Create admin client with service role key
 const supabaseAdmin = supabaseUrl && supabaseServiceKey
@@ -19,46 +15,6 @@ const supabaseAdmin = supabaseUrl && supabaseServiceKey
       },
     })
   : null
-
-function getBearerToken(request: Request): string | null {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader) return null
-  if (!authHeader.toLowerCase().startsWith("bearer ")) return null
-  return authHeader.slice(7).trim() || null
-}
-
-async function requireSuperadmin(request: Request) {
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!supabaseUrl || !anonKey) {
-    return { ok: false as const, response: NextResponse.json({ error: "Supabase public credentials not configured" }, { status: 500 }) }
-  }
-
-  const token = getBearerToken(request)
-  if (!token) {
-    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
-  }
-
-  const supabaseUserClient = createClient(supabaseUrl, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-
-  const { data, error } = await supabaseUserClient.auth.getUser(token)
-  if (error || !data.user) {
-    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
-  }
-
-  const roleCandidate =
-    (data.user.user_metadata?.role as string | undefined) ??
-    (data.user.app_metadata?.role as string | undefined) ??
-    (data.user.user_metadata?.user_role as string | undefined)
-  const role = isAppRole(roleCandidate) ? roleCandidate : null
-
-  if (role !== "superadmin") {
-    return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
-  }
-
-  return { ok: true as const, user: data.user }
-}
 
 export async function GET(request: Request) {
   if (!supabaseAdmin) {
