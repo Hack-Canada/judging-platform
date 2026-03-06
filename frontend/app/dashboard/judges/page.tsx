@@ -80,7 +80,6 @@ export default function JudgesPage() {
   
   // Points allocation
   const [totalInvestmentFund, setTotalInvestmentFund] = React.useState(0)
-  const [totalJudgesCount, setTotalJudgesCount] = React.useState(0)
   const [judgeAllocation, setJudgeAllocation] = React.useState(0)
   
   // Schedule slots mapping (submission_id -> schedule info)
@@ -231,15 +230,19 @@ export default function JudgesPage() {
         setJudge(judgeData)
         setJudgeName(judgeData.name || judgeData.email || "")
 
-        setTotalInvestmentFund(POINTS_PER_JUDGE)
+        const [{ data: roomsSetting }, { data: pointsSetting }] = await Promise.all([
+          supabase
+            .from("admin_settings")
+            .select("setting_value")
+            .eq("setting_key", "rooms_data")
+            .single(),
+          supabase
+            .from("admin_settings")
+            .select("setting_value")
+            .eq("setting_key", "investment_fund")
+            .maybeSingle(),
+        ])
 
-        // Load rooms data for room name mapping
-        const { data: roomsSetting } = await supabase
-          .from("admin_settings")
-          .select("setting_value")
-          .eq("setting_key", "rooms_data")
-          .single()
-        
         if (roomsSetting?.setting_value) {
           try {
             const rooms = JSON.parse(roomsSetting.setting_value)
@@ -254,21 +257,11 @@ export default function JudgesPage() {
           }
         }
 
-        // Count total number of judges
-        const { count: judgesCount, error: countError } = await supabase
-          .from("judges")
-          .select("*", { count: "exact", head: true })
-
-        if (countError) {
-
-        } else {
-          const count = judgesCount || 0
-          setTotalJudgesCount(count)
-
-          // Each judge gets a fixed point budget.
-          setJudgeAllocation(POINTS_PER_JUDGE)
-
-        }
+        const parsedPoints = parseFloat(pointsSetting?.setting_value ?? "")
+        const pointsPerJudge =
+          Number.isFinite(parsedPoints) && parsedPoints > 0 ? parsedPoints : POINTS_PER_JUDGE
+        setTotalInvestmentFund(pointsPerJudge)
+        setJudgeAllocation(pointsPerJudge)
 
         // Load assigned submissions from BOTH sources:
         // 1) calendar_schedule_slots (when a schedule has been built/saved)
@@ -529,6 +522,64 @@ export default function JudgesPage() {
 
     void loadJudgeData()
   }, [selectedJudgeId, refreshKey])
+
+  React.useEffect(() => {
+    if (!selectedJudgeId) return
+
+    const channel = supabase
+      .channel(`judges-dashboard-live-${selectedJudgeId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "admin_settings",
+        },
+        () => {
+          setRefreshKey((k) => k + 1)
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "judges",
+          filter: `id=eq.${selectedJudgeId}`,
+        },
+        () => {
+          setRefreshKey((k) => k + 1)
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "judge_project_assignments",
+          filter: `judge_id=eq.${selectedJudgeId}`,
+        },
+        () => {
+          setRefreshKey((k) => k + 1)
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "calendar_schedule_slots",
+        },
+        () => {
+          setRefreshKey((k) => k + 1)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [selectedJudgeId])
 
   const handleInvestmentChange = (submissionId: string, value: string) => {
     setInvestmentInput(value)
