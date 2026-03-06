@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { SchedulePageSkeleton } from "@/components/schedule-page-skeleton"
 import {
   Select,
   SelectContent,
@@ -160,6 +161,10 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     return `${toHM(start)} - ${toHM(end)}`
   }
 
+  if (loading && submissions.length === 0 && slots.length === 0) {
+    return <SchedulePageSkeleton embedded={embedded} />
+  }
+
   return (
     <div className={embedded ? "px-4 lg:px-6" : "min-h-screen bg-background p-4 md:p-8"}>
       <div className="mx-auto max-w-4xl">
@@ -174,9 +179,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
             <CardDescription>Timings are loaded from the published calendar schedule.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            {loading && submissions.length === 0 && slots.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : !scheduleVisible ? (
+            {!scheduleVisible ? (
               <p className="text-sm text-muted-foreground">
                 Judging schedule is currently hidden by admins.
               </p>
@@ -207,7 +210,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                         }
                       />
                     </SelectTrigger>
-                    <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)] max-h-[55vh] overflow-y-auto p-0 sm:max-h-[22rem]">
+                    <SelectContent className="w-(--radix-select-trigger-width) min-w-(--radix-select-trigger-width) max-h-[55vh] overflow-y-auto p-0 sm:max-h-88">
                       {teamSelectOpen && (
                         <div className="sticky top-0 z-10 border-b bg-popover/95 p-2 backdrop-blur-sm">
                           <div className="relative">
