@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase-client"
+import { DashboardJudgesSkeleton } from "@/components/page-skeletons"
 import type { Judge } from "@/lib/judges-data"
 import { JudgesDataTable } from "@/components/judges-data-table"
 import type { DashboardEntry } from "@/lib/dashboard-entries-data"
@@ -112,6 +113,10 @@ export default function JudgesPage() {
     }
     return judgesDirectory
   }, [judgeAssignmentFilter, judgesDirectory])
+
+  if (loadingJudgeIdentity || (loading && !judge && dashboardEntries.length === 0 && selectedJudgeId !== null)) {
+    return <DashboardJudgesSkeleton />
+  }
 
   // Resolve current judge strictly by authenticated email.
   React.useEffect(() => {
@@ -808,7 +813,7 @@ export default function JudgesPage() {
                     <CardHeader>
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <CardTitle>{loadingJudgeIdentity ? "Loading..." : "Judge dashboard"}</CardTitle>
+                          <CardTitle>Judge dashboard</CardTitle>
                           <CardDescription>
                             {canBrowseAllJudges
                               ? "Superadmin view: review each judge and confirm assignment coverage."
@@ -889,9 +894,7 @@ export default function JudgesPage() {
                     </CardHeader>
                     <CardContent>
                       {!judge ? (
-                        selectedJudgeId && loading ? (
-                          <p className="text-sm text-muted-foreground">Loading judge data...</p>
-                        ) : selectedJudgeId ? (
+                        selectedJudgeId ? (
                           <p className="text-sm text-muted-foreground">No judge data found.</p>
                         ) : canBrowseAllJudges ? (
                           <p className="text-sm text-muted-foreground">No judges match the selected assignment filter.</p>
@@ -945,11 +948,7 @@ export default function JudgesPage() {
                 </div>
 
                 <div className="px-4 lg:px-6">
-                  {!judge ? null : loading ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Loading submissions...
-                    </div>
-                  ) : dashboardEntries.length === 0 ? (
+                  {!judge ? null : dashboardEntries.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       No submissions assigned yet. Please contact admin.
                     </div>

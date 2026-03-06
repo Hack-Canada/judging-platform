@@ -49,7 +49,9 @@ import type { Judge } from "@/lib/judges-data"
 import type { AdminProject } from "@/lib/admin-projects-data"
 import { defaultTracks, type Track } from "@/lib/tracks-data"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
+import { DashboardAdminSkeleton } from "@/components/page-skeletons"
 import { supabase } from "@/lib/supabase-client"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   autoAssignProjectsByTrack,
   buildScheduleWithMinimalRoomMoves,
@@ -374,6 +376,11 @@ export default function AdminPage() {
             const endTime = settingsMap.get("calendar_end_time")
             if (endTime) {
               setScheduleEndTime(endTime)
+            }
+
+            const selectedDate = settingsMap.get("calendar_selected_date")
+            if (selectedDate) {
+              setScheduleDate(selectedDate)
             }
 
             // Load scoring settings
@@ -766,6 +773,29 @@ export default function AdminPage() {
     } catch (error) {
 
       toast.error("Failed to save calendar settings", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    }
+  }
+
+  const persistSelectedCalendarDate = async (nextDate: string) => {
+    try {
+      const { error } = await supabase
+        .from("admin_settings")
+        .upsert(
+          {
+            setting_key: "calendar_selected_date",
+            setting_value: nextDate,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "setting_key" }
+        )
+
+      if (error) {
+        throw error
+      }
+    } catch (error) {
+      toast.error("Failed to save calendar date", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
     }
@@ -1350,6 +1380,7 @@ export default function AdminPage() {
           { setting_key: "calendar_judges_per_project", setting_value: String(TARGET_JUDGES_PER_PROJECT), updated_at: new Date().toISOString() },
           { setting_key: "calendar_start_time", setting_value: scheduleStartTime, updated_at: new Date().toISOString() },
           { setting_key: "calendar_end_time", setting_value: scheduleEndTime, updated_at: new Date().toISOString() },
+          { setting_key: "calendar_selected_date", setting_value: scheduleDate, updated_at: new Date().toISOString() },
         ],
         { onConflict: "setting_key" }
       )
@@ -1464,11 +1495,7 @@ export default function AdminPage() {
   }, [projectsList])
 
   if (!isInitialized) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    )
+    return <DashboardAdminSkeleton />
   }
 
   return (
@@ -1560,8 +1587,17 @@ export default function AdminPage() {
                     </CardHeader>
                     <CardContent>
                       {loadingLeaderboard ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          Loading leaderboard...
+                        <div className="space-y-3">
+                          {Array.from({ length: 5 }).map((_, index) => (
+                            <div key={index} className="grid grid-cols-6 gap-3 border-b pb-3 last:border-b-0">
+                              <Skeleton className="h-5 w-12" />
+                              <Skeleton className="h-5 w-28" />
+                              <Skeleton className="h-5 w-24" />
+                              <Skeleton className="h-5 w-32" />
+                              <Skeleton className="ml-auto h-5 w-16" />
+                              <Skeleton className="ml-auto h-5 w-10" />
+                            </div>
+                          ))}
                         </div>
                       ) : leaderboard.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
@@ -1743,7 +1779,11 @@ export default function AdminPage() {
                             id="schedule-date"
                             type="date"
                             value={scheduleDate}
-                            onChange={(e) => setScheduleDate(e.target.value)}
+                            onChange={(e) => {
+                              const nextDate = e.target.value
+                              setScheduleDate(nextDate)
+                              void persistSelectedCalendarDate(nextDate)
+                            }}
                           />
                         </div>
                         <div className="flex flex-col gap-2">
@@ -1990,8 +2030,18 @@ export default function AdminPage() {
                     </CardHeader>
                     <CardContent>
                       {loadingSubmissions ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          Loading submissions...
+                        <div className="space-y-3">
+                          {Array.from({ length: 6 }).map((_, index) => (
+                            <div key={index} className="grid grid-cols-7 gap-3 border-b pb-3 last:border-b-0">
+                              <Skeleton className="h-5 w-28" />
+                              <Skeleton className="h-5 w-24" />
+                              <Skeleton className="h-5 w-36" />
+                              <Skeleton className="h-5 w-28" />
+                              <Skeleton className="h-5 w-20" />
+                              <Skeleton className="h-5 w-24" />
+                              <Skeleton className="h-5 w-20" />
+                            </div>
+                          ))}
                         </div>
                       ) : submissions.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">

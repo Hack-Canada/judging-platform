@@ -26,6 +26,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NumberTicker } from "@/components/ui/number-ticker"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Popover,
   PopoverContent,
@@ -102,7 +103,33 @@ function ProjectNameCell({ row }: { row: { original: JudgeRow } }) {
       </PopoverTrigger>
       <PopoverContent className="w-80">
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-16" />
+                <div className="flex flex-wrap gap-1">
+                  <Skeleton className="h-5 w-20" />
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-5 w-16" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-12" />
+                <div className="flex flex-wrap gap-1">
+                  <Skeleton className="h-5 w-20" />
+                  <Skeleton className="h-5 w-24" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+            </div>
+          </div>
         ) : details ? (
           <div className="grid gap-4">
             <div className="space-y-1">

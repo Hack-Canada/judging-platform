@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { DashboardSubmissionsSkeleton } from "@/components/page-skeletons"
 import {
   Table,
   TableBody,
@@ -63,6 +64,10 @@ export default function SubmissionsPage() {
     void loadSubmissions()
   }, [])
 
+  if (loading && submissions.length === 0) {
+    return <DashboardSubmissionsSkeleton />
+  }
+
   return (
     <div suppressHydrationWarning className="relative">
       {/* Animated Grid Background */}
@@ -90,11 +95,7 @@ export default function SubmissionsPage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {loading ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          Loading submissions...
-                        </div>
-                      ) : submissions.length === 0 ? (
+                      {submissions.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           No submissions found.
                         </div>

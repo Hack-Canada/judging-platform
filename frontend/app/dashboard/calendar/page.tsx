@@ -68,6 +68,27 @@ export default function CalendarPage() {
   const [saving, setSaving] = React.useState(false)
   const [unscheduledSubmissions, setUnscheduledSubmissions] = React.useState<CalendarSubmission[]>([])
 
+  const persistSelectedCalendarDate = React.useCallback(async (nextDate: string) => {
+    try {
+      const { error } = await supabase
+        .from("admin_settings")
+        .upsert(
+          {
+            setting_key: "calendar_selected_date",
+            setting_value: nextDate,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "setting_key" }
+        )
+
+      if (error) {
+        throw error
+      }
+    } catch (error) {
+      console.error("Failed to persist selected calendar date", error)
+    }
+  }, [])
+
   const [formData, setFormData] = React.useState({
     startTime: "09:00",
     projectId: "",
@@ -116,6 +137,11 @@ export default function CalendarPage() {
               const endTime = settingsMap.get("calendar_end_time")
               if (endTime) {
                 setScheduleEndTime(endTime)
+              }
+
+              const selectedDate = settingsMap.get("calendar_selected_date")
+              if (selectedDate) {
+                setSelectedDate(selectedDate)
               }
 
               // Load rooms data
@@ -682,7 +708,11 @@ export default function CalendarPage() {
                             <Input
                               type="date"
                               value={selectedDate}
-                              onChange={(e) => setSelectedDate(e.target.value)}
+                              onChange={(e) => {
+                                const nextDate = e.target.value
+                                setSelectedDate(nextDate)
+                                void persistSelectedCalendarDate(nextDate)
+                              }}
                               className="flex-1"
                             />
                             <Button
@@ -782,7 +812,7 @@ export default function CalendarPage() {
                                                 handleOpenDialog(slot)
                                               }
                                             }}
-                                            className="group flex w-full flex-col gap-2 rounded-lg border border-border bg-gradient-to-b from-background to-muted/70 px-3 py-2 text-left shadow-sm transition hover:-translate-y-[1px] hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                                            className="group flex w-full flex-col gap-2 rounded-lg border border-border bg-linear-to-b from-background to-muted/70 px-3 py-2 text-left shadow-sm transition hover:-translate-y-px hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
                                           >
                                             <div className="flex items-start justify-between gap-2">
                                               <div className="space-y-1">

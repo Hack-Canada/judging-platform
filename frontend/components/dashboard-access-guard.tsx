@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
+import { DashboardRouteSkeleton } from "@/components/page-skeletons"
 import { supabase } from "@/lib/supabase-client"
 import { getDefaultRouteForRole, getLoginRouteForPath, getUserRole, isDashboardRouteAllowed } from "@/lib/rbac"
 
@@ -41,11 +42,7 @@ export function DashboardAccessGuard({ children }: { children: React.ReactNode }
   }, [pathname, router])
 
   if (!allowed) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted-foreground">Checking access...</p>
-      </div>
-    )
+    return <DashboardRouteSkeleton pathname={pathname} />
   }
 
   return <>{children}</>

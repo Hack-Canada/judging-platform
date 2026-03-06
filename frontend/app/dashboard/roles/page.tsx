@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
+import { DashboardRolesSkeleton } from "@/components/page-skeletons"
 import { supabase } from "@/lib/supabase-client"
 import { getCurrentUserWithRole } from "@/lib/auth-helpers"
 import { getDefaultRouteForRole } from "@/lib/rbac"
@@ -280,11 +281,11 @@ export default function RolesPage() {
   }
 
   if (!authorized) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Checking access...</p>
-      </div>
-    )
+    return <DashboardRolesSkeleton />
+  }
+
+  if (loading && users.length === 0) {
+    return <DashboardRolesSkeleton />
   }
 
   return (
@@ -350,11 +351,7 @@ export default function RolesPage() {
               </div>
             </div>
 
-            {loading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Loading users...
-              </div>
-            ) : users.length === 0 ? (
+            {users.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No users found in the authentication system.
               </div>
