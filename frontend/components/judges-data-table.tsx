@@ -7,7 +7,6 @@ import {
   getFacetedRowModel,
   getFacetedUniqueValues,
   getFilteredRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
@@ -23,6 +22,7 @@ import { toast } from "sonner"
 import { z } from "zod"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NumberTicker } from "@/components/ui/number-ticker"
@@ -301,40 +301,18 @@ export function JudgesDataTable({
   onOpenNotes,
 }: JudgesTableProps) {
   const [data, setData] = React.useState(() => initialData)
+  const isMobile = useIsMobile()
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
   )
   const [sorting, setSorting] = React.useState<SortingState>([])
-  const [pagination, setPagination] = React.useState({
-    pageIndex: 0,
-    pageSize: 50,
-  })
-  
-  // Track current page index to preserve it during updates
-  const preservedPageIndexRef = React.useRef(pagination.pageIndex)
 
-  // Update data when initialData changes, preserving pagination state
+  // Keep the table in sync with refreshed judge assignments.
   React.useEffect(() => {
-    // Check if this is just an update (same length, same submission IDs)
-    const isDataUpdate = initialData.length === data.length &&
-      initialData.every((newEntry) => {
-        const oldEntry = data.find((e) => (e as JudgeRow).submissionId === (newEntry as JudgeRow).submissionId)
-        return oldEntry !== undefined
-      })
-    
-    // If it's just a data update (not a full reload), preserve the current page
-    if (isDataUpdate && preservedPageIndexRef.current > 0) {
-      // Restore the preserved page index
-      setPagination(prev => ({ 
-        ...prev, 
-        pageIndex: preservedPageIndexRef.current 
-      }))
-    }
-    
     setData(initialData)
-  }, [initialData, data])
+  }, [initialData])
 
   const columns = React.useMemo(
     () => createColumns(onInvestmentChange, remainingAllocation, onOpenNotes),
@@ -348,7 +326,6 @@ export function JudgesDataTable({
       sorting,
       columnVisibility,
       columnFilters,
-      pagination,
     },
     enableRowSelection: true,
     onSortingChange: setSorting,
@@ -356,18 +333,9 @@ export function JudgesDataTable({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
     onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: (updater) => {
-      setPagination((prev) => {
-        const newPagination = typeof updater === 'function' ? updater(prev) : updater
-        // Preserve the page index for future updates
-        preservedPageIndexRef.current = newPagination.pageIndex
-        return newPagination
-      })
-    },
   })
 
   return (
@@ -392,124 +360,92 @@ export function JudgesDataTable({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-lg border overflow-x-auto">
-        <Table className="min-w-[760px]">
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
+      {isMobile ? (
+        <div className="space-y-3">
+          {table.getRowModel().rows?.length ? (
+            table.getRowModel().rows.map((row) => (
+              <div key={row.id} className="rounded-lg border bg-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Project
+                    </p>
+                    <ProjectNameCell row={row} />
+                  </div>
+                  <div className="w-[140px] shrink-0">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">
+                      Points
+                    </p>
+                    <InvestmentCell
+                      row={row}
+                      onInvestmentChange={onInvestmentChange}
+                      remainingAllocation={remainingAllocation}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-lg border bg-card p-6 text-center text-muted-foreground">
+              No submissions assigned.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-lg border overflow-x-auto">
+          <Table className="min-w-[760px]">
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    return (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    )
+                  })}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No submissions assigned.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Pagination */}
-      <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} submission(s)
-        </div>
-        <div className="flex flex-wrap items-center gap-3 sm:gap-6 lg:gap-8">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium">Rows per page</p>
-            <select
-              value={table.getState().pagination.pageSize}
-              onChange={(e) => {
-                table.setPageSize(Number(e.target.value))
-              }}
-              className="h-8 w-[90px] rounded-md border border-input bg-background"
-            >
-              {[25, 50, 100, 250].map((pageSize) => (
-                <option key={pageSize} value={pageSize}>
-                  {pageSize}
-                </option>
               ))}
-              <option value={9999}>All</option>
-            </select>
-          </div>
-          <div className="flex min-w-[100px] items-center justify-center text-sm font-medium">
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              className="hidden h-8 w-8 p-0 lg:flex"
-              onClick={() => table.setPageIndex(0)}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <span className="sr-only">Go to first page</span>
-              «
-            </Button>
-            <Button
-              variant="outline"
-              className="h-8 w-8 p-0"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <span className="sr-only">Go to previous page</span>
-              ‹
-            </Button>
-            <Button
-              variant="outline"
-              className="h-8 w-8 p-0"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              <span className="sr-only">Go to next page</span>
-              ›
-            </Button>
-            <Button
-              variant="outline"
-              className="hidden h-8 w-8 p-0 lg:flex"
-              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              disabled={!table.getCanNextPage()}
-            >
-              <span className="sr-only">Go to last page</span>
-              »
-            </Button>
-          </div>
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center"
+                  >
+                    No submissions assigned.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
+      )}
+
+      <div className="px-2 text-sm text-muted-foreground">
+        {table.getFilteredRowModel().rows.length} submission(s)
       </div>
     </div>
   )
