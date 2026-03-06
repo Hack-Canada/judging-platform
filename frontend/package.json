@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "backup:db": "node scripts/db-backup.js",
     "start": "next start",
     "db:clear": "node scripts/clear-db.js --confirm",
     "lint": "eslint",
