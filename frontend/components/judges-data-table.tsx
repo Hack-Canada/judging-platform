@@ -309,7 +309,7 @@ export function JudgesDataTable({
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 50,
   })
   
   // Track current page index to preserve it during updates
@@ -457,13 +457,14 @@ export function JudgesDataTable({
               onChange={(e) => {
                 table.setPageSize(Number(e.target.value))
               }}
-              className="h-8 w-[70px] rounded-md border border-input bg-background"
+              className="h-8 w-[90px] rounded-md border border-input bg-background"
             >
-              {[10, 20, 30, 40, 50].map((pageSize) => (
+              {[25, 50, 100, 250].map((pageSize) => (
                 <option key={pageSize} value={pageSize}>
                   {pageSize}
                 </option>
               ))}
+              <option value={9999}>All</option>
             </select>
           </div>
           <div className="flex min-w-[100px] items-center justify-center text-sm font-medium">
