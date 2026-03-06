@@ -33,6 +33,17 @@ CREATE TABLE public.judge_investments (
   CONSTRAINT judge_investments_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
   CONSTRAINT judge_investments_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
 );
+CREATE TABLE public.judge_notes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  judge_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_notes_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
+  CONSTRAINT judge_notes_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+);
 CREATE TABLE public.judge_project_assignments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   judge_id uuid NOT NULL,
@@ -63,14 +74,4 @@ CREATE TABLE public.submissions (
   submitted_at timestamp with time zone NOT NULL DEFAULT now(),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT submissions_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.judge_notes (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  judge_id uuid NOT NULL REFERENCES public.judges(id) ON DELETE CASCADE,
-  submission_id uuid NOT NULL REFERENCES public.submissions(id) ON DELETE CASCADE,
-  notes text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT judge_notes_pkey PRIMARY KEY (id),
-  CONSTRAINT judge_notes_judge_id_submission_id_key UNIQUE (judge_id, submission_id)
 );
