@@ -167,18 +167,20 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
 
   return (
     <div className={embedded ? "px-4 lg:px-6" : "min-h-screen bg-background p-4 md:p-8"}>
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-5xl">
         <Card>
-          <CardHeader>
+          <CardHeader className="space-y-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle>Judging Schedule</CardTitle>
+              <CardTitle className="text-2xl">Judging Schedule</CardTitle>
               <Button variant="outline" size="sm" onClick={() => void loadData()} disabled={loading}>
                 {loading ? "Refreshing..." : "Refresh timings"}
               </Button>
             </div>
-            <CardDescription>Timings are loaded from the published calendar schedule.</CardDescription>
+            <CardDescription className="text-sm md:text-base">
+              Timings are loaded from the published calendar schedule.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-6">
             {!scheduleVisible ? (
               <p className="text-sm text-muted-foreground">
                 Judging schedule is currently hidden by admins.
@@ -187,8 +189,8 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
               <p className="text-sm text-muted-foreground">No teams have submitted yet. Check back later.</p>
             ) : (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="team-select">Team</Label>
+                <div className="space-y-2.5">
+                  <Label htmlFor="team-select" className="text-sm md:text-base">Team</Label>
                   <Select
                     value={activeSubmissionId ?? ""}
                     onOpenChange={(open) => {
@@ -201,7 +203,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                     }}
                     disabled={filteredSubmissions.length === 0}
                   >
-                    <SelectTrigger id="team-select" className="w-full max-w-md">
+                    <SelectTrigger id="team-select" className="h-11 w-full max-w-lg text-base">
                       <SelectValue
                         placeholder={
                           filteredSubmissions.length === 0
@@ -238,14 +240,14 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                 </div>
 
                 {activeSubmissionId && filteredSubmissions.length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {slotsForSelectedTeam.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No judging times scheduled yet for this team.</p>
                     ) : (
-                      <div className="space-y-5">
+                      <div className="space-y-6">
                         {groupSlotsByDate.map(([date, dateSlots]) => (
-                          <div key={date} className="space-y-2.5">
-                            <p className="text-sm font-semibold tracking-tight">
+                          <div key={date} className="space-y-3">
+                            <p className="text-base font-semibold tracking-tight md:text-lg">
                               {new Date(date).toLocaleDateString(undefined, {
                                 weekday: "short",
                                 year: "numeric",
@@ -253,13 +255,13 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                                 day: "numeric",
                               })}
                             </p>
-                            <div className="space-y-1.5">
+                            <div className="space-y-2">
                               {dateSlots.map((slot) => {
                                 const room = roomsById.get(slot.room_id)
                                 return (
-                                  <div key={slot.id} className="flex flex-col gap-1 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between">
+                                  <div key={slot.id} className="flex flex-col gap-2 rounded-lg border px-4 py-3 text-base transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between">
                                     <p className="font-medium tracking-tight">{formatTimeRange(slot.start_time, slot.end_time)}</p>
-                                    <p className="text-xs text-muted-foreground">{room?.name ?? `Room ${slot.room_id}`}</p>
+                                    <p className="text-sm text-muted-foreground">{room?.name ?? `Room ${slot.room_id}`}</p>
                                   </div>
                                 )
                               })}
