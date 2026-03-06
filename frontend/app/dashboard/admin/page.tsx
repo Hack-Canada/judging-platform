@@ -76,8 +76,8 @@ export default function AdminPage() {
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
   const [slotDuration, setSlotDuration] = React.useState(5) // Calendar slot duration in minutes
-  const [scheduleStartTime, setScheduleStartTime] = React.useState("13:00") // Default 1 PM
-  const [scheduleEndTime, setScheduleEndTime] = React.useState("16:00") // Default 4 PM
+  const [scheduleStartTime, setScheduleStartTime] = React.useState("10:00") // Default 10 AM
+  const [scheduleEndTime, setScheduleEndTime] = React.useState("17:00") // Default 5 PM
   const [minInvestment, setMinInvestment] = React.useState("0")
   const [maxInvestment, setMaxInvestment] = React.useState(String(POINTS_PER_JUDGE))
   const [hackerScheduleVisibilityEnabled, setHackerScheduleVisibilityEnabled] = React.useState(false)
@@ -918,15 +918,15 @@ export default function AdminPage() {
     }
     const normalizedEmail = judgeFormData.email.trim().toLowerCase()
     const normalizedPin = judgeFormData.pin.trim()
-    if (!editingJudge && normalizedPin.length < 4) {
+    if (!editingJudge && !/^\d{4}$/.test(normalizedPin)) {
       toast.error("Validation error", {
-        description: "PIN is required and must be at least 4 characters.",
+        description: "PIN is required and must be exactly 4 digits.",
       })
       return
     }
-    if (editingJudge && editingJudge.email.trim().toLowerCase() !== normalizedEmail && normalizedPin.length < 4) {
+    if (editingJudge && editingJudge.email.trim().toLowerCase() !== normalizedEmail && !/^\d{4}$/.test(normalizedPin)) {
       toast.error("PIN required", {
-        description: "Set a PIN when changing a judge email so login is provisioned for the new email.",
+        description: "Set a 4-digit PIN when changing a judge email so login is provisioned for the new email.",
       })
       return
     }
@@ -2242,9 +2242,11 @@ export default function AdminPage() {
                   placeholder={editingJudge ? "Leave blank to keep current PIN" : "Enter PIN (e.g., 1234)"}
                   required={!editingJudge}
                   minLength={4}
+                  maxLength={4}
+                  pattern="\d{4}"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Judge login uses email + PIN only. Magic-link login is not used.
+                  Judge login uses email + a 4-digit PIN only. Magic-link login is not used.
                 </p>
               </div>
               <div className="flex flex-col gap-2">

@@ -66,7 +66,17 @@ export default function JudgeLoginPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pin">PIN Code</Label>
-              <Input id="pin" type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} required />
+              <Input
+                id="pin"
+                type="password"
+                inputMode="numeric"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                required
+                minLength={4}
+                maxLength={4}
+                pattern="\d{4}"
+              />
             </div>
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Signing in..." : "Sign In"}

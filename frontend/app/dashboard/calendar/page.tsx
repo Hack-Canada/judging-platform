@@ -63,8 +63,8 @@ export default function CalendarPage() {
   const [editingSlot, setEditingSlot] = React.useState<TimeSlot | null>(null)
   const [judgesPerProject, setJudgesPerProject] = React.useState(2)
   const [slotDuration, setSlotDuration] = React.useState(5)
-  const [scheduleStartTime, setScheduleStartTime] = React.useState("13:00")
-  const [scheduleEndTime, setScheduleEndTime] = React.useState("16:00")
+  const [scheduleStartTime, setScheduleStartTime] = React.useState("10:00")
+  const [scheduleEndTime, setScheduleEndTime] = React.useState("17:00")
   const [saving, setSaving] = React.useState(false)
   const [unscheduledSubmissions, setUnscheduledSubmissions] = React.useState<CalendarSubmission[]>([])
 

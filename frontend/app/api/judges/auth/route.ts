@@ -64,6 +64,10 @@ type JudgeAuthPayload = {
   pin?: string
 }
 
+function isValidJudgePin(pin: string): boolean {
+  return /^\d{4}$/.test(pin)
+}
+
 export async function POST(request: Request) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Admin access not configured" }, { status: 500 })
@@ -81,8 +85,8 @@ export async function POST(request: Request) {
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 })
     }
-    if (!pin || pin.length < 4) {
-      return NextResponse.json({ error: "PIN must be at least 4 characters" }, { status: 400 })
+    if (!isValidJudgePin(pin)) {
+      return NextResponse.json({ error: "PIN must be exactly 4 digits" }, { status: 400 })
     }
 
     const { data: usersPage, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
