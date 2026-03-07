@@ -2,6 +2,8 @@
 
 This repo includes a GitHub Actions workflow at `.github/workflows/db-backup.yml` that runs every 5 minutes, creates a PostgreSQL custom-format backup with `pg_dump`, and uploads both the dump and a small manifest JSON file to S3.
 
+The workflow explicitly installs PostgreSQL 17 client tools so `pg_dump` matches the current Supabase server version.
+
 ## What It Creates
 
 Each run produces:
@@ -36,6 +38,8 @@ You can test the backup helper locally:
 cd frontend
 SUPABASE_DB_URL="postgresql://USER:PASSWORD@HOST:5432/postgres" npm run backup:db
 ```
+
+If your local machine has an older `pg_dump`, install PostgreSQL 17 client tools and run the script with that binary on your `PATH`.
 
 Optional environment variables:
 
