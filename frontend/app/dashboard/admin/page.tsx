@@ -83,6 +83,7 @@ export default function AdminPage() {
   const [submissionFormEnabled, setSubmissionFormEnabled] = React.useState(true)
   const [savingSubmissionFormVisibility, setSavingSubmissionFormVisibility] = React.useState(false)
   const [hackerScheduleVisibilityEnabled, setHackerScheduleVisibilityEnabled] = React.useState(false)
+  const [savingHackerScheduleVisibility, setSavingHackerScheduleVisibility] = React.useState(false)
   const [scheduleDate, setScheduleDate] = React.useState(() =>
     new Date().toISOString().slice(0, 10)
   )
@@ -918,14 +919,15 @@ export default function AdminPage() {
     }
   }
 
-  const handleSaveHackerScheduleVisibility = async () => {
+  const handleSaveHackerScheduleVisibility = async (nextEnabled: boolean) => {
+    setSavingHackerScheduleVisibility(true)
     try {
       const { error } = await supabase
         .from("admin_settings")
         .upsert(
           {
             setting_key: "hacker_schedule_visibility",
-            setting_value: hackerScheduleVisibilityEnabled ? "enabled" : "disabled",
+            setting_value: nextEnabled ? "enabled" : "disabled",
             updated_at: new Date().toISOString(),
           },
           {
@@ -936,14 +938,17 @@ export default function AdminPage() {
       if (error) throw error
 
       toast.success("Hacker schedule visibility updated", {
-        description: hackerScheduleVisibilityEnabled
+        description: nextEnabled
           ? "Hackers can now view the published judging schedule."
           : "Hackers can no longer view the judging schedule.",
       })
     } catch (error) {
+      setHackerScheduleVisibilityEnabled((current) => !current)
       toast.error("Failed to update visibility", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
+    } finally {
+      setSavingHackerScheduleVisibility(false)
     }
   }
 
@@ -1830,14 +1835,20 @@ export default function AdminPage() {
                         <div className="flex items-center gap-3">
                           <Switch
                             checked={hackerScheduleVisibilityEnabled}
-                            onCheckedChange={setHackerScheduleVisibilityEnabled}
+                            disabled={savingHackerScheduleVisibility}
+                            onCheckedChange={(checked) => {
+                              setHackerScheduleVisibilityEnabled(checked)
+                              void handleSaveHackerScheduleVisibility(checked)
+                            }}
                             id="hacker-schedule-visibility"
                           />
                           <Label htmlFor="hacker-schedule-visibility">
                             Allow hackers to view judging schedule
                           </Label>
                         </div>
-                        <Button onClick={handleSaveHackerScheduleVisibility}>Save Visibility</Button>
+                        {savingHackerScheduleVisibility ? (
+                          <span className="text-sm text-muted-foreground">Saving...</span>
+                        ) : null}
                       </div>
                     </CardContent>
                   </Card>
