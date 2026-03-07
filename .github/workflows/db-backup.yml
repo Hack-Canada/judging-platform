@@ -1,0 +1,72 @@
+name: Database Backup To S3
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: db-backup-s3
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+      S3_BACKUP_PREFIX: ${{ secrets.S3_BACKUP_PREFIX }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install PostgreSQL client tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Create backup archive
+        id: backup
+        run: node frontend/scripts/db-backup.js
+
+      - name: Validate required S3 settings
+        run: |
+          test -n "$S3_BACKUP_BUCKET" || { echo "Missing S3_BACKUP_BUCKET secret"; exit 1; }
+          test -n "$AWS_REGION" || { echo "Missing AWS_REGION secret"; exit 1; }
+
+      - name: Upload dump to S3
+        run: aws s3 cp "${{ steps.backup.outputs.dump_path }}" "s3://${{ secrets.S3_BACKUP_BUCKET }}/${{ steps.backup.outputs.s3_dump_key }}" --only-show-errors
+
+      - name: Upload manifest to S3
+        run: aws s3 cp "${{ steps.backup.outputs.manifest_path }}" "s3://${{ secrets.S3_BACKUP_BUCKET }}/${{ steps.backup.outputs.s3_manifest_key }}" --only-show-errors
+
+      - name: Write workflow summary
+        run: |
+          {
+            echo "## Database backup"
+            echo
+            echo "- Bucket: \`${S3_BACKUP_BUCKET}\`"
+            echo "- Region: \`${AWS_REGION}\`"
+            echo "- Dump key: \`${{ steps.backup.outputs.s3_dump_key }}\`"
+            echo "- Manifest key: \`${{ steps.backup.outputs.s3_manifest_key }}\`"
+            echo "- Size (bytes): \`${{ steps.backup.outputs.dump_size_bytes }}\`"
+            echo "- SHA256: \`${{ steps.backup.outputs.dump_sha256 }}\`"
+            echo
+            echo "Schedule note: GitHub Actions cron is best-effort and may drift from exact 5-minute boundaries."
+          } >> "$GITHUB_STEP_SUMMARY"
