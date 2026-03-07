@@ -17,6 +17,28 @@ const supabaseAdmin = supabaseUrl && supabaseServiceKey
     })
   : null
 
+async function syncJudgeDirectoryUser(email: string, name: string) {
+  if (!supabaseAdmin) {
+    throw new Error("Admin access not configured")
+  }
+
+  const judgeName = name || email.split("@")[0]
+  const { error } = await supabaseAdmin
+    .from("judges")
+    .upsert(
+      {
+        name: judgeName,
+        email,
+        tracks: ["General"],
+        assigned_projects: 0,
+        total_invested: 0,
+      },
+      { onConflict: "email" }
+    )
+
+  if (error) throw error
+}
+
 export async function GET(request: Request) {
   if (!supabaseAdmin) {
     return NextResponse.json(
@@ -133,6 +155,15 @@ export async function PATCH(request: Request) {
       )
     }
 
+    if (role === "judge" || role === "sponsor") {
+      await syncJudgeDirectoryUser(
+        data.user.email || currentUser.user.email || "",
+        (data.user.user_metadata?.name as string | undefined) ||
+          (currentUser.user.user_metadata?.name as string | undefined) ||
+          ""
+      )
+    }
+
     return NextResponse.json({ 
       success: true,
       user: {
@@ -236,24 +267,12 @@ export async function POST(request: Request) {
     }
 
     if (role === "judge" || role === "sponsor") {
-      const judgeName = name || email.split("@")[0]
-      const { error: judgeError } = await supabaseAdmin
-        .from("judges")
-        .upsert(
-          {
-            name: judgeName,
-            email,
-            tracks: ["General"],
-            assigned_projects: 0,
-            total_invested: 0,
-          },
-          { onConflict: "email" }
-        )
-
-      if (judgeError) {
+      try {
+        await syncJudgeDirectoryUser(email, name)
+      } catch (judgeError) {
         await supabaseAdmin.auth.admin.deleteUser(data.user.id)
         return NextResponse.json(
-          { error: judgeError.message },
+          { error: judgeError instanceof Error ? judgeError.message : "Failed to sync judge directory" },
           { status: 500 }
         )
       }
