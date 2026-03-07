@@ -2099,7 +2099,7 @@ export default function AdminPage() {
                   {/* Hacker Submissions (read-only) */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <CardTitle>Submissions</CardTitle>
+                      <CardTitle>Submissions ({submissions.length})</CardTitle>
                       <CardDescription>
                         Project submissions from hackers. Use Step 1 above to assign judges.
                       </CardDescription>
