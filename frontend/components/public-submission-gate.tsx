@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { HackerScheduleView } from "@/components/hacker-schedule-view"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { HackerSubmissionForm } from "@/components/hacker-submission-form"
 import { SubmissionPageSkeleton } from "@/components/page-skeletons"
 import { supabase } from "@/lib/supabase-client"
@@ -48,6 +48,19 @@ export function PublicSubmissionGate({ embedded = false }: PublicSubmissionGateP
   return submissionFormEnabled ? (
     <HackerSubmissionForm embedded={embedded} />
   ) : (
-    <HackerScheduleView embedded={embedded} />
+    <div className={embedded ? "p-4 md:p-6" : "min-h-screen bg-background p-4 md:p-8"}>
+      <div className="mx-auto max-w-4xl">
+        <Card>
+          <CardHeader>
+            <CardTitle>Not open - check again</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Project submissions are currently closed.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   )
 }

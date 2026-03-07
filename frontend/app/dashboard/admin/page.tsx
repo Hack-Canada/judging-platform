@@ -973,7 +973,7 @@ export default function AdminPage() {
       toast.success("Submission form visibility updated", {
         description: nextEnabled
           ? "Hackers can now access the project submission form."
-          : "The public submission page now shows the judging schedule instead.",
+          : 'The public submission page now shows "Not open - check again."',
       })
     } catch (error) {
       setSubmissionFormEnabled((current) => !current)
@@ -1797,7 +1797,7 @@ export default function AdminPage() {
                       <CardTitle>Submission Form Visibility</CardTitle>
                       <CardDescription>
                         Control whether hackers can access the public submission form. When disabled, the public
-                        submission page will show the judging schedule instead.
+                        submission page will show a closed message instead.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
