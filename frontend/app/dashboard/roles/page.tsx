@@ -1,6 +1,10 @@
 "use client"
 
 import * as React from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -62,6 +66,13 @@ export default function RolesPage() {
   const [authorized, setAuthorized] = React.useState(false)
   const [selectedRole, setSelectedRole] = React.useState<string>("all")
   const [updatingRoles, setUpdatingRoles] = React.useState<Set<string>>(new Set())
+  const [creatingUser, setCreatingUser] = React.useState(false)
+  const [newUserForm, setNewUserForm] = React.useState({
+    name: "",
+    email: "",
+    role: "hacker" as StandardRole,
+    password: "",
+  })
   const isInitialLoad = React.useRef(true)
 
   React.useEffect(() => {
@@ -280,6 +291,71 @@ export default function RolesPage() {
     }
   }
 
+  const credentialLabel =
+    newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "PIN" : "Password"
+
+  const credentialHint =
+    newUserForm.role === "judge" || newUserForm.role === "sponsor"
+      ? "Use exactly 4 digits for judge/sponsor sign-in."
+      : "Use at least 6 characters."
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCreatingUser(true)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Session expired. Please sign in again.")
+      }
+
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          name: newUserForm.name,
+          email: newUserForm.email,
+          role: newUserForm.role,
+          password: newUserForm.password,
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to create user")
+      }
+
+      if (result.user) {
+        setUsers((prevUsers) => [result.user, ...prevUsers])
+      }
+
+      setNewUserForm({
+        name: "",
+        email: "",
+        role: "hacker",
+        password: "",
+      })
+
+      toast.success("User created successfully", {
+        description:
+          newUserForm.role === "judge" || newUserForm.role === "sponsor"
+            ? "Judge directory access was also created with a default General track."
+            : undefined,
+      })
+    } catch (error) {
+      toast.error("Failed to create user", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setCreatingUser(false)
+    }
+  }
+
   if (!authorized) {
     return <DashboardRolesSkeleton />
   }
@@ -316,6 +392,99 @@ export default function RolesPage() {
                 </p>
               </div>
             </div>
+
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Add User</CardTitle>
+                <CardDescription>
+                  Create a new authenticated user and assign their initial role.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateUser} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="new-user-name">Name</Label>
+                    <Input
+                      id="new-user-name"
+                      value={newUserForm.name}
+                      onChange={(e) =>
+                        setNewUserForm((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      placeholder="Jane Doe"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-user-email">Email</Label>
+                    <Input
+                      id="new-user-email"
+                      type="email"
+                      required
+                      value={newUserForm.email}
+                      onChange={(e) =>
+                        setNewUserForm((prev) => ({
+                          ...prev,
+                          email: e.target.value,
+                        }))
+                      }
+                      placeholder="jane@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-user-role">Role</Label>
+                    <Select
+                      value={newUserForm.role}
+                      onValueChange={(value) =>
+                        setNewUserForm((prev) => ({
+                          ...prev,
+                          role: value as StandardRole,
+                          password: "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="new-user-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STANDARD_ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role.charAt(0).toUpperCase() + role.slice(1)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-user-password">{credentialLabel}</Label>
+                    <Input
+                      id="new-user-password"
+                      type="password"
+                      required
+                      inputMode={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "numeric" : undefined}
+                      minLength={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? 4 : 6}
+                      maxLength={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? 4 : undefined}
+                      pattern={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "\\d{4}" : undefined}
+                      value={newUserForm.password}
+                      onChange={(e) =>
+                        setNewUserForm((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
+                      placeholder={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "1234" : "At least 6 characters"}
+                    />
+                    <p className="text-xs text-muted-foreground">{credentialHint}</p>
+                  </div>
+                  <div className="md:col-span-2 xl:col-span-4">
+                    <Button type="submit" disabled={creatingUser}>
+                      {creatingUser ? "Creating..." : "Add User"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
 
             {/* Role Filter */}
             <div className="mb-4 flex items-center gap-4">
