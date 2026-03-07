@@ -3,15 +3,20 @@
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { HackerScheduleView } from "@/components/hacker-schedule-view"
 import { HackerSubmissionForm } from "@/components/hacker-submission-form"
 import { SubmissionPageSkeleton } from "@/components/page-skeletons"
 import { supabase } from "@/lib/supabase-client"
 
 type PublicSubmissionGateProps = {
   embedded?: boolean
+  showScheduleInlineWhenClosed?: boolean
 }
 
-export function PublicSubmissionGate({ embedded = false }: PublicSubmissionGateProps) {
+export function PublicSubmissionGate({
+  embedded = false,
+  showScheduleInlineWhenClosed = false,
+}: PublicSubmissionGateProps) {
   const [loading, setLoading] = React.useState(true)
   const [submissionFormEnabled, setSubmissionFormEnabled] = React.useState(true)
   const [scheduleVisible, setScheduleVisible] = React.useState(false)
@@ -48,9 +53,15 @@ export function PublicSubmissionGate({ embedded = false }: PublicSubmissionGateP
     return <SubmissionPageSkeleton embedded={embedded} />
   }
 
-  return submissionFormEnabled ? (
-    <HackerSubmissionForm embedded={embedded} />
-  ) : (
+  if (submissionFormEnabled) {
+    return <HackerSubmissionForm embedded={embedded} />
+  }
+
+  if (scheduleVisible && showScheduleInlineWhenClosed) {
+    return <HackerScheduleView embedded={embedded} />
+  }
+
+  return (
     <div className={embedded ? "p-4 md:p-6" : "min-h-screen bg-background p-4 md:p-8"}>
       <div className="mx-auto max-w-4xl">
         <Card>
