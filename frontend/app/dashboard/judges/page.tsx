@@ -115,7 +115,27 @@ export default function JudgesPage() {
   }, [judgeAssignmentFilter, judgesDirectory])
 
   if (loadingJudgeIdentity || (loading && !judge && dashboardEntries.length === 0 && selectedJudgeId !== null)) {
-    return <DashboardJudgesSkeleton />
+    return (
+      <div suppressHydrationWarning className="relative">
+        <div className="animated-grid fixed inset-0 z-0" />
+        <SidebarProvider
+          style={
+            {
+              "--sidebar-width": "calc(var(--spacing) * 72)",
+              "--header-height": "calc(var(--spacing) * 12)",
+            } as React.CSSProperties
+          }
+        >
+          <AppSidebar variant="inset" />
+          <SidebarInset className="relative z-10">
+            <SiteHeader />
+            <div className="flex flex-1 items-center justify-center h-[calc(100vh-var(--header-height))]">
+              <p className="text-muted-foreground">Nothing is assigned to you right now, come back after :)</p>
+            </div>
+          </SidebarInset>
+        </SidebarProvider>
+      </div>
+    )
   }
 
   // Resolve current judge strictly by authenticated email.
