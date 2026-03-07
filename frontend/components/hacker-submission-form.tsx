@@ -16,6 +16,20 @@ type HackerSubmissionFormProps = {
 
 export function HackerSubmissionForm({ embedded = false }: HackerSubmissionFormProps) {
   const [submitting, setSubmitting] = React.useState(false)
+  const [submitted, setSubmitted] = React.useState(false)
+  const [scheduleVisible, setScheduleVisible] = React.useState(false)
+
+  React.useEffect(() => {
+    const loadVisibility = async () => {
+      const { data } = await supabase
+        .from("admin_settings")
+        .select("setting_value")
+        .eq("setting_key", "hacker_schedule_visibility")
+        .maybeSingle()
+      setScheduleVisible(data?.setting_value === "enabled")
+    }
+    void loadVisibility()
+  }, [])
   const [formData, setFormData] = React.useState({
     teamName: "",
     members: ["", "", "", ""],
@@ -63,16 +77,7 @@ export function HackerSubmissionForm({ embedded = false }: HackerSubmissionFormP
       const { error } = await supabase.from("submissions").insert([payload])
       if (error) throw error
 
-      toast.success("Submission received!", {
-        description: "Your project was submitted successfully.",
-      })
-      setFormData({
-        teamName: "",
-        members: ["", "", "", ""],
-        projectName: "",
-        devpostLink: "",
-        tracks: [],
-      })
+      setSubmitted(true)
     } catch (error) {
       toast.error("Failed to submit project", {
         description: error instanceof Error ? error.message : "Unknown error",
@@ -81,6 +86,27 @@ export function HackerSubmissionForm({ embedded = false }: HackerSubmissionFormP
       setSubmitting(false)
     }
   }
+
+  if (submitted) {
+    return (
+      <div className={embedded ? "p-4 md:p-6" : "min-h-screen bg-background flex items-center justify-center p-4 md:p-8"}>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p className="text-muted-foreground">Submitted successfully, check the discord for judging schedule :)</p>
+          {scheduleVisible ? (
+            <a href="/schedule">
+              <Button>View Judging Schedule</Button>
+            </a>
+          ) : (
+            <div className="space-y-1">
+              <Button disabled className="cursor-not-allowed opacity-50 bg-muted text-muted-foreground hover:bg-muted">View Judging Schedule</Button>
+              <p className="text-xs text-muted-foreground">Come back around 10:15 AM March 8th, 2026 :)</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+  
 
   return (
     <div className={embedded ? "p-4 md:p-6" : "min-h-screen bg-background p-4 md:p-8"}>
