@@ -36,8 +36,9 @@ export default function AdminLoginPage() {
       if (role !== "admin" && role !== "superadmin") {
         await signOut()
         toast.error("Unauthorized role", {
-          description: "This login is for admin and superadmin users only.",
+          description: "Judges and sponsors must use the judge login page instead.",
         })
+        router.replace("/judge-login")
         return
       }
 
