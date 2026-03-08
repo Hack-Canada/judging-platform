@@ -15,5 +15,4 @@ export const defaultRooms: Room[] = [
   { id: 8, name: "Room 8", description: "Judging room 8" },
   { id: 9, name: "Room 9", description: "Judging room 9" },
   { id: 10, name: "Room 10", description: "Judging room 10" },
-  { id: 11, name: "Room 11", description: "Judging room 11" },
 ]
