@@ -35,7 +35,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { IconPlus, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconDeviceFloppy } from "@tabler/icons-react"
+import { IconPlus, IconEdit, IconTrash, IconDeviceFloppy, IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
+import posthog from "posthog-js"
 import { toast } from "sonner"
 import type { Judge } from "@/lib/judges-data"
 import { generateTimeSlots, getEndTime, type TimeSlot, type DaySchedule } from "@/lib/schedule-data"
@@ -51,10 +52,7 @@ type CalendarSubmission = {
 
 
 export default function CalendarPage() {
-  const [selectedDate, setSelectedDate] = React.useState(() => {
-    const today = new Date()
-    return today.toISOString().split("T")[0]
-  })
+  const [selectedDate, setSelectedDate] = React.useState("2026-03-08")
   const [judges, setJudges] = React.useState<Judge[]>([])
   const [submissions, setSubmissions] = React.useState<CalendarSubmission[]>([])
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
@@ -68,26 +66,10 @@ export default function CalendarPage() {
   const [saving, setSaving] = React.useState(false)
   const [unscheduledSubmissions, setUnscheduledSubmissions] = React.useState<CalendarSubmission[]>([])
 
-  const persistSelectedCalendarDate = React.useCallback(async (nextDate: string) => {
-    try {
-      const { error } = await supabase
-        .from("admin_settings")
-        .upsert(
-          {
-            setting_key: "calendar_selected_date",
-            setting_value: nextDate,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "setting_key" }
-        )
-
-      if (error) {
-        throw error
-      }
-    } catch (error) {
-      console.error("Failed to persist selected calendar date", error)
-    }
-  }, [])
+  // Refs so loadSlotsForDate always reads the latest data without stale closures
+  const submissionsRef = React.useRef<CalendarSubmission[]>([])
+  const roomsRef = React.useRef<Room[]>(defaultRooms)
+  const judgesRef = React.useRef<Judge[]>([])
 
   const [formData, setFormData] = React.useState({
     startTime: "09:00",
@@ -95,6 +77,56 @@ export default function CalendarPage() {
     judgeIds: [] as (number | string)[],
     roomId: "",
   })
+
+  // Defined before loadFromSupabase so it can be called after refs are synced.
+  // Reads from refs (not state) so this callback is stable (deps: []) and never
+  // captures stale submissions/rooms/judges, eliminating the race condition where
+  // an earlier-started fetch would overwrite good data with "Unknown" project names.
+  const loadSlotsForDate = React.useCallback(async (date: string) => {
+    const { data: rows, error } = await supabase
+      .from("calendar_schedule_slots")
+      .select("id, date, start_time, end_time, submission_id, room_id, judge_ids")
+      .eq("date", date)
+      .order("start_time", { ascending: true })
+
+    if (error) {
+      setSlots([])
+      return
+    }
+    if (!rows || rows.length === 0) {
+      setSlots([])
+      return
+    }
+    type SlotRow = { id: string; start_time: string; end_time: string; submission_id: string; room_id: number; judge_ids?: string[] }
+    const timeSlotsMapped: TimeSlot[] = (rows as SlotRow[]).map((row) => {
+      const startTime = typeof row.start_time === "string"
+        ? row.start_time.slice(0, 5)
+        : row.start_time
+      const endTime = typeof row.end_time === "string"
+        ? row.end_time.slice(0, 5)
+        : row.end_time
+      // Use refs — always up-to-date regardless of render cycle
+      const sub = submissionsRef.current.find((s) => s.id === row.submission_id)
+      const room = roomsRef.current.find((r) => r.id === row.room_id)
+      const judgeIds = Array.isArray(row.judge_ids) ? row.judge_ids : []
+      const judgeNames = judgeIds
+        .map((id: string) => judgesRef.current.find((j) => String(j.id) === String(id))?.name)
+        .filter(Boolean) as string[]
+      return {
+        id: row.id,
+        startTime,
+        endTime,
+        projectId: row.submission_id,
+        projectName: sub?.project_name ?? "Unknown",
+        judgeIds,
+        judgeNames,
+        roomId: row.room_id,
+        roomName: room?.name ?? `Room ${row.room_id}`,
+      }
+    })
+    setSlots(timeSlotsMapped)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // stable — reads from refs, not state
 
   React.useEffect(() => {
     const loadFromSupabase = async () => {
@@ -139,33 +171,28 @@ export default function CalendarPage() {
                 setScheduleEndTime(endTime)
               }
 
-              const selectedDate = settingsMap.get("calendar_selected_date")
-              if (selectedDate) {
-                setSelectedDate(selectedDate)
-              }
-
               // Load rooms data
               const roomsData = settingsMap.get("rooms_data")
               if (roomsData) {
                 try {
                   const parsed = JSON.parse(roomsData)
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setRooms(parsed)
-                  } else {
-                    setRooms(defaultRooms)
-                  }
+                  const parsedRooms = Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultRooms
+                  // Sync ref so loadSlotsForDate reads fresh room data
+                  roomsRef.current = parsedRooms
+                  setRooms(parsedRooms)
                 } catch (e) {
-
+                  roomsRef.current = defaultRooms
                   setRooms(defaultRooms)
                 }
               } else {
+                roomsRef.current = defaultRooms
                 setRooms(defaultRooms)
               }
 
             }
           } catch (error) {
-
             // Fallback to defaults
+            roomsRef.current = defaultRooms
             setRooms(defaultRooms)
           }
         }
@@ -176,19 +203,22 @@ export default function CalendarPage() {
         const [{ data: supabaseJudges, error: judgesError }, { data: supabaseSubmissions, error: submissionsError }] =
           await Promise.all([
             supabase.from("judges").select("id, name, email, tracks"),
-            supabase.from("submissions").select("id, project_name, tracks"),
+            supabase.from("test_submissions").select("id, project_name, tracks"),
           ])
 
         if (!judgesError && supabaseJudges) {
           const rows = supabaseJudges as { id: string; name: string; email?: string; tracks?: string[] }[]
-          setJudges(rows.map((row) => ({
+          const mappedJudges = rows.map((row) => ({
             id: row.id,
             name: row.name,
             email: row.email || "",
             assignedProjects: 0,
             totalInvested: 0,
             tracks: row.tracks || ["General"],
-          })) as unknown as Judge[])
+          })) as unknown as Judge[]
+          // Sync ref first so loadSlotsForDate reads fresh data
+          judgesRef.current = mappedJudges
+          setJudges(mappedJudges)
         }
 
         if (!submissionsError && supabaseSubmissions) {
@@ -198,10 +228,13 @@ export default function CalendarPage() {
             project_name: row.project_name ?? "Untitled",
             tracks: row.tracks || ["General"],
           }))
+          // Sync ref first so loadSlotsForDate reads fresh data
+          submissionsRef.current = mappedSubmissions
           setSubmissions(mappedSubmissions)
         }
 
-        // Slots for selectedDate are loaded in loadSlotsForDate effect below
+        // Now that refs hold the latest data, load slots for the current date
+        await loadSlotsForDate(selectedDate)
       } catch (error) {
 
       }
@@ -229,64 +262,33 @@ export default function CalendarPage() {
     return () => {
       void supabase.removeChannel(settingsChannel)
     }
-  }, [selectedDate])
-  
-  // Load slots from Supabase for selectedDate (so Admin-published schedule shows up)
-  const loadSlotsForDate = React.useCallback(async (date: string) => {
-    const { data: rows, error } = await supabase
-      .from("calendar_schedule_slots")
-      .select("id, date, start_time, end_time, submission_id, room_id, judge_ids")
-      .eq("date", date)
-      .order("start_time", { ascending: true })
+  }, [selectedDate, loadSlotsForDate])
 
-    if (error) {
-      setSlots([])
-      return
-    }
-    if (!rows || rows.length === 0) {
-      setSlots([])
-      return
-    }
-    type SlotRow = { id: string; start_time: string; end_time: string; submission_id: string; room_id: number; judge_ids?: string[] }
-    const timeSlotsMapped: TimeSlot[] = (rows as SlotRow[]).map((row) => {
-      const startTime = typeof row.start_time === "string"
-        ? row.start_time.slice(0, 5)
-        : row.start_time
-      const endTime = typeof row.end_time === "string"
-        ? row.end_time.slice(0, 5)
-        : row.end_time
-      const sub = submissions.find((s) => s.id === row.submission_id)
-      const room = rooms.find((r) => r.id === row.room_id)
-      const judgeIds = Array.isArray(row.judge_ids) ? row.judge_ids : []
-      const judgeNames = judgeIds
-        .map((id: string) => judges.find((j) => String(j.id) === String(id))?.name)
-        .filter(Boolean) as string[]
-      return {
-        id: row.id,
-        startTime,
-        endTime,
-        projectId: row.submission_id,
-        projectName: sub?.project_name ?? "Unknown",
-        judgeIds,
-        judgeNames,
-        roomId: row.room_id,
-        roomName: room?.name ?? `Room ${row.room_id}`,
-      }
-    })
-    setSlots(timeSlotsMapped)
-  }, [submissions, rooms, judges])
-
+  // Re-load slots whenever date changes
   React.useEffect(() => {
     void loadSlotsForDate(selectedDate)
   }, [selectedDate, loadSlotsForDate])
 
-  // When Admin publishes schedule, refetch slots for current date
+  // When Admin publishes schedule, refetch slots for current date (same-tab event)
   React.useEffect(() => {
     const onSchedulePublished = () => {
       void loadSlotsForDate(selectedDate)
     }
     window.addEventListener("schedulePublished", onSchedulePublished)
     return () => window.removeEventListener("schedulePublished", onSchedulePublished)
+  }, [selectedDate, loadSlotsForDate])
+
+  // Realtime subscription — reload slots whenever calendar_schedule_slots changes (cross-tab)
+  React.useEffect(() => {
+    const channel = supabase
+      .channel("calendar-slots-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "calendar_schedule_slots" },
+        () => { void loadSlotsForDate(selectedDate) }
+      )
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
   }, [selectedDate, loadSlotsForDate])
 
   // Update time slots when time range changes
@@ -300,19 +302,32 @@ export default function CalendarPage() {
     setSlots(newSlots)
   }
 
+  // Compute which submissions have no slot on the selected date
+  React.useEffect(() => {
+    if (submissions.length === 0) {
+      setUnscheduledSubmissions([])
+      return
+    }
+    const scheduledIds = new Set(slots.map((s) => s.projectId))
+    setUnscheduledSubmissions(submissions.filter((s) => !scheduledIds.has(s.id)))
+  }, [submissions, slots])
+
+  // Navigate to the previous or next date (uses local date constructor to avoid UTC shift)
+  const navigateDate = React.useCallback((delta: number) => {
+    setSelectedDate((prev) => {
+      const [y, m, d] = prev.split("-").map(Number)
+      const date = new Date(y, m - 1, d + delta)
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+    })
+  }, [])
+
   // Generate time slots dynamically based on the configured time range
   const timeSlots = React.useMemo(
     () => generateTimeSlots(selectedDate, scheduleStartTime, scheduleEndTime),
     [selectedDate, scheduleStartTime, scheduleEndTime]
   )
 
-  const navigateDate = (days: number) => {
-    const currentDate = new Date(selectedDate)
-    currentDate.setDate(currentDate.getDate() + days)
-    setSelectedDate(currentDate.toISOString().split("T")[0])
-  }
-
-  const handleOpenDialog = (slot?: TimeSlot, time?: string, roomId?: number) => {
+const handleOpenDialog = (slot?: TimeSlot, time?: string, roomId?: number) => {
     if (slot) {
       setEditingSlot(slot)
       setFormData({
@@ -436,6 +451,7 @@ export default function CalendarPage() {
         a.startTime.localeCompare(b.startTime)
       )
       saveSchedule(updated)
+      posthog.capture("slot_assigned", { project_name: submission.project_name, time: formData.startTime, room: selectedRoom.name })
       toast.success("Time slot created!", {
         description: `Slot for ${submission.project_name} has been scheduled`,
       })
@@ -583,6 +599,7 @@ export default function CalendarPage() {
         return
       }
 
+      posthog.capture("schedule_saved", { slot_count: slots.length, date: selectedDate })
       toast.success("Schedule saved!", {
         description: `Saved ${slots.length} time slots for ${selectedDate}`,
       })
@@ -611,8 +628,9 @@ export default function CalendarPage() {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("en-US", {
+    // Parse as local date to avoid UTC midnight → previous day in negative UTC offsets
+    const [y, mo, d] = dateString.split("-").map(Number)
+    return new Date(y, mo - 1, d).toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
@@ -685,48 +703,32 @@ export default function CalendarPage() {
                     )}
                   </div>
 
-                  {/* Date Navigation */}
+                  {/* Date Display */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <CardTitle>Date Selection</CardTitle>
+                      <CardTitle>Date</CardTitle>
                       <CardDescription>
-                        Select the date for scheduling
+                        {formatDate(selectedDate)}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-2">
-                          <Label>Date</Label>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => navigateDate(-1)}
-                            >
-                              <IconChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <Input
-                              type="date"
-                              value={selectedDate}
-                              onChange={(e) => {
-                                const nextDate = e.target.value
-                                setSelectedDate(nextDate)
-                                void persistSelectedCalendarDate(nextDate)
-                              }}
-                              className="flex-1"
-                            />
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => navigateDate(1)}
-                            >
-                              <IconChevronRight className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {formatDate(selectedDate)}
-                          </p>
+                        {/* Date navigation */}
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="icon" onClick={() => navigateDate(-1)} aria-label="Previous day">
+                            <IconChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <Input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="w-40"
+                          />
+                          <Button variant="outline" size="icon" onClick={() => navigateDate(1)} aria-label="Next day">
+                            <IconChevronRight className="h-4 w-4" />
+                          </Button>
                         </div>
+                        <div className="flex flex-col gap-2">
                         <div className="p-3 bg-muted rounded-md">
                           <p className="text-sm text-muted-foreground">
                             <strong>Current Settings (from Admin):</strong> Schedule: {scheduleStartTime} - {scheduleEndTime}, Slot duration: {slotDuration} minutes, Judges per project: {judgesPerProject}. 
@@ -753,6 +755,7 @@ export default function CalendarPage() {
                             Available rooms: {rooms.map(r => r.name).join(", ")}
                           </p>
                         </div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -760,7 +763,7 @@ export default function CalendarPage() {
                   {/* Calendar View */}
                   <Card>
                     <CardHeader>
-                      <CardTitle>Time Slots - {formatDate(selectedDate)}</CardTitle>
+                      <CardTitle>Time Slots — {formatDate(selectedDate)}</CardTitle>
                       <CardDescription>
                         Click on a time slot to assign or edit judge-submission assignments. All rooms are shown for each time frame.
                       </CardDescription>

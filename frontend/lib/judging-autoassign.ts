@@ -1,6 +1,5 @@
 import type { AdminProject } from "@/lib/admin-projects-data"
 import type { Judge } from "@/lib/judges-data"
-import type { Room } from "@/lib/rooms-data"
 
 export type AutoAssignResult = {
   updatedProjects: AdminProject[]
@@ -22,101 +21,66 @@ export type ScheduleSlot = {
   judge_ids: string[]
 }
 
-const MIN_JUDGES_PER_PROJECT = 2
-const MIN_REQUIRED_JUDGES_PER_PROJECT = 1
-const MAX_JUDGES_PER_PROJECT = 2
+/** judgeId (string UUID) → roomId (number) */
+export type JudgeRoomMap = Map<string, number>
 
-export const clampJudgesPerProject = (value: number): number => {
-  return Math.min(MAX_JUDGES_PER_PROJECT, Math.max(MIN_JUDGES_PER_PROJECT, value))
-}
+// ---------------------------------------------------------------------------
+// Auto-assign: deterministic track → judge matching
+// ---------------------------------------------------------------------------
 
-const getProjectTracks = (project: AdminProject): string[] => {
-  const rawTracks = project.tracks
-  if (Array.isArray(rawTracks) && rawTracks.length > 0) {
-    return rawTracks as string[]
-  }
-  return ["General"]
-}
-
-const canJudgeSubmission = (judge: Judge, projectTracks: string[]): boolean => {
-  const sponsorTracks = projectTracks.filter((track) => track !== "General")
-  if (sponsorTracks.length === 0) {
-    return true
-  }
-  // any overlap with sponsor tracks is enough.
-  return sponsorTracks.some((track) => judge.tracks?.includes(track))
-}
-
-export const autoAssignProjectsByTrack = (
+/**
+ * For each project, assigns every judge whose track appears in the project's
+ * track list. One judge can own multiple tracks; they are only assigned once
+ * per project (deduped by judge name).
+ *
+ * Projects with no matching judge end up in underAssignedProjects.
+ */
+export const autoAssignByTrackMatch = (
   judges: Judge[],
   projects: AdminProject[],
-  requestedJudgesPerProject: number,
 ): AutoAssignResult => {
-  const targetJudgesPerProject = clampJudgesPerProject(requestedJudgesPerProject)
-
-  const updatedProjects = projects.map((project) => ({
-    ...project,
-    assignedJudges: [] as string[],
-  }))
+  // Build track → Judge lookup
+  const trackToJudge = new Map<string, Judge>()
+  judges.forEach((judge) => {
+    judge.tracks?.forEach((track) => {
+      trackToJudge.set(track, judge)
+    })
+  })
 
   const judgeAssignmentCount = new Map<string, number>()
-  judges.forEach((judge) => {
-    judgeAssignmentCount.set(judge.name, 0)
-  })
+  judges.forEach((judge) => judgeAssignmentCount.set(judge.name, 0))
 
   const underAssignedProjects: AutoAssignResult["underAssignedProjects"] = []
 
-  projects.forEach((project) => {
-    const projectInList = updatedProjects.find((candidate) => candidate.id === project.id)
-    if (!projectInList) {
-      return
-    }
+  const updatedProjects = projects.map((project) => {
+    const projectTracks: string[] =
+      Array.isArray(project.tracks) && project.tracks.length > 0
+        ? (project.tracks as string[])
+        : []
 
-    const projectTracks = getProjectTracks(project)
-    const eligibleJudges = judges.filter((judge) => canJudgeSubmission(judge, projectTracks))
-    const sortedEligibleJudges = [...eligibleJudges].sort(
-      (a, b) =>
-        (judgeAssignmentCount.get(a.name) ?? 0) -
-        (judgeAssignmentCount.get(b.name) ?? 0),
-    )
+    const assignedJudges: string[] = []
 
-    for (const judge of sortedEligibleJudges) {
-      if (projectInList.assignedJudges.length >= targetJudgesPerProject) {
-        break
-      }
-      if (projectInList.assignedJudges.includes(judge.name)) {
-        continue
-      }
-      projectInList.assignedJudges.push(judge.name)
-      judgeAssignmentCount.set(judge.name, (judgeAssignmentCount.get(judge.name) ?? 0) + 1)
-    }
-
-    if (projectInList.assignedJudges.length < MIN_REQUIRED_JUDGES_PER_PROJECT) {
-      const fallbackJudge = [...judges]
-        .sort(
-          (a, b) =>
-            (judgeAssignmentCount.get(a.name) ?? 0) -
-            (judgeAssignmentCount.get(b.name) ?? 0),
-        )
-        .find((judge) => !projectInList.assignedJudges.includes(judge.name))
-
-      if (fallbackJudge) {
-        projectInList.assignedJudges.push(fallbackJudge.name)
+    for (const track of projectTracks) {
+      const judge = trackToJudge.get(track)
+      if (judge && !assignedJudges.includes(judge.name)) {
+        assignedJudges.push(judge.name)
         judgeAssignmentCount.set(
-          fallbackJudge.name,
-          (judgeAssignmentCount.get(fallbackJudge.name) ?? 0) + 1,
+          judge.name,
+          (judgeAssignmentCount.get(judge.name) ?? 0) + 1,
         )
       }
     }
 
-    if (projectInList.assignedJudges.length < MIN_JUDGES_PER_PROJECT) {
+    if (assignedJudges.length === 0) {
       underAssignedProjects.push({
-        projectName: projectInList.name,
-        assigned: projectInList.assignedJudges.length,
-        minimumRequired: MIN_JUDGES_PER_PROJECT,
-        eligibleJudges: eligibleJudges.length,
+        projectName: project.name,
+        assigned: 0,
+        minimumRequired: 1,
+        eligibleJudges: 0,
       })
     }
+
+    return { ...project, assignedJudges }
   })
 
   return {
@@ -126,14 +90,18 @@ export const autoAssignProjectsByTrack = (
   }
 }
 
+// ---------------------------------------------------------------------------
+// Schedule builder: one slot per (project, judge) pair, judge in fixed room
+// ---------------------------------------------------------------------------
+
 type ScheduleSubmission = {
   submissionId: string
   judgeIds: string[]
 }
 
-type BuildScheduleInput = {
+type BuildSchedulePerJudgeRoomInput = {
   submissions: ScheduleSubmission[]
-  rooms: Room[]
+  judgeRoomMap: JudgeRoomMap
   scheduleDate: string
   startTime: string
   endTime: string
@@ -157,117 +125,109 @@ const minutesToTime = (totalMinutes: number): string => {
   return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`
 }
 
-export const buildScheduleWithMinimalRoomMoves = (
-  input: BuildScheduleInput,
+/**
+ * Builds a schedule where each judge has a fixed room and teams rotate between
+ * rooms. Each (submission, judge) pair gets its own time slot.
+ *
+ * Constraint: a team cannot appear in two rooms at the same time tick.
+ *
+ * Returns slots with exactly one judge_id per slot.
+ */
+export const buildSchedulePerJudgeRoom = (
+  input: BuildSchedulePerJudgeRoomInput,
 ): BuildScheduleResult => {
   const {
     submissions,
-    rooms,
+    judgeRoomMap,
     scheduleDate,
     startTime,
     endTime,
     slotDurationMinutes,
   } = input
 
-  const slots: ScheduleSlot[] = []
-  const lastRoomByJudge = new Map<string, number>()
-  let roomMoveCount = 0
-  let unscheduled = [...submissions]
+  // Build per-judge queue: judgeId → submissionId[]
+  // Preserve insertion order for consistent scheduling
+  const judgeQueue = new Map<string, string[]>()
+  for (const sub of submissions) {
+    for (const judgeId of sub.judgeIds) {
+      if (!judgeQueue.has(judgeId)) judgeQueue.set(judgeId, [])
+      judgeQueue.get(judgeId)!.push(sub.submissionId)
+    }
+  }
 
-  let currentSlotStart = timeToMinutes(startTime)
+  const slots: ScheduleSlot[] = []
+  let currentTick = timeToMinutes(startTime)
   const scheduleEnd = timeToMinutes(endTime)
 
-  while (
-    unscheduled.length > 0 &&
-    currentSlotStart + slotDurationMinutes <= scheduleEnd
-  ) {
-    const judgesUsedThisSlot = new Set<string>()
-    const assignmentsThisSlot: Array<{ roomId: number; unscheduledIndex: number }> = []
-    const pickedSubmissionIndexes = new Set<number>()
+  while (currentTick + slotDurationMinutes <= scheduleEnd) {
+    // Track which submission teams are already placed this tick
+    const teamsThisTick = new Set<string>()
+    let anyPlaced = false
 
-    for (const room of rooms) {
-      let bestIndex = -1
-      let bestMoveCost = Number.POSITIVE_INFINITY
-      let bestStayScore = Number.NEGATIVE_INFINITY
+    for (const [judgeId, queue] of judgeQueue) {
+      if (queue.length === 0) continue
 
-      unscheduled.forEach((submission, index) => {
-        if (pickedSubmissionIndexes.has(index)) {
-          return
-        }
-        if (submission.judgeIds.some((judgeId) => judgesUsedThisSlot.has(judgeId))) {
-          return
-        }
+      const roomId = judgeRoomMap.get(judgeId)
+      if (roomId === undefined) continue
 
-        let moveCost = 0
-        let stayScore = 0
+      // Find the first project in this judge's queue not already scheduled this tick
+      const idx = queue.findIndex((submId) => !teamsThisTick.has(submId))
+      if (idx === -1) continue
 
-        submission.judgeIds.forEach((judgeId) => {
-          const previousRoom = lastRoomByJudge.get(judgeId)
-          if (previousRoom === undefined) {
-            return
-          }
-          if (previousRoom === room.id) {
-            stayScore += 1
-          } else {
-            moveCost += 1
-          }
-        })
-
-        const isBetter =
-          moveCost < bestMoveCost ||
-          (moveCost === bestMoveCost && stayScore > bestStayScore)
-
-        if (isBetter) {
-          bestIndex = index
-          bestMoveCost = moveCost
-          bestStayScore = stayScore
-        }
-      })
-
-      if (bestIndex === -1) {
-        continue
-      }
-
-      assignmentsThisSlot.push({ roomId: room.id, unscheduledIndex: bestIndex })
-      pickedSubmissionIndexes.add(bestIndex)
-
-      const selectedSubmission = unscheduled[bestIndex]
-      selectedSubmission.judgeIds.forEach((judgeId) => judgesUsedThisSlot.add(judgeId))
-    }
-
-    assignmentsThisSlot.forEach(({ roomId, unscheduledIndex }) => {
-      const submission = unscheduled[unscheduledIndex]
-      const slotStart = minutesToTime(currentSlotStart)
-      const slotEnd = minutesToTime(currentSlotStart + slotDurationMinutes)
-
-      submission.judgeIds.forEach((judgeId) => {
-        const previousRoom = lastRoomByJudge.get(judgeId)
-        if (previousRoom !== undefined && previousRoom !== roomId) {
-          roomMoveCount += 1
-        }
-      })
+      const submId = queue.splice(idx, 1)[0]
+      teamsThisTick.add(submId)
+      anyPlaced = true
 
       slots.push({
         date: scheduleDate,
-        start_time: slotStart,
-        end_time: slotEnd,
-        submission_id: submission.submissionId,
+        start_time: minutesToTime(currentTick),
+        end_time: minutesToTime(currentTick + slotDurationMinutes),
+        submission_id: submId,
         room_id: roomId,
-        judge_ids: submission.judgeIds,
+        judge_ids: [judgeId],
       })
+    }
 
-      submission.judgeIds.forEach((judgeId) => {
-        lastRoomByJudge.set(judgeId, roomId)
-      })
-    })
+    // If nothing was placed this tick (all queues empty or all blocked), stop
+    if (!anyPlaced) break
 
-    unscheduled = unscheduled.filter((_, index) => !pickedSubmissionIndexes.has(index))
-    currentSlotStart += slotDurationMinutes
+    currentTick += slotDurationMinutes
+  }
+
+  // Any submissions still remaining in queues are unscheduled
+  const remainingSet = new Set<string>()
+  for (const queue of judgeQueue.values()) {
+    queue.forEach((submId) => remainingSet.add(submId))
   }
 
   return {
     slots,
-    unscheduledSubmissionIds: unscheduled.map((submission) => submission.submissionId),
-    roomMoveCount,
+    unscheduledSubmissionIds: Array.from(remainingSet),
+    roomMoveCount: 0, // not applicable in the fixed-room model
   }
 }
+
+// ---------------------------------------------------------------------------
+// @deprecated — kept for reference only, no longer used
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use autoAssignByTrackMatch instead */
+export const autoAssignProjectsByTrack = (
+  _judges: Judge[],
+  _projects: AdminProject[],
+  _requestedJudgesPerProject: number,
+): AutoAssignResult => {
+  throw new Error(
+    "autoAssignProjectsByTrack is deprecated. Use autoAssignByTrackMatch.",
+  )
+}
+
+/** @deprecated Use buildSchedulePerJudgeRoom instead */
+export const buildScheduleWithMinimalRoomMoves = (): never => {
+  throw new Error(
+    "buildScheduleWithMinimalRoomMoves is deprecated. Use buildSchedulePerJudgeRoom.",
+  )
+}
+
+/** @deprecated No longer needed */
+export const clampJudgesPerProject = (value: number): number => value

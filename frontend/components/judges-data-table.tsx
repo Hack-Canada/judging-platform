@@ -79,11 +79,16 @@ function ProjectNameCell({ row }: { row: { original: JudgeRow } }) {
     if (details || !submissionId) return
     setLoading(true)
     const { data } = await supabase
-      .from("submissions")
-      .select("team_name, members, tracks, devpost_link")
+      .from("test_submissions")
+      .select("submitter_name, members, tracks, devpost_link")
       .eq("id", submissionId)
       .single()
-    if (data) setDetails(data as NonNullable<typeof details>)
+    if (data) setDetails({
+      team_name: (data as any).submitter_name ?? "",
+      members: (data as any).members ?? [],
+      tracks: (data as any).tracks ?? [],
+      devpost_link: (data as any).devpost_link ?? "",
+    })
     setLoading(false)
   }
 

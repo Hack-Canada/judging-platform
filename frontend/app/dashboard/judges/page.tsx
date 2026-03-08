@@ -114,29 +114,6 @@ export default function JudgesPage() {
     return judgesDirectory
   }, [judgeAssignmentFilter, judgesDirectory])
 
-  if (loadingJudgeIdentity || (loading && !judge && dashboardEntries.length === 0 && selectedJudgeId !== null)) {
-    return (
-      <div suppressHydrationWarning className="relative">
-        <div className="animated-grid fixed inset-0 z-0" />
-        <SidebarProvider
-          style={
-            {
-              "--sidebar-width": "calc(var(--spacing) * 72)",
-              "--header-height": "calc(var(--spacing) * 12)",
-            } as React.CSSProperties
-          }
-        >
-          <AppSidebar variant="inset" />
-          <SidebarInset className="relative z-10">
-            <SiteHeader />
-            <div className="flex flex-1 items-center justify-center h-[calc(100vh-var(--header-height))]">
-              <p className="text-muted-foreground">Nothing is assigned to you right now, come back after :)</p>
-            </div>
-          </SidebarInset>
-        </SidebarProvider>
-      </div>
-    )
-  }
 
   // Resolve current judge strictly by authenticated email.
   React.useEffect(() => {
@@ -351,25 +328,28 @@ export default function JudgesPage() {
         })
         setScheduleSlotsMap(slotsMap)
 
-        // Load submission details from Supabase (only assigned ones)
+        // Load submission details from test_submissions by judge's tracks
         let submissionsData: any[] | null = null
-        if (assignedSubmissionIds.length > 0) {
-
+        if (judgeData.tracks && judgeData.tracks.length > 0) {
           const { data, error: submissionsError } = await supabase
-            .from("submissions")
-            .select("id, project_name, tracks, team_name, devpost_link")
-            .in("id", assignedSubmissionIds)
-            .order("submitted_at", { ascending: false })
+            .from("test_submissions")
+            .select("id, project_name, tracks, devpost_link")
+            .overlaps("tracks", judgeData.tracks)
+            .order("created_at", { ascending: false })
 
-          if (submissionsError) {
-
-
-          } else {
+          if (!submissionsError) {
             submissionsData = data
-
           }
-        } else {
+        } else if (assignedSubmissionIds.length > 0) {
+          const { data, error: submissionsError } = await supabase
+            .from("test_submissions")
+            .select("id, project_name, tracks, devpost_link")
+            .in("id", assignedSubmissionIds)
+            .order("created_at", { ascending: false })
 
+          if (!submissionsError) {
+            submissionsData = data
+          }
         }
 
         // Load investments from Supabase (using submission_id)
@@ -825,6 +805,11 @@ export default function JudgesPage() {
         <AppSidebar variant="inset" />
         <SidebarInset className="relative z-10">
           <SiteHeader />
+          {(loadingJudgeIdentity || (loading && !judge && dashboardEntries.length === 0 && selectedJudgeId !== null)) ? (
+            <div className="flex flex-1 items-center justify-center h-[calc(100vh-var(--header-height))]">
+              <p className="text-muted-foreground">Nothing is assigned to you right now, come back after :)</p>
+            </div>
+          ) : (
           <div className="flex flex-col overflow-visible">
             <div className="@container/main flex flex-col gap-2 overflow-visible">
               <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -1002,6 +987,7 @@ export default function JudgesPage() {
               </div>
             </div>
           </div>
+          )}
         </SidebarInset>
       </SidebarProvider>
 

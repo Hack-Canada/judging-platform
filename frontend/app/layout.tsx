@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { fredoka, rubik } from "@/lib/fonts";
-import { Analytics } from "@vercel/analytics/next";
+import { PostHogProvider } from "@/components/posthog-provider";
 
 export const metadata: Metadata = {
   title: {
@@ -41,9 +41,10 @@ export default function RootLayout({
       <body
         className={`${fredoka.className} ${rubik.variable} antialiased`}
       >
-        {children}
-        <Toaster />
-        <Analytics />
+        <PostHogProvider>
+          {children}
+          <Toaster />
+        </PostHogProvider>
       </body>
     </html>
   );

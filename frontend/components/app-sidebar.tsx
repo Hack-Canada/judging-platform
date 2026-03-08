@@ -8,8 +8,8 @@ import {
   IconCalendar,
   IconFolder,
   IconUser,
-  IconUsers,
   IconShield,
+  IconChartBar,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -39,11 +39,6 @@ const data = {
       icon: IconGavel,
     },
     {
-      title: "Hackers Submission",
-      url: "/dashboard/hackers",
-      icon: IconUsers,
-    },
-    {
       title: "Hacker View",
       url: "/dashboard/hacker-view",
       icon: IconUser,
@@ -53,10 +48,15 @@ const data = {
       url: "/dashboard/submissions",
       icon: IconFolder,
     },
+    // {
+    //   title: "Calendar",
+    //   url: "/dashboard/calendar",
+    //   icon: IconCalendar,
+    // },
     {
-      title: "Calendar",
-      url: "/dashboard/calendar",
-      icon: IconCalendar,
+      title: "Analytics",
+      url: "/dashboard/analytics",
+      icon: IconChartBar,
     },
     {
       title: "Admin",
@@ -146,7 +146,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [loadUser])
 
   return (
-    <Sidebar collapsible={"offcanvas" as "icon"} {...props}>
+    <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>

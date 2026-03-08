@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { getCurrentUserWithRole, signInJudgeWithPin, signOut } from "@/lib/auth-helpers"
 import { getDefaultRouteForRole } from "@/lib/rbac"
+import posthog from "posthog-js"
 
 export default function JudgeLoginPage() {
   const router = useRouter()
@@ -35,12 +36,15 @@ export default function JudgeLoginPage() {
       const { role } = await getCurrentUserWithRole()
       if (role !== "judge" && role !== "sponsor") {
         await signOut()
+        posthog.capture("login_failed", { reason: "unauthorized_role", attempted_role: role, login_type: "judge" })
         toast.error("Unauthorized role", {
           description: "This login is for judges and sponsors only.",
         })
         return
       }
 
+      posthog.capture("judge_login", { role, email: email.trim() })
+      posthog.identify(email.trim(), { email: email.trim(), role })
       router.replace(getDefaultRouteForRole(role))
     } catch (error) {
       toast.error("Sign in failed", {

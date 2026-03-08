@@ -53,10 +53,11 @@ import { DashboardAdminSkeleton } from "@/components/page-skeletons"
 import { supabase } from "@/lib/supabase-client"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
-  autoAssignProjectsByTrack,
-  buildScheduleWithMinimalRoomMoves,
-  clampJudgesPerProject,
+  autoAssignByTrackMatch,
+  buildSchedulePerJudgeRoom,
+  type JudgeRoomMap,
 } from "@/lib/judging-autoassign"
+import { Textarea } from "@/components/ui/textarea"
 
 
 export default function AdminPage() {
@@ -75,7 +76,7 @@ export default function AdminPage() {
   const [investmentFund, setInvestmentFund] = React.useState(String(POINTS_PER_JUDGE))
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
-  const [slotDuration, setSlotDuration] = React.useState(5) // Calendar slot duration in minutes
+  const [slotDuration, setSlotDuration] = React.useState("5") // Calendar slot duration in minutes
   const [scheduleStartTime, setScheduleStartTime] = React.useState("10:00") // Default 10 AM
   const [scheduleEndTime, setScheduleEndTime] = React.useState("17:00") // Default 5 PM
   const [minInvestment, setMinInvestment] = React.useState("0")
@@ -120,6 +121,23 @@ export default function AdminPage() {
   })
   const [manualAssignmentDialogOpen, setManualAssignmentDialogOpen] = React.useState(false)
   const [manualProjectsList, setManualProjectsList] = React.useState<AdminProject[]>([])
+
+  // Judge-room assignment state: judgeId → roomId
+  const [judgeRoomAssignments, setJudgeRoomAssignments] = React.useState<Record<string, number>>({})
+
+  // CSV import state
+  type ParsedProject = {
+    project_name: string
+    devpost_link: string | null
+    tracks: string[]
+    submitter_name: string | null
+    submitter_email: string | null
+    members: string[]
+  }
+  const [csvImportOpen, setCsvImportOpen] = React.useState(false)
+  const [csvText, setCsvText] = React.useState("")
+  const [csvPreview, setCsvPreview] = React.useState<ParsedProject[] | null>(null)
+  const [csvImporting, setCsvImporting] = React.useState(false)
 
   // Backup state
   type BackupSnapshot = {
@@ -283,13 +301,32 @@ export default function AdminPage() {
     }
   }, [])
 
+  const findMatchingSubmission = React.useCallback((sourceRow: any, existingRows: any[]) => {
+    const normalizedDevpostLink = (sourceRow?.devpost_link || "").trim()
+    if (normalizedDevpostLink) {
+      const byDevpost = existingRows.find(
+        (row) => (row.devpost_link || "").trim().toLowerCase() === normalizedDevpostLink.toLowerCase(),
+      )
+      if (byDevpost) return byDevpost
+    }
+
+    const normalizedProjectName = (sourceRow?.project_name || "").trim().toLowerCase()
+    if (!normalizedProjectName) return null
+
+    return (
+      existingRows.find(
+        (row) => (row.project_name || "").trim().toLowerCase() === normalizedProjectName,
+      ) || null
+    )
+  }, [])
+
   const loadLeaderboard = React.useCallback(async () => {
     try {
       setLoadingLeaderboard(true)
       const [{ data: submissionsData, error: submissionsError }, { data: investmentsData, error: investmentsError }] = await Promise.all([
         supabase
-          .from("submissions")
-          .select("id, project_name, team_name, tracks, submitted_at"),
+          .from("test_submissions")
+          .select("id, project_name, tracks, created_at"),
         supabase
           .from("judge_investments")
           .select("submission_id, judge_id, amount"),
@@ -323,7 +360,7 @@ export default function AdminPage() {
           tracks: Array.isArray(submission.tracks) ? submission.tracks : ["General"],
           totalPoints: pointsData?.totalPoints || 0,
           judgeCount: pointsData?.judges.size || 0,
-          submittedAt: submission.submitted_at || null,
+          submittedAt: submission.submitted_at || submission.created_at || null,
         }
       })
 
@@ -377,7 +414,7 @@ export default function AdminPage() {
             // Load calendar settings
             const slotDuration = settingsMap.get("calendar_slot_duration")
             if (slotDuration) {
-              setSlotDuration(parseInt(slotDuration) || 5)
+              setSlotDuration(slotDuration)
             }
 
             const startTime = settingsMap.get("calendar_start_time")
@@ -442,31 +479,48 @@ export default function AdminPage() {
               }
             }
 
+            // Load judge-room assignments
+            const judgeRoomsData = settingsMap.get("judge_room_assignments")
+            if (judgeRoomsData) {
+              try {
+                const parsed = JSON.parse(judgeRoomsData)
+                if (parsed && typeof parsed === "object") {
+                  setJudgeRoomAssignments(parsed)
+                }
+              } catch (e) {
+
+              }
+            }
+
           }
         } catch (error) {
 
         }
       }
 
-      await loadSettingsFromSupabase()
-
       try {
+
+        await loadSettingsFromSupabase()
 
         const [
           { data: supabaseJudges, error: judgesError }, 
           { data: supabaseSubmissions, error: submissionsError },
-          { data: assignmentsData, error: assignmentsError }
+          { data: assignmentsData, error: assignmentsError },
+          { data: persistedSubmissions }
         ] = await Promise.all([
           supabase
             .from("judges")
             .select("id, name, email, assigned_projects, total_invested, tracks")
             .order("created_at", { ascending: false }),
           supabase
-            .from("submissions")
-            .select("id, project_name, tracks"),
+            .from("test_submissions")
+            .select("id, project_name, devpost_link, submitter_name, submitter_email, members, tracks, created_at"),
           supabase
             .from("judge_project_assignments")
-            .select("judge_id, submission_id")
+            .select("judge_id, submission_id"),
+          supabase
+            .from("submissions")
+            .select("id, project_name, devpost_link")
         ])
 
 
@@ -526,16 +580,20 @@ export default function AdminPage() {
           }
           
           // Map submissions to AdminProject format with assignments
-          const mappedProjects: AdminProject[] = (supabaseSubmissions as any[]).map((row, index) => ({
-            id: index + 1, // Internal ID for AdminProject (for UI state)
-            name: row.project_name ?? "Untitled Project",
-            assignedJudges: assignmentMap.get(row.id) || [],
-            totalInvestment: 0,
-            tracks: (row.tracks && Array.isArray(row.tracks) && row.tracks.length > 0)
-              ? row.tracks
-              : ["General"],
-            submissionId: row.id, // Store actual submission UUID
-          }))
+          const mappedProjects: AdminProject[] = (supabaseSubmissions as any[]).map((row, index) => {
+            const testId = String(row.id)
+            return {
+              id: index + 1,
+              name: row.project_name ?? "Untitled Project",
+              assignedJudges: assignmentMap.get(testId) || [],
+              totalInvestment: 0,
+              tracks: (row.tracks && Array.isArray(row.tracks) && row.tracks.length > 0)
+                ? row.tracks
+                : ["General"],
+              submissionId: testId,
+              sourceSubmissionId: testId,
+            } as AdminProject
+          })
           setProjectsList(mappedProjects as any)
         }
 
@@ -563,7 +621,7 @@ export default function AdminPage() {
     }
 
     void loadFromSupabase()
-  }, [])
+  }, [findMatchingSubmission, loadTrackStats])
   
   // Helper function to save a setting to Supabase
   const saveSettingToSupabase = async (key: string, value: string) => {
@@ -602,9 +660,9 @@ export default function AdminPage() {
       try {
         setLoadingSubmissions(true)
         const { data, error } = await supabase
-          .from("submissions")
+          .from("test_submissions")
           .select("*")
-          .order("submitted_at", { ascending: false })
+          .order("created_at", { ascending: false })
 
         if (error && !error.message.includes("relation") && !error.message.includes("does not exist")) {
 
@@ -640,7 +698,7 @@ export default function AdminPage() {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "submissions" },
+        { event: "*", schema: "public", table: "test_submissions" },
         () => {
           void loadLeaderboard()
         },
@@ -783,6 +841,156 @@ export default function AdminPage() {
     }
   }
 
+  const saveJudgeRoomAssignment = async (judgeId: string, roomId: number) => {
+    const next = { ...judgeRoomAssignments, [judgeId]: roomId }
+    setJudgeRoomAssignments(next)
+    try {
+      await saveSettingToSupabase("judge_room_assignments", JSON.stringify(next))
+    } catch {
+      toast.error("Failed to save room assignment")
+    }
+  }
+
+  // CSV parsing: one row per track, grouped by project_name / devpost_link
+  const parseCsvForImport = (raw: string): ParsedProject[] => {
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    if (lines.length < 2) return []
+
+    // Parse a single CSV line respecting quoted fields
+    const parseLine = (line: string): string[] => {
+      const fields: string[] = []
+      let field = ""
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (inQuotes) {
+          if (ch === '"' && line[i + 1] === '"') { field += '"'; i++ }
+          else if (ch === '"') { inQuotes = false }
+          else { field += ch }
+        } else {
+          if (ch === '"') { inQuotes = true }
+          else if (ch === ',') { fields.push(field.trim()); field = "" }
+          else { field += ch }
+        }
+      }
+      fields.push(field.trim())
+      return fields
+    }
+
+    const [, ...dataLines] = lines // skip header
+    const byKey = new Map<string, ParsedProject>()
+
+    for (const line of dataLines) {
+      const cols = parseLine(line)
+      const project_name = cols[0]?.trim() || ""
+      const devpost_link = cols[1]?.trim() || null
+      const track = cols[2]?.trim() || ""
+      const submitter_name = cols[3]?.trim() || null
+      const submitter_email = cols[4]?.trim() || null
+      const membersRaw = cols[5]?.trim() || ""
+      const members = membersRaw
+        ? membersRaw.split(/[;,]/).map((m) => m.trim()).filter(Boolean)
+        : []
+
+      if (!project_name) continue
+
+      const key = devpost_link || project_name
+
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          project_name,
+          devpost_link: devpost_link || null,
+          tracks: [],
+          submitter_name,
+          submitter_email,
+          members,
+        })
+      }
+
+      const entry = byKey.get(key)!
+      if (track && !entry.tracks.includes(track)) {
+        entry.tracks.push(track)
+      }
+    }
+
+    return Array.from(byKey.values())
+  }
+
+  const handleCsvParse = () => {
+    const parsed = parseCsvForImport(csvText)
+    if (parsed.length === 0) {
+      toast.error("No projects found", { description: "Check that your CSV has a header row and data rows." })
+      return
+    }
+    setCsvPreview(parsed)
+  }
+
+  const handleCsvImport = async () => {
+    if (!csvPreview || csvPreview.length === 0) return
+    try {
+      setCsvImporting(true)
+
+      // Clear existing test_submissions
+      const { error: deleteError } = await supabase
+        .from("test_submissions")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000")
+
+      if (deleteError) throw deleteError
+
+      // Insert in batches of 20
+      const BATCH = 20
+      for (let i = 0; i < csvPreview.length; i += BATCH) {
+        const batch = csvPreview.slice(i, i + BATCH)
+        const { error: insertError } = await supabase.from("test_submissions").insert(batch)
+        if (insertError) throw insertError
+      }
+
+      toast.success(`Imported ${csvPreview.length} project(s)`, {
+        description: "test_submissions table has been replaced.",
+      })
+
+      // Reload submissions + projects list
+      const [{ data: newSubs }, { data: assignments }] = await Promise.all([
+        supabase.from("test_submissions").select("id, project_name, tracks"),
+        supabase.from("judge_project_assignments").select("judge_id, submission_id"),
+      ])
+
+      if (newSubs) {
+        const assignmentMap = new Map<string, string[]>()
+        if (assignments) {
+          assignments.forEach((a: any) => {
+            const judge = judgesList.find((j: any) => String(j.id) === String(a.judge_id))
+            if (judge && a.submission_id) {
+              if (!assignmentMap.has(a.submission_id)) assignmentMap.set(a.submission_id, [])
+              assignmentMap.get(a.submission_id)!.push(judge.name)
+            }
+          })
+        }
+        const mapped = (newSubs as any[]).map((row, index) => ({
+          id: index + 1,
+          name: row.project_name ?? "Untitled Project",
+          assignedJudges: assignmentMap.get(row.id) || [],
+          totalInvestment: 0,
+          tracks: Array.isArray(row.tracks) && row.tracks.length > 0 ? row.tracks : [],
+          submissionId: row.id,
+        }))
+        setProjectsList(mapped as any)
+        setSubmissions(newSubs as any[])
+      }
+
+      setCsvImportOpen(false)
+      setCsvText("")
+      setCsvPreview(null)
+    } catch (error) {
+      toast.error("Import failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setCsvImporting(false)
+    }
+  }
+
   const handleSaveFund = async () => {
     const parsedPoints = parseFloat(investmentFund)
     if (!Number.isFinite(parsedPoints) || parsedPoints <= 0) {
@@ -822,7 +1030,7 @@ export default function AdminPage() {
   const handleSaveCalendarSettings = async () => {
     try {
       const settingsToSave = [
-        { setting_key: "calendar_slot_duration", setting_value: slotDuration.toString() },
+        { setting_key: "calendar_slot_duration", setting_value: slotDuration },
         { setting_key: "calendar_judges_per_project", setting_value: String(TARGET_JUDGES_PER_PROJECT) },
         { setting_key: "calendar_start_time", setting_value: scheduleStartTime },
         { setting_key: "calendar_end_time", setting_value: scheduleEndTime },
@@ -974,7 +1182,7 @@ export default function AdminPage() {
       setJudgeFormData({ name: judge.name, email: judge.email, pin: "", tracks: judge.tracks || [] })
     } else {
       setEditingJudge(null)
-      setJudgeFormData({ name: "", email: "", pin: "", tracks: ["General"] })
+      setJudgeFormData({ name: "", email: "", pin: "", tracks: [] })
     }
     setIsJudgeDialogOpen(true)
   }
@@ -1159,11 +1367,9 @@ export default function AdminPage() {
     }
     
     const activeProjects = projectsList
-    const targetJudgesPerProject = clampJudgesPerProject(TARGET_JUDGES_PER_PROJECT)
-    const assignmentResult = autoAssignProjectsByTrack(
+    const assignmentResult = autoAssignByTrackMatch(
       judgesList,
       projectsList,
-      targetJudgesPerProject,
     )
     const updatedProjects = assignmentResult.updatedProjects
 
@@ -1196,7 +1402,7 @@ export default function AdminPage() {
       const totalAssignments = updatedProjects.reduce((sum, p) => sum + p.assignedJudges.length, 0)
       if (totalAssignments > 0) {
         toast.success("Judges auto-assigned!", {
-          description: `${totalAssignments} judge assignment(s) across ${activeProjectsCount} active submission(s) (target: 2-3 per project).`,
+          description: `${totalAssignments} judge assignment(s) across ${activeProjectsCount} submission(s) by track match.`,
         })
       }
     }
@@ -1225,9 +1431,42 @@ export default function AdminPage() {
 
     try {
       setSavingAssignments(true)
+
+      const sourceSubmissionIds = sourceProjects
+        .map((project) => String((project as any).sourceSubmissionId || ""))
+        .filter(Boolean)
+
+      const sourceRowsById = new Map<string, any>()
+      if (sourceSubmissionIds.length > 0) {
+        const { data: sourceRows, error: sourceRowsError } = await supabase
+          .from("test_submissions")
+          .select("id, project_name, devpost_link, submitter_name, submitter_email, members, tracks, created_at")
+          .in("id", sourceSubmissionIds)
+
+        if (sourceRowsError) throw sourceRowsError
+        ;(sourceRows || []).forEach((row: any) => {
+          sourceRowsById.set(String(row.id), row)
+        })
+      }
+
+      const resolvedProjects: AdminProject[] = []
+      for (const project of sourceProjects) {
+        // Use test_submissions ID directly — no submissions table roundtrip needed
+        const submissionId =
+          (project as any).submissionId
+            ? String((project as any).submissionId)
+            : (project as any).sourceSubmissionId
+              ? String((project as any).sourceSubmissionId)
+              : undefined
+
+        resolvedProjects.push({
+          ...project,
+          submissionId,
+        } as AdminProject)
+      }
       
       // Get all submission IDs that have assignments
-      const submissionIds = sourceProjects
+      const submissionIds = resolvedProjects
         .filter(p => (p as any).submissionId)
         .map(p => (p as any).submissionId)
       
@@ -1246,7 +1485,7 @@ export default function AdminPage() {
       // Create new assignments (with deduplication)
       const assignmentsMap = new Map<string, { judge_id: string; submission_id: string }>()
       
-      sourceProjects.forEach((project) => {
+      resolvedProjects.forEach((project) => {
         const submissionId = (project as any).submissionId
         if (submissionId && project.assignedJudges.length > 0) {
           // Remove duplicate judge names from assignedJudges
@@ -1296,14 +1535,21 @@ export default function AdminPage() {
           .eq("id", judgeId)
       }
 
+      setProjectsList(resolvedProjects)
       setAssignmentsModified(false)
       toast.success("Assignments saved!", {
         description: `Saved ${assignmentsToInsert.length} judge assignment(s)`,
       })
     } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" && error !== null && "message" in error
+            ? String((error as { message: unknown }).message)
+            : "Unknown error"
 
       toast.error("Failed to save assignments", {
-        description: error instanceof Error ? error.message : "Unknown error",
+        description: errorMessage,
       })
     } finally {
       setSavingAssignments(false)
@@ -1389,6 +1635,14 @@ export default function AdminPage() {
 
   /** Build calendar_schedule_slots from current assignments and publish. */
   const handlePublishSchedule = async () => {
+    const parsedSlotDuration = parseInt(slotDuration, 10)
+    if (!Number.isFinite(parsedSlotDuration) || parsedSlotDuration <= 0) {
+      toast.error("Invalid slot duration", {
+        description: "Enter a valid number of minutes greater than 0.",
+      })
+      return
+    }
+
     if (projectsList.length === 0 || judgesList.length === 0) {
       toast.error("No submissions or judges", {
         description: "Auto-assign judges first, then publish.",
@@ -1422,21 +1676,41 @@ export default function AdminPage() {
 
     if (subsWithJudges.length === 0) {
       toast.error("No assignments", {
-        description: "Run “Auto-assign judges” first, then publish.",
+        description: "Run 'Auto-assign judges' first, then publish.",
       })
       return
     }
 
-      const { slots, unscheduledSubmissionIds, roomMoveCount } = buildScheduleWithMinimalRoomMoves({
+    // Build judgeRoomMap from current judgeRoomAssignments state
+    const judgeRoomMap: JudgeRoomMap = new Map(
+      Object.entries(judgeRoomAssignments).map(([judgeId, roomId]) => [judgeId, roomId])
+    )
+
+    // Warn if any assigned judge has no room
+    const allAssignedJudgeIds = subsWithJudges.flatMap((s) => s.judgeIds)
+    const judgesWithoutRoom = [...new Set(allAssignedJudgeIds)].filter(
+      (id) => !judgeRoomMap.has(id)
+    )
+    if (judgesWithoutRoom.length > 0) {
+      const names = judgesWithoutRoom
+        .map((id) => judgesList.find((j) => String(j.id) === id)?.name ?? id)
+        .join(", ")
+      toast.warning("Some judges have no room assigned", {
+        description: `Assign a room to: ${names}`,
+      })
+      return
+    }
+
+    const { slots, unscheduledSubmissionIds, roomMoveCount } = buildSchedulePerJudgeRoom({
       submissions: subsWithJudges.map((submission) => ({
         submissionId: submission.submissionId,
         judgeIds: submission.judgeIds,
       })),
-      rooms: roomsList,
+      judgeRoomMap,
       scheduleDate,
       startTime: scheduleStartTime,
       endTime: scheduleEndTime,
-      slotDurationMinutes: slotDuration,
+      slotDurationMinutes: parsedSlotDuration,
     })
 
     if (slots.length === 0) {
@@ -1457,7 +1731,7 @@ export default function AdminPage() {
 
       await supabase.from("admin_settings").upsert(
         [
-          { setting_key: "calendar_slot_duration", setting_value: String(slotDuration), updated_at: new Date().toISOString() },
+          { setting_key: "calendar_slot_duration", setting_value: String(parsedSlotDuration), updated_at: new Date().toISOString() },
           { setting_key: "calendar_judges_per_project", setting_value: String(TARGET_JUDGES_PER_PROJECT), updated_at: new Date().toISOString() },
           { setting_key: "calendar_start_time", setting_value: scheduleStartTime, updated_at: new Date().toISOString() },
           { setting_key: "calendar_end_time", setting_value: scheduleEndTime, updated_at: new Date().toISOString() },
@@ -1560,11 +1834,8 @@ export default function AdminPage() {
   const totalPointsBudget = pointsPerJudge * judgesList.length
   const remainingFund = totalPointsBudget - totalJudgesInvestment
   const projectsWithSubmission = projectsList.filter((project) => Boolean((project as any).submissionId))
-  const projectsUnderMin = projectsWithSubmission.filter((project) => project.assignedJudges.length < 2).length
-  const projectsOverMax = projectsWithSubmission.filter((project) => project.assignedJudges.length > 3).length
-  const projectsInRange = projectsWithSubmission.filter(
-    (project) => project.assignedJudges.length >= 2 && project.assignedJudges.length <= 3,
-  ).length
+  const projectsWithNoJudge = projectsWithSubmission.filter((project) => project.assignedJudges.length === 0).length
+  const projectsWithJudge = projectsWithSubmission.filter((project) => project.assignedJudges.length > 0).length
   const assignedJudgesBySubmission = React.useMemo(() => {
     const map = new Map<string, string[]>()
     projectsList.forEach((project) => {
@@ -1787,7 +2058,7 @@ export default function AdminPage() {
                     <CardHeader>
                       <CardTitle>Step 1: Auto-assign judges to submissions</CardTitle>
                       <CardDescription>
-                        Assign judges to every submission by track (round-robin), targeting 2-3 judges per submission. Then publish the schedule in Step 2.
+                        Assigns each submission to the judge who owns that track. Each submission gets one slot per matched judge. Publish the schedule in Step 2.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -1822,26 +2093,22 @@ export default function AdminPage() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                         <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Target judges/project</p>
-                          <p className="text-lg font-semibold">2-3</p>
+                          <p className="text-xs text-muted-foreground">Total submissions</p>
+                          <p className="text-lg font-semibold">{projectsWithSubmission.length}</p>
                         </div>
                         <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Projects in 2-3 range</p>
-                          <p className="text-lg font-semibold">{projectsInRange} / {projectsWithSubmission.length}</p>
+                          <p className="text-xs text-muted-foreground">Submissions assigned</p>
+                          <p className="text-lg font-semibold">{projectsWithJudge} / {projectsWithSubmission.length}</p>
                         </div>
                         <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Projects under 2 judges</p>
-                          <p className="text-lg font-semibold">{projectsUnderMin}</p>
+                          <p className="text-xs text-muted-foreground">No judge match</p>
+                          <p className={`text-lg font-semibold ${projectsWithNoJudge > 0 ? "text-destructive" : ""}`}>{projectsWithNoJudge}</p>
                         </div>
                         <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Projects over 3 judges</p>
-                          <p className="text-lg font-semibold">{projectsOverMax}</p>
-                        </div>
-                        <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Last schedule room moves</p>
-                          <p className="text-lg font-semibold">{scheduleQuality.roomMoves}</p>
+                          <p className="text-xs text-muted-foreground">Last publish slots</p>
+                          <p className="text-lg font-semibold">{scheduleQuality.slots}</p>
                         </div>
                       </div>
                       <div className="mt-3 text-xs text-muted-foreground">
@@ -1895,12 +2162,10 @@ export default function AdminPage() {
                           <Label htmlFor="slot-duration">Slot duration (min)</Label>
                           <Input
                             id="slot-duration"
-                            type="number"
-                            min="5"
-                            max="60"
-                            step="5"
+                            type="text"
+                            inputMode="numeric"
                             value={slotDuration}
-                            onChange={(e) => setSlotDuration(Math.max(5, parseInt(e.target.value) || 5))}
+                            onChange={(e) => setSlotDuration(e.target.value)}
                           />
                         </div>
                         <div className="flex flex-col gap-2 justify-end">
@@ -1946,6 +2211,7 @@ export default function AdminPage() {
                             <TableHead>Judge Name</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Tracks</TableHead>
+                            <TableHead>Room</TableHead>
                             <TableHead>Assigned Projects</TableHead>
                             <TableHead>Points Used</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
@@ -1954,7 +2220,7 @@ export default function AdminPage() {
                         <TableBody>
                           {judgesList.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                                 No judges found. Click "Add Judge" to create one.
                               </TableCell>
                             </TableRow>
@@ -1969,6 +2235,27 @@ export default function AdminPage() {
                                       <Badge key={idx} variant="outline">{track}</Badge>
                                     ))}
                                   </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Select
+                                    value={judgeRoomAssignments[String(judge.id)] !== undefined
+                                      ? String(judgeRoomAssignments[String(judge.id)])
+                                      : ""}
+                                    onValueChange={(val) => {
+                                      void saveJudgeRoomAssignment(String(judge.id), parseInt(val))
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-[120px] h-8 text-xs">
+                                      <SelectValue placeholder="No room" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {roomsList.map((room) => (
+                                        <SelectItem key={room.id} value={String(room.id)}>
+                                          {room.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="secondary">{judge.assignedProjects}</Badge>
@@ -2107,13 +2394,20 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Hacker Submissions (read-only) */}
+                  {/* Submissions */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <CardTitle>Submissions</CardTitle>
-                      <CardDescription>
-                        Project submissions from hackers. Use Step 1 above to assign judges.
-                      </CardDescription>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle>Submissions ({submissions.length})</CardTitle>
+                          <CardDescription>
+                            Import a CSV to load submissions. Use Step 1 above to assign judges.
+                          </CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setCsvImportOpen(true)}>
+                          Import CSV
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {loadingSubmissions ? (
@@ -2483,6 +2777,93 @@ export default function AdminPage() {
             </Button>
             <Button type="button" variant="destructive" onClick={handleDeleteJudgeConfirm}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={csvImportOpen} onOpenChange={(open) => {
+        setCsvImportOpen(open)
+        if (!open) { setCsvText(""); setCsvPreview(null) }
+      }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Import Submissions from CSV</DialogTitle>
+            <DialogDescription>
+              Paste your CSV below. Expected format (one row per track):
+              <code className="block mt-1 text-xs bg-muted rounded px-2 py-1">
+                project_name,devpost_link,tracks,submitter_name,submitter_email,members
+              </code>
+              Members can be semicolon or comma separated within their cell. This will <strong>replace all existing submissions</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Textarea
+              className="font-mono text-xs min-h-[180px]"
+              placeholder={"project_name,devpost_link,tracks,submitter_name,submitter_email,members\nMy Project,https://devpost.com/...,General,Jane Doe,jane@example.com,Jane Doe;Bob Smith"}
+              value={csvText}
+              onChange={(e) => { setCsvText(e.target.value); setCsvPreview(null) }}
+            />
+
+            <Button variant="outline" onClick={handleCsvParse} disabled={!csvText.trim()}>
+              Parse &amp; Preview
+            </Button>
+
+            {csvPreview && csvPreview.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{csvPreview.length} project(s) found — preview:</p>
+                <div className="max-h-[240px] overflow-y-auto rounded border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Project Name</TableHead>
+                        <TableHead>Tracks</TableHead>
+                        <TableHead>Members</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {csvPreview.slice(0, 20).map((proj, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium text-sm">{proj.project_name}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {proj.tracks.map((t, ti) => (
+                                <Badge key={ti} variant="outline" className="text-xs">{t}</Badge>
+                              ))}
+                              {proj.tracks.length === 0 && <span className="text-muted-foreground text-xs">none</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {proj.members.slice(0, 3).join(", ")}{proj.members.length > 3 ? ` +${proj.members.length - 3}` : ""}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {csvPreview.length > 20 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground text-xs py-2">
+                            … and {csvPreview.length - 20} more
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => { setCsvImportOpen(false); setCsvText(""); setCsvPreview(null) }}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!csvPreview || csvPreview.length === 0 || csvImporting}
+              onClick={() => void handleCsvImport()}
+            >
+              {csvImporting ? "Importing..." : `Import ${csvPreview?.length ?? 0} project(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>
