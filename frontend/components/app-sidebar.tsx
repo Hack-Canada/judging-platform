@@ -24,6 +24,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { supabase } from "@/lib/supabase-client"
+import type { AppRole } from "@/lib/rbac"
 import { getUserRole, isDashboardRouteAllowed } from "@/lib/rbac"
 
 const data = {
@@ -67,6 +68,7 @@ const data = {
       title: "Role Management",
       url: "/dashboard/roles",
       icon: IconShield,
+      allowedRoles: ["superadmin"] as AppRole[],
     },
   ],
 }
@@ -88,7 +90,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   )
 
   const navItems = React.useMemo(
-    () => data.navMain.filter((item) => isDashboardRouteAllowed(role, item.url)),
+    () =>
+      data.navMain.filter((item) => {
+        if (!isDashboardRouteAllowed(role, item.url)) return false
+        if (item.allowedRoles && !item.allowedRoles.includes(role)) return false
+        return true
+      }),
     [role]
   )
 
