@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { IconPlus, IconEdit, IconTrash, IconDeviceFloppy } from "@tabler/icons-react"
+import posthog from "posthog-js"
 import { toast } from "sonner"
 import type { Judge } from "@/lib/judges-data"
 import { generateTimeSlots, getEndTime, type TimeSlot, type DaySchedule } from "@/lib/schedule-data"
@@ -406,6 +407,7 @@ const handleOpenDialog = (slot?: TimeSlot, time?: string, roomId?: number) => {
         a.startTime.localeCompare(b.startTime)
       )
       saveSchedule(updated)
+      posthog.capture("slot_assigned", { project_name: submission.project_name, time: formData.startTime, room: selectedRoom.name })
       toast.success("Time slot created!", {
         description: `Slot for ${submission.project_name} has been scheduled`,
       })
@@ -553,6 +555,7 @@ const handleOpenDialog = (slot?: TimeSlot, time?: string, roomId?: number) => {
         return
       }
 
+      posthog.capture("schedule_saved", { slot_count: slots.length, date: selectedDate })
       toast.success("Schedule saved!", {
         description: `Saved ${slots.length} time slots for ${selectedDate}`,
       })
