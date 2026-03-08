@@ -290,8 +290,8 @@ export default function AdminPage() {
       setLoadingLeaderboard(true)
       const [{ data: submissionsData, error: submissionsError }, { data: investmentsData, error: investmentsError }] = await Promise.all([
         supabase
-          .from("submissions")
-          .select("id, project_name, team_name, tracks, submitted_at"),
+          .from("test_submissions")
+          .select("id, project_name, tracks, created_at"),
         supabase
           .from("judge_investments")
           .select("submission_id, judge_id, amount"),
@@ -325,7 +325,7 @@ export default function AdminPage() {
           tracks: Array.isArray(submission.tracks) ? submission.tracks : ["General"],
           totalPoints: pointsData?.totalPoints || 0,
           judgeCount: pointsData?.judges.size || 0,
-          submittedAt: submission.submitted_at || null,
+          submittedAt: submission.submitted_at || submission.created_at || null,
         }
       })
 
@@ -469,7 +469,7 @@ export default function AdminPage() {
             .select("id, name, email, assigned_projects, total_invested, tracks")
             .order("created_at", { ascending: false }),
           supabase
-            .from("submissions")
+            .from("test_submissions")
             .select("id, project_name, tracks"),
           supabase
             .from("judge_project_assignments")
@@ -609,9 +609,9 @@ export default function AdminPage() {
       try {
         setLoadingSubmissions(true)
         const { data, error } = await supabase
-          .from("submissions")
+          .from("test_submissions")
           .select("*")
-          .order("submitted_at", { ascending: false })
+          .order("created_at", { ascending: false })
 
         if (error && !error.message.includes("relation") && !error.message.includes("does not exist")) {
 
@@ -647,7 +647,7 @@ export default function AdminPage() {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "submissions" },
+        { event: "*", schema: "public", table: "test_submissions" },
         () => {
           void loadLeaderboard()
         },
