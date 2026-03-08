@@ -376,6 +376,24 @@ export function JudgesDataTable({
                       Project
                     </p>
                     <ProjectNameCell row={row} />
+                    <div className="mt-3 space-y-2">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Time
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {row.original.time || "Not scheduled"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Room
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {row.original.room || "-"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                   <div className="w-[140px] shrink-0">
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">

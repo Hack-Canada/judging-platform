@@ -56,6 +56,21 @@ type ScheduleSlotInfo = {
   room_id: number
 }
 
+function formatRoomLabel(roomId: number, roomsMap: Map<number, string>) {
+  const configuredName = roomsMap.get(roomId)
+  if (configuredName) return configuredName
+
+  if (roomId >= 11 && roomId <= 18) {
+    return `Floor 3 Room ${roomId - 10}`
+  }
+
+  if (roomId >= 19 && roomId <= 26) {
+    return `Floor 4 Room ${roomId - 18}`
+  }
+
+  return `Room ${roomId}`
+}
+
 export default function JudgesPage() {
   const [currentRole, setCurrentRole] = React.useState<AppRole | null>(null)
   const [judgeName, setJudgeName] = React.useState<string>("")
@@ -455,7 +470,7 @@ export default function JudgesPage() {
             // Format room info (show all rooms if multiple)
             const roomInfo = sortedSlots.length > 0
               ? sortedSlots.map(slot => {
-                  return roomsMap.get(slot.room_id) || `Room ${slot.room_id}`
+                  return formatRoomLabel(slot.room_id, roomsMap)
                 }).join(", ")
               : "-"
             
