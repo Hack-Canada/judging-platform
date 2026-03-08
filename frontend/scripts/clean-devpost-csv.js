@@ -13,6 +13,7 @@
  *
  * Notes:
  *   - tracks and members are pipe-separated (|)
+ *   - every submitted project includes the "General" track
  *   - projects titled "Untitled" are skipped
  *   - multiple rows for the same project (one per track) are merged
  *   - output defaults to same directory as input, named submissions_clean.csv
@@ -110,7 +111,7 @@ for (const row of dataRows) {
     byProject.set(title, {
       project_name: title,
       devpost_link: get(row, devpostCol),
-      tracks: [],
+      tracks: ["General"],
       submitter_name: submitterName,
       submitter_email: get(row, emailCol),
       members,
