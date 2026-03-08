@@ -307,23 +307,24 @@ export default function JudgesPage() {
         })
         setScheduleSlotsMap(slotsMap)
 
-        // Load submission details from test_submissions by judge's tracks
+        // Load submission details from test_submissions.
+        // Explicit judge assignments are the source of truth; track overlap is only a fallback.
         let submissionsData: any[] | null = null
-        if (judgeData.tracks && judgeData.tracks.length > 0) {
+        if (assignedSubmissionIds.length > 0) {
           const { data, error: submissionsError } = await supabase
             .from("test_submissions")
             .select("id, project_name, tracks, devpost_link")
-            .overlaps("tracks", judgeData.tracks)
+            .in("id", assignedSubmissionIds)
             .order("created_at", { ascending: false })
 
           if (!submissionsError) {
             submissionsData = data
           }
-        } else if (assignedSubmissionIds.length > 0) {
+        } else if (judgeData.tracks && judgeData.tracks.length > 0) {
           const { data, error: submissionsError } = await supabase
             .from("test_submissions")
             .select("id, project_name, tracks, devpost_link")
-            .in("id", assignedSubmissionIds)
+            .overlaps("tracks", judgeData.tracks)
             .order("created_at", { ascending: false })
 
           if (!submissionsError) {
