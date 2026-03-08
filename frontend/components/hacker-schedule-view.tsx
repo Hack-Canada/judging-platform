@@ -37,11 +37,6 @@ type SubmissionRow = {
   tracks: string[]
 }
 
-type JudgeRow = {
-  id: string
-  tracks: string[]
-}
-
 type HackerScheduleViewProps = {
   embedded?: boolean
 }
@@ -49,7 +44,6 @@ type HackerScheduleViewProps = {
 export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps) {
   const [slots, setSlots] = React.useState<SlotRow[]>([])
   const [submissions, setSubmissions] = React.useState<SubmissionRow[]>([])
-  const [judges, setJudges] = React.useState<JudgeRow[]>([])
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [scheduleVisible, setScheduleVisible] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
@@ -59,7 +53,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true)
-      const [{ data: slotData }, { data: submissionData }, { data: judgesData }, { data: settingsData }, { data: visibilityData }] =
+      const [{ data: slotData }, { data: submissionData }, { data: settingsData }, { data: visibilityData }] =
         await Promise.all([
           supabase
             .from("calendar_schedule_slots")
@@ -68,7 +62,6 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
             .order("start_time", { ascending: true }),
           // Fix: was querying `submissions` (wrong table — slots reference test_submissions.id)
           supabase.from("test_submissions").select("id, project_name, submitter_name, tracks"),
-          supabase.from("judges").select("id, tracks"),
           supabase
             .from("admin_settings")
             .select("setting_key, setting_value")
@@ -83,7 +76,6 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
       setSlots((slotData as SlotRow[]) || [])
       const subs = (submissionData as SubmissionRow[]) || []
       setSubmissions(subs)
-      setJudges((judgesData as JudgeRow[]) || [])
       if (subs.length > 0) {
         setActiveSubmissionId((prev) => prev ?? subs[0].id)
       }
@@ -125,16 +117,6 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     )
     return map
   }, [submissions])
-
-  const judgesById = React.useMemo(() => {
-    const map = new Map<string, { tracks: string[] }>()
-    judges.forEach((judge) => {
-      map.set(judge.id, {
-        tracks: Array.isArray(judge.tracks) ? judge.tracks.filter(Boolean) : [],
-      })
-    })
-    return map
-  }, [judges])
 
   React.useEffect(() => {
     if (submissions.length > 0 && !activeSubmissionId) {
@@ -180,29 +162,33 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     (slot: SlotRow) => {
       const submissionTracks = submissionsById.get(slot.submission_id)?.tracks ?? []
       const normalizedSubmissionTracks = submissionTracks.length > 0 ? submissionTracks : ["General"]
+      const roomDescription = String(roomsById.get(slot.room_id)?.description || "").trim().toLowerCase()
 
-      const matchedTracks = new Set<string>()
-      const judgeIds = Array.isArray(slot.judge_ids) ? slot.judge_ids : []
-
-      judgeIds.forEach((judgeId) => {
-        const judgeTracks = judgesById.get(judgeId)?.tracks ?? []
-        judgeTracks.forEach((track) => {
-          if (normalizedSubmissionTracks.includes(track)) {
-            matchedTracks.add(track)
-          }
-        })
-      })
-
-      if (matchedTracks.size > 0) {
-        // Prefer sponsor (non-General) tracks so each room shows its specific track.
-        // Only fall back to "General" if no sponsor tracks are matched.
-        const sponsorTracks = Array.from(matchedTracks).filter((t) => t !== "General")
-        return sponsorTracks.length > 0 ? sponsorTracks : ["General"]
+      if (!roomDescription || roomDescription === "general") {
+        return ["General"]
       }
 
-      return ["General"]
+      const aliasMatchers: Record<string, RegExp[]> = {
+        google: [/google/i],
+        cloudinary: [/cloudinary/i],
+        reactiv: [/reactiv/i],
+        spur: [/spur/i, /founder/i, /startup/i],
+        tailscale: [/tailscale/i],
+        vivirion: [/vivirion/i, /healthcare/i],
+        "vr laurier": [/virtual reality/i, /webxr/i, /immersive experiences/i, /vr/i],
+      }
+
+      const matchers = aliasMatchers[roomDescription] ?? [new RegExp(roomDescription.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")]
+      const sponsorTracks = normalizedSubmissionTracks.filter((track) => track !== "General")
+      const matchedTracks = sponsorTracks.filter((track) => matchers.some((matcher) => matcher.test(track)))
+
+      if (matchedTracks.length > 0) {
+        return matchedTracks
+      }
+
+      return sponsorTracks.length > 0 ? sponsorTracks : ["General"]
     },
-    [judgesById, submissionsById]
+    [roomsById, submissionsById]
   )
 
   const formatTimeRange = (start: string, end: string) => {
