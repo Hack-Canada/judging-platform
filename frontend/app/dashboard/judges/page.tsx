@@ -114,29 +114,6 @@ export default function JudgesPage() {
     return judgesDirectory
   }, [judgeAssignmentFilter, judgesDirectory])
 
-  if (loadingJudgeIdentity || (loading && !judge && dashboardEntries.length === 0 && selectedJudgeId !== null)) {
-    return (
-      <div suppressHydrationWarning className="relative">
-        <div className="animated-grid fixed inset-0 z-0" />
-        <SidebarProvider
-          style={
-            {
-              "--sidebar-width": "calc(var(--spacing) * 72)",
-              "--header-height": "calc(var(--spacing) * 12)",
-            } as React.CSSProperties
-          }
-        >
-          <AppSidebar variant="inset" />
-          <SidebarInset className="relative z-10">
-            <SiteHeader />
-            <div className="flex flex-1 items-center justify-center h-[calc(100vh-var(--header-height))]">
-              <p className="text-muted-foreground">Nothing is assigned to you right now, come back after :)</p>
-            </div>
-          </SidebarInset>
-        </SidebarProvider>
-      </div>
-    )
-  }
 
   // Resolve current judge strictly by authenticated email.
   React.useEffect(() => {
@@ -825,6 +802,11 @@ export default function JudgesPage() {
         <AppSidebar variant="inset" />
         <SidebarInset className="relative z-10">
           <SiteHeader />
+          {(loadingJudgeIdentity || (loading && !judge && dashboardEntries.length === 0 && selectedJudgeId !== null)) ? (
+            <div className="flex flex-1 items-center justify-center h-[calc(100vh-var(--header-height))]">
+              <p className="text-muted-foreground">Nothing is assigned to you right now, come back after :)</p>
+            </div>
+          ) : (
           <div className="flex flex-col overflow-visible">
             <div className="@container/main flex flex-col gap-2 overflow-visible">
               <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -1002,6 +984,7 @@ export default function JudgesPage() {
               </div>
             </div>
           </div>
+          )}
         </SidebarInset>
       </SidebarProvider>
 
