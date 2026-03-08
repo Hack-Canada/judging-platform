@@ -1014,7 +1014,7 @@ export default function AdminPage() {
       setJudgeFormData({ name: judge.name, email: judge.email, pin: "", tracks: judge.tracks || [] })
     } else {
       setEditingJudge(null)
-      setJudgeFormData({ name: "", email: "", pin: "", tracks: ["General"] })
+      setJudgeFormData({ name: "", email: "", pin: "", tracks: [] })
     }
     setIsJudgeDialogOpen(true)
   }
