@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { SchedulePageSkeleton } from "@/components/schedule-page-skeleton"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,7 @@ type SlotRow = {
   end_time: string
   room_id: number
   submission_id: string
+  judge_ids: string[]
 }
 
 // Matches test_submissions columns (calendar slots reference test_submissions.id)
@@ -32,6 +34,12 @@ type SubmissionRow = {
   id: string
   project_name: string
   submitter_name: string | null
+  tracks: string[]
+}
+
+type JudgeRow = {
+  id: string
+  tracks: string[]
 }
 
 type HackerScheduleViewProps = {
@@ -41,6 +49,7 @@ type HackerScheduleViewProps = {
 export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps) {
   const [slots, setSlots] = React.useState<SlotRow[]>([])
   const [submissions, setSubmissions] = React.useState<SubmissionRow[]>([])
+  const [judges, setJudges] = React.useState<JudgeRow[]>([])
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [scheduleVisible, setScheduleVisible] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
@@ -50,15 +59,16 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true)
-      const [{ data: slotData }, { data: submissionData }, { data: settingsData }, { data: visibilityData }] =
+      const [{ data: slotData }, { data: submissionData }, { data: judgesData }, { data: settingsData }, { data: visibilityData }] =
         await Promise.all([
           supabase
             .from("calendar_schedule_slots")
-            .select("id, date, start_time, end_time, room_id, submission_id")
+            .select("id, date, start_time, end_time, room_id, submission_id, judge_ids")
             .order("date", { ascending: true })
             .order("start_time", { ascending: true }),
           // Fix: was querying `submissions` (wrong table — slots reference test_submissions.id)
-          supabase.from("test_submissions").select("id, project_name, submitter_name"),
+          supabase.from("test_submissions").select("id, project_name, submitter_name, tracks"),
+          supabase.from("judges").select("id, tracks"),
           supabase
             .from("admin_settings")
             .select("setting_key, setting_value")
@@ -73,6 +83,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
       setSlots((slotData as SlotRow[]) || [])
       const subs = (submissionData as SubmissionRow[]) || []
       setSubmissions(subs)
+      setJudges((judgesData as JudgeRow[]) || [])
       if (subs.length > 0) {
         setActiveSubmissionId((prev) => prev ?? subs[0].id)
       }
@@ -105,14 +116,25 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
   }, [rooms])
 
   const submissionsById = React.useMemo(() => {
-    const map = new Map<string, { projectName: string }>()
+    const map = new Map<string, { projectName: string; tracks: string[] }>()
     submissions.forEach((s) =>
       map.set(s.id, {
         projectName: s.project_name ?? "Untitled Project",
+        tracks: Array.isArray(s.tracks) ? s.tracks.filter(Boolean) : [],
       }),
     )
     return map
   }, [submissions])
+
+  const judgesById = React.useMemo(() => {
+    const map = new Map<string, { tracks: string[] }>()
+    judges.forEach((judge) => {
+      map.set(judge.id, {
+        tracks: Array.isArray(judge.tracks) ? judge.tracks.filter(Boolean) : [],
+      })
+    })
+    return map
+  }, [judges])
 
   React.useEffect(() => {
     if (submissions.length > 0 && !activeSubmissionId) {
@@ -151,6 +173,34 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     const scheduledIds = new Set(slots.map((slot) => slot.submission_id))
     return submissions.filter((sub) => !scheduledIds.has(sub.id))
   }, [submissions, slots])
+
+  const activeSubmission = activeSubmissionId ? submissionsById.get(activeSubmissionId) : undefined
+
+  const getSlotTracks = React.useCallback(
+    (slot: SlotRow) => {
+      const submissionTracks = submissionsById.get(slot.submission_id)?.tracks ?? []
+      const normalizedSubmissionTracks = submissionTracks.length > 0 ? submissionTracks : ["General"]
+
+      const matchedTracks = new Set<string>()
+      const judgeIds = Array.isArray(slot.judge_ids) ? slot.judge_ids : []
+
+      judgeIds.forEach((judgeId) => {
+        const judgeTracks = judgesById.get(judgeId)?.tracks ?? []
+        judgeTracks.forEach((track) => {
+          if (normalizedSubmissionTracks.includes(track)) {
+            matchedTracks.add(track)
+          }
+        })
+      })
+
+      if (matchedTracks.size > 0) {
+        return Array.from(matchedTracks)
+      }
+
+      return normalizedSubmissionTracks.includes("General") ? ["General"] : normalizedSubmissionTracks
+    },
+    [judgesById, submissionsById]
+  )
 
   const formatTimeRange = (start: string, end: string) => {
     const toHM = (t: string) => {
@@ -219,7 +269,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      className="w-(--radix-popover-trigger-width) p-0"
                       align="start"
                     >
                       <Command>
@@ -230,7 +280,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                             {submissions.map((sub) => (
                               <CommandItem
                                 key={sub.id}
-                                value={`${sub.project_name ?? ""} ${sub.submitter_name ?? ""}`.trim()}
+                                value={`${sub.project_name ?? ""} ${sub.submitter_name ?? ""} ${(sub.tracks || []).join(" ")}`.trim()}
                                 onSelect={() => {
                                   setActiveSubmissionId(sub.id)
                                   setComboboxOpen(false)
@@ -239,7 +289,12 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                                 <IconCheck
                                   className={`mr-2 size-4 shrink-0 ${activeSubmissionId === sub.id ? "opacity-100" : "opacity-0"}`}
                                 />
-                                <span className="truncate">{sub.project_name || "Untitled Project"}</span>
+                                <div className="min-w-0">
+                                  <p className="truncate">{sub.project_name || "Untitled Project"}</p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {sub.tracks?.length ? sub.tracks.join(", ") : "General"}
+                                  </p>
+                                </div>
                               </CommandItem>
                             ))}
                           </CommandGroup>
@@ -247,6 +302,15 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  {activeSubmission && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {(activeSubmission.tracks.length > 0 ? activeSubmission.tracks : ["General"]).map((track) => (
+                        <Badge key={track} variant="secondary">
+                          {track}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {activeSubmissionId && (
@@ -263,9 +327,19 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                             <div className="space-y-2">
                               {dateSlots.map((slot) => {
                                 const room = roomsById.get(slot.room_id)
+                                const slotTracks = getSlotTracks(slot)
                                 return (
                                   <div key={slot.id} className="flex flex-col gap-2 rounded-lg border px-4 py-3 text-base transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between">
-                                    <p className="font-medium tracking-tight">{formatTimeRange(slot.start_time, slot.end_time)}</p>
+                                    <div className="space-y-2">
+                                      <p className="font-medium tracking-tight">{formatTimeRange(slot.start_time, slot.end_time)}</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {slotTracks.map((track) => (
+                                          <Badge key={`${slot.id}-${track}`} variant="outline">
+                                            {track}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
                                     <p className="text-sm text-muted-foreground">{room?.name ?? `Room ${slot.room_id}`}</p>
                                   </div>
                                 )
@@ -297,7 +371,16 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                     key={sub.id}
                     className="flex flex-col gap-1 rounded-lg border px-4 py-3 text-base sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <p className="font-medium tracking-tight">{sub.project_name || "Untitled Project"}</p>
+                    <div className="space-y-2">
+                      <p className="font-medium tracking-tight">{sub.project_name || "Untitled Project"}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(sub.tracks?.length ? sub.tracks : ["General"]).map((track) => (
+                          <Badge key={`${sub.id}-${track}`} variant="outline">
+                            {track}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
                     {sub.submitter_name && (
                       <p className="text-sm text-muted-foreground">{sub.submitter_name}</p>
                     )}
