@@ -498,9 +498,9 @@ export default function AdminPage() {
         }
       }
 
-      await loadSettingsFromSupabase()
-
       try {
+
+        await loadSettingsFromSupabase()
 
         const [
           { data: supabaseJudges, error: judgesError }, 

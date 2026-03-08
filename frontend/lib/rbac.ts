@@ -16,10 +16,11 @@ const DASHBOARD_ALLOWLIST: Record<AppRole, string[]> = {
   hacker: [],
   judge: ["/dashboard/judges"],
   sponsor: ["/dashboard/judges"],
-  admin: ["/dashboard", "/dashboard/admin", "/dashboard/calendar", "/dashboard/submissions", "/dashboard/hacker-view"],
+  admin: ["/dashboard", "/dashboard/admin", "/dashboard/analytics", "/dashboard/calendar", "/dashboard/submissions", "/dashboard/hacker-view"],
   superadmin: [
     "/dashboard",
     "/dashboard/admin",
+    "/dashboard/analytics",
     "/dashboard/calendar",
     "/dashboard/submissions",
     "/dashboard/hackers",
