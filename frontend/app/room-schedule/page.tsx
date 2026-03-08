@@ -88,7 +88,7 @@ export default function RoomSchedulePage() {
         const [
           { data: roomsSetting },
           { data: calendarSlots },
-          { data: allJudges },
+          judgeNamesRes,
         ] = await Promise.all([
           supabase
             .from("admin_settings")
@@ -98,15 +98,15 @@ export default function RoomSchedulePage() {
           supabase
             .from("calendar_schedule_slots")
             .select("submission_id, judge_ids, date, start_time, end_time, room_id"),
-          supabase
-            .from("judges")
-            .select("id, name"),
+          fetch("/api/judges/names").then((r) => (r.ok ? r.json() : {})),
         ])
 
         const judgesMap = new Map<string, string>()
-        allJudges?.forEach((j: { id: string; name: string }) => {
-          judgesMap.set(String(j.id).toLowerCase(), j.name)
-        })
+        if (judgeNamesRes && typeof judgeNamesRes === "object") {
+          Object.entries(judgeNamesRes).forEach(([id, name]) => {
+            judgesMap.set(String(id).toLowerCase(), name as string)
+          })
+        }
         judgesCacheRef.current = judgesMap
 
         const roomsMap = new Map<number, string>()
