@@ -48,11 +48,11 @@ const data = {
       url: "/dashboard/submissions",
       icon: IconFolder,
     },
-    {
-      title: "Calendar",
-      url: "/dashboard/calendar",
-      icon: IconCalendar,
-    },
+    // {
+    //   title: "Calendar",
+    //   url: "/dashboard/calendar",
+    //   icon: IconCalendar,
+    // },
     {
       title: "Analytics",
       url: "/dashboard/analytics",
