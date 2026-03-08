@@ -232,7 +232,7 @@ type ScheduleSubmission = {
 
 type BuildSchedulePerJudgeRoomInput = {
   submissions: ScheduleSubmission[]
-  generalRoomIds: number[]
+  judgeRoomMap: JudgeRoomMap
   scheduleDate: string
   startTime: string
   endTime: string
@@ -257,18 +257,22 @@ const minutesToTime = (totalMinutes: number): string => {
 }
 
 /**
- * Builds a schedule with exactly one slot per project in a general room.
- * All assigned judges for that project are attached to the same slot, so the
- * team stays in one room instead of rotating across judge-specific rooms.
+ * Builds a schedule with one slot per (project, room) group.
+ * Judges assigned to the same project and room share the same slot, so General
+ * stays in one room / one time slot while sponsor judging can still happen in
+ * separate sponsor rooms.
  *
- * Constraint: a judge cannot appear in two projects in the same time tick.
+ * Constraints:
+ * - a room can host only one project in the same time tick
+ * - a judge cannot appear in two projects in the same time tick
+ * - a project cannot appear in two rooms in the same time tick
  */
 export const buildSchedulePerJudgeRoom = (
   input: BuildSchedulePerJudgeRoomInput,
 ): BuildScheduleResult => {
   const {
     submissions,
-    generalRoomIds,
+    judgeRoomMap,
     scheduleDate,
     startTime,
     endTime,
@@ -276,46 +280,64 @@ export const buildSchedulePerJudgeRoom = (
   } = input
 
   const remaining = submissions
-    .map((submission) => ({
-      submissionId: submission.submissionId,
-      judgeIds: Array.from(new Set(submission.judgeIds)),
-    }))
-    .filter((submission) => submission.judgeIds.length > 0)
+    .flatMap((submission) => {
+      const roomToJudgeIds = new Map<number, string[]>()
+
+      Array.from(new Set(submission.judgeIds)).forEach((judgeId) => {
+        const roomId = judgeRoomMap.get(judgeId)
+        if (roomId === undefined) return
+        if (!roomToJudgeIds.has(roomId)) roomToJudgeIds.set(roomId, [])
+        roomToJudgeIds.get(roomId)!.push(judgeId)
+      })
+
+      return Array.from(roomToJudgeIds.entries()).map(([roomId, judgeIds]) => ({
+        submissionId: submission.submissionId,
+        roomId,
+        judgeIds,
+      }))
+    })
+    .filter((session) => session.judgeIds.length > 0)
 
   const slots: ScheduleSlot[] = []
   let currentTick = timeToMinutes(startTime)
   const scheduleEnd = timeToMinutes(endTime)
-  let roomStartCursor = 0
 
   while (currentTick + slotDurationMinutes <= scheduleEnd && remaining.length > 0) {
     const judgesThisTick = new Set<string>()
+    const roomsThisTick = new Set<number>()
+    const submissionsThisTick = new Set<string>()
     let anyPlaced = false
 
-    for (let offset = 0; offset < generalRoomIds.length; offset++) {
-      const roomId = generalRoomIds[(roomStartCursor + offset) % generalRoomIds.length]
-      const submissionIndex = remaining.findIndex((submission) =>
-        submission.judgeIds.every((judgeId) => !judgesThisTick.has(judgeId))
-      )
+    for (let index = 0; index < remaining.length; ) {
+      const session = remaining[index]
+      const canPlace =
+        !roomsThisTick.has(session.roomId) &&
+        !submissionsThisTick.has(session.submissionId) &&
+        session.judgeIds.every((judgeId) => !judgesThisTick.has(judgeId))
 
-      if (submissionIndex === -1) continue
+      if (!canPlace) {
+        index += 1
+        continue
+      }
 
-      const [submission] = remaining.splice(submissionIndex, 1)
-      submission.judgeIds.forEach((judgeId) => judgesThisTick.add(judgeId))
+      remaining.splice(index, 1)
+      roomsThisTick.add(session.roomId)
+      submissionsThisTick.add(session.submissionId)
+      session.judgeIds.forEach((judgeId) => judgesThisTick.add(judgeId))
       anyPlaced = true
 
       slots.push({
         date: scheduleDate,
         start_time: minutesToTime(currentTick),
         end_time: minutesToTime(currentTick + slotDurationMinutes),
-        submission_id: submission.submissionId,
-        room_id: roomId,
-        judge_ids: submission.judgeIds,
+        submission_id: session.submissionId,
+        room_id: session.roomId,
+        judge_ids: session.judgeIds,
       })
     }
 
     if (!anyPlaced) break
 
-    roomStartCursor = (roomStartCursor + 1) % generalRoomIds.length
     currentTick += slotDurationMinutes
   }
 

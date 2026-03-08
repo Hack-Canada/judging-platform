@@ -194,10 +194,13 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
       })
 
       if (matchedTracks.size > 0) {
-        return Array.from(matchedTracks)
+        // Prefer sponsor (non-General) tracks so each room shows its specific track.
+        // Only fall back to "General" if no sponsor tracks are matched.
+        const sponsorTracks = Array.from(matchedTracks).filter((t) => t !== "General")
+        return sponsorTracks.length > 0 ? sponsorTracks : ["General"]
       }
 
-      return normalizedSubmissionTracks.includes("General") ? ["General"] : normalizedSubmissionTracks
+      return ["General"]
     },
     [judgesById, submissionsById]
   )
