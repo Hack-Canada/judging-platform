@@ -161,6 +161,11 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
   }, [slotsForSelectedTeam])
 
+  const unscheduledSubmissions = React.useMemo(() => {
+    const scheduledIds = new Set(slots.map((slot) => slot.submission_id))
+    return submissions.filter((sub) => !scheduledIds.has(sub.id))
+  }, [submissions, slots])
+
   const formatTimeRange = (start: string, end: string) => {
     const toHM = (t: string) => {
       const [h, m] = t.split(":")
@@ -293,6 +298,32 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
             )}
           </CardContent>
         </Card>
+
+        {scheduleVisible && unscheduledSubmissions.length > 0 && (
+          <Card className="mt-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Not Yet Scheduled</CardTitle>
+              <CardDescription className="text-sm">
+                The following project{unscheduledSubmissions.length === 1 ? " has" : "s have"} not been assigned a judging time yet.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {unscheduledSubmissions.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex flex-col gap-1 rounded-lg border px-4 py-3 text-base sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p className="font-medium tracking-tight">{sub.project_name || "Untitled Project"}</p>
+                    {sub.submitter_name && (
+                      <p className="text-sm text-muted-foreground">{sub.submitter_name}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )
