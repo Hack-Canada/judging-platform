@@ -3,19 +3,20 @@
 import * as React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { SchedulePageSkeleton } from "@/components/schedule-page-skeleton"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import { supabase } from "@/lib/supabase-client"
 import { defaultRooms, type Room } from "@/lib/rooms-data"
-import { IconSearch } from "@tabler/icons-react"
+import { IconChevronDown, IconCheck } from "@tabler/icons-react"
 
 type SlotRow = {
   id: string
@@ -43,8 +44,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
   const [scheduleVisible, setScheduleVisible] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
-  const [searchQuery, setSearchQuery] = React.useState("")
-  const [teamSelectOpen, setTeamSelectOpen] = React.useState(false)
+  const [comboboxOpen, setComboboxOpen] = React.useState(false)
   const [activeSubmissionId, setActiveSubmissionId] = React.useState<string | undefined>(undefined)
 
   const loadData = React.useCallback(async () => {
@@ -114,25 +114,11 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     return map
   }, [submissions])
 
-  const filteredSubmissions = React.useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return submissions
-    return submissions.filter((sub) => {
-      const name = (sub.project_name ?? "").toLowerCase()
-      const submitter = (sub.submitter_name ?? "").toLowerCase()
-      return name.includes(q) || submitter.includes(q)
-    })
-  }, [submissions, searchQuery])
-
   React.useEffect(() => {
-    if (filteredSubmissions.length === 0) {
-      setActiveSubmissionId(undefined)
-      return
+    if (submissions.length > 0 && !activeSubmissionId) {
+      setActiveSubmissionId(submissions[0].id)
     }
-    if (!activeSubmissionId || !filteredSubmissions.some((sub) => sub.id === activeSubmissionId)) {
-      setActiveSubmissionId(filteredSubmissions[0].id)
-    }
-  }, [filteredSubmissions, activeSubmissionId])
+  }, [submissions, activeSubmissionId])
 
   const slotsForSelectedTeam = React.useMemo(() => {
     if (!activeSubmissionId) return []
@@ -185,9 +171,6 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     })
   }
 
-  // Suppress the unused var warning — submissionsById is available for future use
-  void submissionsById
-
   if (loading && submissions.length === 0 && slots.length === 0) {
     return <SchedulePageSkeleton embedded={embedded} />
   }
@@ -216,57 +199,57 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
               <p className="text-sm text-muted-foreground">No projects have been submitted yet. Check back later.</p>
             ) : (
               <>
-                <div className="space-y-2.5">
-                  <Label htmlFor="team-select" className="text-sm md:text-base">Project</Label>
-                  <Select
-                    value={activeSubmissionId ?? ""}
-                    onOpenChange={(open) => {
-                      setTeamSelectOpen(open)
-                      if (!open) setSearchQuery("")
-                    }}
-                    onValueChange={(value) => {
-                      setActiveSubmissionId(value)
-                      setSearchQuery("")
-                    }}
-                    disabled={filteredSubmissions.length === 0}
-                  >
-                    <SelectTrigger id="team-select" className="h-11 w-full max-w-lg text-base">
-                      <SelectValue
-                        placeholder={
-                          filteredSubmissions.length === 0
-                            ? "No matching projects"
-                            : "Select a project to view timings"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent className="w-(--radix-select-trigger-width) min-w-(--radix-select-trigger-width) max-h-[55vh] overflow-y-auto p-0 sm:max-h-88">
-                      {teamSelectOpen && (
-                        <div className="sticky top-0 z-10 border-b bg-popover/95 p-2 backdrop-blur-sm">
-                          <div className="relative">
-                            <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                              placeholder="Search project name"
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              onKeyDown={(e) => e.stopPropagation()}
-                              className="pl-8"
-                            />
-                          </div>
-                        </div>
-                      )}
-                      <div className="px-2 pb-1 pt-2 text-xs text-muted-foreground">
-                        {filteredSubmissions.length} project{filteredSubmissions.length === 1 ? "" : "s"}
-                      </div>
-                      {filteredSubmissions.map((sub) => (
-                        <SelectItem key={sub.id} value={sub.id}>
-                          <span className="truncate">{sub.project_name || "Untitled Project"}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-2">
+                  <Label className="text-sm md:text-base">Project</Label>
+                  <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={comboboxOpen}
+                        disabled={submissions.length === 0}
+                        className="h-11 w-full max-w-lg justify-between text-base font-normal"
+                      >
+                        <span className="truncate">
+                          {activeSubmissionId
+                            ? (submissionsById.get(activeSubmissionId)?.projectName ?? "Untitled Project")
+                            : "Select a project to view timings"}
+                        </span>
+                        <IconChevronDown className="ml-2 size-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder="Search project name…" />
+                        <CommandList className="max-h-[55vh] sm:max-h-72">
+                          <CommandEmpty>No matching projects.</CommandEmpty>
+                          <CommandGroup>
+                            {submissions.map((sub) => (
+                              <CommandItem
+                                key={sub.id}
+                                value={`${sub.project_name ?? ""} ${sub.submitter_name ?? ""}`.trim()}
+                                onSelect={() => {
+                                  setActiveSubmissionId(sub.id)
+                                  setComboboxOpen(false)
+                                }}
+                              >
+                                <IconCheck
+                                  className={`mr-2 size-4 shrink-0 ${activeSubmissionId === sub.id ? "opacity-100" : "opacity-0"}`}
+                                />
+                                <span className="truncate">{sub.project_name || "Untitled Project"}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
-                {activeSubmissionId && filteredSubmissions.length > 0 && (
+                {activeSubmissionId && (
                   <div className="space-y-4">
                     {slotsForSelectedTeam.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No judging times scheduled yet for this project.</p>

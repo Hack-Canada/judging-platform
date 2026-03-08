@@ -26,7 +26,7 @@ CREATE TABLE public.judge_investments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   judge_id uuid NOT NULL,
   submission_id uuid NOT NULL,
-  amount numeric NOT NULL DEFAULT 0,
+  amount numeric NOT NULL DEFAULT 0, -- stores judge's 1–10 rank for this project
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT judge_investments_pkey PRIMARY KEY (id),
@@ -58,7 +58,7 @@ CREATE TABLE public.judges (
   name text NOT NULL,
   email text NOT NULL UNIQUE,
   assigned_projects integer NOT NULL DEFAULT 0,
-  total_invested numeric NOT NULL DEFAULT 0,
+  total_invested numeric NOT NULL DEFAULT 0, -- legacy column, no longer actively used
   tracks ARRAY NOT NULL DEFAULT ARRAY['General'::text],
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT judges_pkey PRIMARY KEY (id)
