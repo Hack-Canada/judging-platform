@@ -72,12 +72,12 @@ const colIdx = {}
 headerRow.forEach((h, i) => { colIdx[h.trim()] = i })
 
 const isTitleFirst = headerRow[0].trim() === "Project Title"
-const titleCol       = isTitleFirst ? 0 : 1
-const devpostCol     = isTitleFirst ? 1 : 2
-const tracksCol      = isTitleFirst ? (colIdx["Opt-In Prizes"] ?? 9) : 0
-const firstNameCol   = colIdx["Submitter First Name"] ?? 11
-const lastNameCol    = colIdx["Submitter Last Name"]  ?? 12
-const emailCol       = colIdx["Submitter Email"]      ?? 13
+const titleCol = isTitleFirst ? 0 : 1
+const devpostCol = isTitleFirst ? 1 : 2
+const tracksCol = isTitleFirst ? (colIdx["Opt-In Prizes"] ?? 9) : 0
+const firstNameCol = colIdx["Submitter First Name"] ?? 11
+const lastNameCol = colIdx["Submitter Last Name"] ?? 12
+const emailCol = colIdx["Submitter Email"] ?? 13
 const memberStartCol = colIdx["Team Member 1 First Name"] ?? 23
 
 console.log(`Detected format: ${isTitleFirst ? "B (one row per project)" : "A (one row per track)"}`)
@@ -90,7 +90,7 @@ for (const row of dataRows) {
 
   if (!byProject.has(title)) {
     const firstName = get(row, firstNameCol)
-    const lastName  = get(row, lastNameCol)
+    const lastName = get(row, lastNameCol)
     const submitterName = [firstName, lastName].filter(Boolean).join(" ")
 
     const members = []
@@ -99,17 +99,17 @@ for (const row of dataRows) {
     let idx = memberStartCol
     while (idx < row.length) {
       const mFirst = get(row, idx)
-      const mLast  = get(row, idx + 1)
+      const mLast = get(row, idx + 1)
       const name = [mFirst, mLast].filter(Boolean).join(" ")
       if (name) members.push(name)
       idx += 3
     }
 
     byProject.set(title, {
-      project_name:    title,
-      devpost_link:    get(row, devpostCol),
-      tracks:          [],
-      submitter_name:  submitterName,
+      project_name: title,
+      devpost_link: get(row, devpostCol),
+      tracks: [],
+      submitter_name: submitterName,
       submitter_email: get(row, emailCol),
       members,
     })
@@ -117,16 +117,18 @@ for (const row of dataRows) {
 
   const entry = byProject.get(title)
 
+  const isMLH = (t) => t.toLowerCase().startsWith("[mlh]") || t.toLowerCase().startsWith("mlh ")
+
   if (isTitleFirst) {
     // Format B: all tracks are comma-separated in one cell
     const rawTracks = get(row, tracksCol)
     rawTracks.split(",").map(t => t.trim()).filter(Boolean).forEach(t => {
-      if (!entry.tracks.includes(t)) entry.tracks.push(t)
+      if (!isMLH(t) && !entry.tracks.includes(t)) entry.tracks.push(t)
     })
   } else {
     // Format A: one track per row
     const track = get(row, tracksCol)
-    if (track && !entry.tracks.includes(track)) entry.tracks.push(track)
+    if (track && !isMLH(track) && !entry.tracks.includes(track)) entry.tracks.push(track)
   }
 }
 
