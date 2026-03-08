@@ -76,7 +76,7 @@ export default function AdminPage() {
   const [investmentFund, setInvestmentFund] = React.useState(String(POINTS_PER_JUDGE))
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
-  const [slotDuration, setSlotDuration] = React.useState(8) // Calendar slot duration in minutes
+  const [slotDuration, setSlotDuration] = React.useState("5") // Calendar slot duration in minutes
   const [scheduleStartTime, setScheduleStartTime] = React.useState("10:00") // Default 10 AM
   const [scheduleEndTime, setScheduleEndTime] = React.useState("17:00") // Default 5 PM
   const [minInvestment, setMinInvestment] = React.useState("0")
@@ -414,7 +414,7 @@ export default function AdminPage() {
             // Load calendar settings
             const slotDuration = settingsMap.get("calendar_slot_duration")
             if (slotDuration) {
-              setSlotDuration(parseInt(slotDuration) || 5)
+              setSlotDuration(slotDuration)
             }
 
             const startTime = settingsMap.get("calendar_start_time")
@@ -498,9 +498,9 @@ export default function AdminPage() {
         }
       }
 
-      await loadSettingsFromSupabase()
-
       try {
+
+        await loadSettingsFromSupabase()
 
         const [
           { data: supabaseJudges, error: judgesError }, 
@@ -1030,7 +1030,7 @@ export default function AdminPage() {
   const handleSaveCalendarSettings = async () => {
     try {
       const settingsToSave = [
-        { setting_key: "calendar_slot_duration", setting_value: slotDuration.toString() },
+        { setting_key: "calendar_slot_duration", setting_value: slotDuration },
         { setting_key: "calendar_judges_per_project", setting_value: String(TARGET_JUDGES_PER_PROJECT) },
         { setting_key: "calendar_start_time", setting_value: scheduleStartTime },
         { setting_key: "calendar_end_time", setting_value: scheduleEndTime },
@@ -1635,6 +1635,14 @@ export default function AdminPage() {
 
   /** Build calendar_schedule_slots from current assignments and publish. */
   const handlePublishSchedule = async () => {
+    const parsedSlotDuration = parseInt(slotDuration, 10)
+    if (!Number.isFinite(parsedSlotDuration) || parsedSlotDuration <= 0) {
+      toast.error("Invalid slot duration", {
+        description: "Enter a valid number of minutes greater than 0.",
+      })
+      return
+    }
+
     if (projectsList.length === 0 || judgesList.length === 0) {
       toast.error("No submissions or judges", {
         description: "Auto-assign judges first, then publish.",
@@ -1702,7 +1710,7 @@ export default function AdminPage() {
       scheduleDate,
       startTime: scheduleStartTime,
       endTime: scheduleEndTime,
-      slotDurationMinutes: slotDuration,
+      slotDurationMinutes: parsedSlotDuration,
     })
 
     if (slots.length === 0) {
@@ -1723,7 +1731,7 @@ export default function AdminPage() {
 
       await supabase.from("admin_settings").upsert(
         [
-          { setting_key: "calendar_slot_duration", setting_value: String(slotDuration), updated_at: new Date().toISOString() },
+          { setting_key: "calendar_slot_duration", setting_value: String(parsedSlotDuration), updated_at: new Date().toISOString() },
           { setting_key: "calendar_judges_per_project", setting_value: String(TARGET_JUDGES_PER_PROJECT), updated_at: new Date().toISOString() },
           { setting_key: "calendar_start_time", setting_value: scheduleStartTime, updated_at: new Date().toISOString() },
           { setting_key: "calendar_end_time", setting_value: scheduleEndTime, updated_at: new Date().toISOString() },
@@ -2154,12 +2162,10 @@ export default function AdminPage() {
                           <Label htmlFor="slot-duration">Slot duration (min)</Label>
                           <Input
                             id="slot-duration"
-                            type="number"
-                            min="5"
-                            max="60"
-                            step="5"
+                            type="text"
+                            inputMode="numeric"
                             value={slotDuration}
-                            onChange={(e) => setSlotDuration(Math.max(5, parseInt(e.target.value) || 5))}
+                            onChange={(e) => setSlotDuration(e.target.value)}
                           />
                         </div>
                         <div className="flex flex-col gap-2 justify-end">

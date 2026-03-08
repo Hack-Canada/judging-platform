@@ -26,10 +26,11 @@ type SlotRow = {
   submission_id: string
 }
 
+// Matches test_submissions columns (calendar slots reference test_submissions.id)
 type SubmissionRow = {
   id: string
-  team_name: string
   project_name: string
+  submitter_name: string | null
 }
 
 type HackerScheduleViewProps = {
@@ -56,7 +57,8 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
             .select("id, date, start_time, end_time, room_id, submission_id")
             .order("date", { ascending: true })
             .order("start_time", { ascending: true }),
-          supabase.from("submissions").select("id, team_name, project_name"),
+          // Fix: was querying `submissions` (wrong table — slots reference test_submissions.id)
+          supabase.from("test_submissions").select("id, project_name, submitter_name"),
           supabase
             .from("admin_settings")
             .select("setting_key, setting_value")
@@ -103,10 +105,9 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
   }, [rooms])
 
   const submissionsById = React.useMemo(() => {
-    const map = new Map<string, { teamName: string; projectName: string }>()
+    const map = new Map<string, { projectName: string }>()
     submissions.forEach((s) =>
       map.set(s.id, {
-        teamName: s.team_name ?? "Unknown Team",
         projectName: s.project_name ?? "Untitled Project",
       }),
     )
@@ -117,8 +118,9 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     const q = searchQuery.trim().toLowerCase()
     if (!q) return submissions
     return submissions.filter((sub) => {
-      const team = (sub.team_name ?? "").toLowerCase()
-      return team.includes(q)
+      const name = (sub.project_name ?? "").toLowerCase()
+      const submitter = (sub.submitter_name ?? "").toLowerCase()
+      return name.includes(q) || submitter.includes(q)
     })
   }, [submissions, searchQuery])
 
@@ -161,6 +163,20 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
     return `${toHM(start)} - ${toHM(end)}`
   }
 
+  // Fix: parse "YYYY-MM-DD" as local date to avoid UTC midnight → previous day in negative UTC offsets
+  const formatLocalDate = (dateStr: string) => {
+    const [y, m, d] = dateStr.split("-").map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
+  }
+
+  // Suppress the unused var warning — submissionsById is available for future use
+  void submissionsById
+
   if (loading && submissions.length === 0 && slots.length === 0) {
     return <SchedulePageSkeleton embedded={embedded} />
   }
@@ -186,11 +202,11 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                 Judging schedule is currently hidden by admins.
               </p>
             ) : submissions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No teams have submitted yet. Check back later.</p>
+              <p className="text-sm text-muted-foreground">No projects have been submitted yet. Check back later.</p>
             ) : (
               <>
                 <div className="space-y-2.5">
-                  <Label htmlFor="team-select" className="text-sm md:text-base">Team</Label>
+                  <Label htmlFor="team-select" className="text-sm md:text-base">Project</Label>
                   <Select
                     value={activeSubmissionId ?? ""}
                     onOpenChange={(open) => {
@@ -207,8 +223,8 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                       <SelectValue
                         placeholder={
                           filteredSubmissions.length === 0
-                            ? "No matching teams"
-                            : "Select a team to view their timings"
+                            ? "No matching projects"
+                            : "Select a project to view timings"
                         }
                       />
                     </SelectTrigger>
@@ -218,7 +234,7 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                           <div className="relative">
                             <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
-                              placeholder="Search team name"
+                              placeholder="Search project name"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
                               onKeyDown={(e) => e.stopPropagation()}
@@ -228,11 +244,11 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                         </div>
                       )}
                       <div className="px-2 pb-1 pt-2 text-xs text-muted-foreground">
-                        {filteredSubmissions.length} team{filteredSubmissions.length === 1 ? "" : "s"}
+                        {filteredSubmissions.length} project{filteredSubmissions.length === 1 ? "" : "s"}
                       </div>
                       {filteredSubmissions.map((sub) => (
                         <SelectItem key={sub.id} value={sub.id}>
-                          <span className="truncate">{sub.team_name || "Unnamed Team"}</span>
+                          <span className="truncate">{sub.project_name || "Untitled Project"}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -242,18 +258,13 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
                 {activeSubmissionId && filteredSubmissions.length > 0 && (
                   <div className="space-y-4">
                     {slotsForSelectedTeam.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No judging times scheduled yet for this team.</p>
+                      <p className="text-sm text-muted-foreground">No judging times scheduled yet for this project.</p>
                     ) : (
                       <div className="space-y-6">
                         {groupSlotsByDate.map(([date, dateSlots]) => (
                           <div key={date} className="space-y-3">
                             <p className="text-base font-semibold tracking-tight md:text-lg">
-                              {new Date(date).toLocaleDateString(undefined, {
-                                weekday: "short",
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                              })}
+                              {formatLocalDate(date)}
                             </p>
                             <div className="space-y-2">
                               {dateSlots.map((slot) => {

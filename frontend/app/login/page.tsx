@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { getCurrentUserWithRole, signInAdmin, signOut } from "@/lib/auth-helpers"
 import { getDefaultRouteForRole } from "@/lib/rbac"
+import posthog from "posthog-js"
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -35,6 +36,7 @@ export default function AdminLoginPage() {
       const { role } = await getCurrentUserWithRole()
       if (role !== "admin" && role !== "superadmin") {
         await signOut()
+        posthog.capture("login_failed", { reason: "unauthorized_role", attempted_role: role, login_type: "admin" })
         toast.error("Unauthorized role", {
           description: "Judges and sponsors must use the judge login page instead.",
         })
@@ -42,6 +44,8 @@ export default function AdminLoginPage() {
         return
       }
 
+      posthog.capture("admin_login", { role, email: email.trim() })
+      posthog.identify(email.trim(), { email: email.trim(), role })
       router.replace(getDefaultRouteForRole(role))
     } catch (error) {
       toast.error("Sign in failed", {
