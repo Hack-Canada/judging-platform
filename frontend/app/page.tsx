@@ -1,5 +1,5 @@
-import { PublicSubmissionGate } from "@/components/public-submission-gate"
+import { HackerScheduleView } from "@/components/hacker-schedule-view"
 
 export default function Home() {
-  return <PublicSubmissionGate showScheduleInlineWhenClosed />
+  return <HackerScheduleView />
 }
