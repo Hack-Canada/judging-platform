@@ -152,7 +152,7 @@ export default function CalendarPage() {
         const [{ data: supabaseJudges, error: judgesError }, { data: supabaseSubmissions, error: submissionsError }] =
           await Promise.all([
             supabase.from("judges").select("id, name, email, tracks"),
-            supabase.from("submissions").select("id, project_name, tracks"),
+            supabase.from("test_submissions").select("id, project_name, tracks"),
           ])
 
         if (!judgesError && supabaseJudges) {
@@ -256,13 +256,26 @@ export default function CalendarPage() {
     void loadSlotsForDate(selectedDate)
   }, [selectedDate, loadSlotsForDate])
 
-  // When Admin publishes schedule, refetch slots for current date
+  // When Admin publishes schedule, refetch slots for current date (same-tab event)
   React.useEffect(() => {
     const onSchedulePublished = () => {
       void loadSlotsForDate(selectedDate)
     }
     window.addEventListener("schedulePublished", onSchedulePublished)
     return () => window.removeEventListener("schedulePublished", onSchedulePublished)
+  }, [selectedDate, loadSlotsForDate])
+
+  // Realtime subscription — reload slots whenever calendar_schedule_slots changes (cross-tab)
+  React.useEffect(() => {
+    const channel = supabase
+      .channel("calendar-slots-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "calendar_schedule_slots" },
+        () => { void loadSlotsForDate(selectedDate) }
+      )
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
   }, [selectedDate, loadSlotsForDate])
 
   // Update time slots when time range changes

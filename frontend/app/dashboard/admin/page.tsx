@@ -581,19 +581,17 @@ export default function AdminPage() {
           
           // Map submissions to AdminProject format with assignments
           const mappedProjects: AdminProject[] = (supabaseSubmissions as any[]).map((row, index) => {
-            const matchedSubmission = findMatchingSubmission(row, persistedSubmissions || [])
-            const persistedSubmissionId = matchedSubmission ? String(matchedSubmission.id) : undefined
-
+            const testId = String(row.id)
             return {
               id: index + 1,
               name: row.project_name ?? "Untitled Project",
-              assignedJudges: persistedSubmissionId ? assignmentMap.get(persistedSubmissionId) || [] : [],
+              assignedJudges: assignmentMap.get(testId) || [],
               totalInvestment: 0,
               tracks: (row.tracks && Array.isArray(row.tracks) && row.tracks.length > 0)
                 ? row.tracks
                 : ["General"],
-              submissionId: persistedSubmissionId,
-              sourceSubmissionId: String(row.id),
+              submissionId: testId,
+              sourceSubmissionId: testId,
             } as AdminProject
           })
           setProjectsList(mappedProjects as any)
@@ -1451,68 +1449,20 @@ export default function AdminPage() {
         })
       }
 
-      const { data: existingSubmissionRows, error: existingSubmissionRowsError } = await supabase
-        .from("submissions")
-        .select("id, project_name, devpost_link")
-
-      if (existingSubmissionRowsError) throw existingSubmissionRowsError
-
       const resolvedProjects: AdminProject[] = []
       for (const project of sourceProjects) {
-        const sourceSubmissionId = String((project as any).sourceSubmissionId || "")
-        const sourceRow = sourceRowsById.get(sourceSubmissionId)
-
-        let persistedSubmissionId = (project as any).submissionId
-          ? String((project as any).submissionId)
-          : undefined
-
-        if (!persistedSubmissionId && sourceRow) {
-          const matchedSubmission = findMatchingSubmission(sourceRow, existingSubmissionRows || [])
-
-          if (matchedSubmission) {
-            persistedSubmissionId = String(matchedSubmission.id)
-          } else {
-            const fallbackName =
-              sourceRow.submitter_name ||
-              (Array.isArray(sourceRow.members) && sourceRow.members.length > 0 ? sourceRow.members[0] : "") ||
-              "Imported Submitter"
-
-            const fallbackTeamName =
-              sourceRow.submitter_email ||
-              sourceRow.project_name ||
-              "Imported Team"
-
-            const fallbackDevpostLink =
-              sourceRow.devpost_link ||
-              `https://hack-canada.local/test-submissions/${sourceRow.id}`
-
-            const { data: insertedSubmissionRows, error: insertSubmissionError } = await supabase
-              .from("submissions")
-              .insert({
-                name: fallbackName,
-                team_name: fallbackTeamName,
-                members: Array.isArray(sourceRow.members) ? sourceRow.members : [],
-                devpost_link: fallbackDevpostLink,
-                project_name: sourceRow.project_name || "Untitled Project",
-                tracks: Array.isArray(sourceRow.tracks) && sourceRow.tracks.length > 0 ? sourceRow.tracks : ["General"],
-                submitted_at: sourceRow.created_at || new Date().toISOString(),
-              })
-              .select("id, project_name, devpost_link")
-
-            if (insertSubmissionError) throw insertSubmissionError
-
-            const insertedSubmission = insertedSubmissionRows?.[0]
-            persistedSubmissionId = insertedSubmission ? String(insertedSubmission.id) : undefined
-            if (insertedSubmission) {
-              ;(existingSubmissionRows || []).push(insertedSubmission)
-            }
-          }
-        }
+        // Use test_submissions ID directly — no submissions table roundtrip needed
+        const submissionId =
+          (project as any).submissionId
+            ? String((project as any).submissionId)
+            : (project as any).sourceSubmissionId
+              ? String((project as any).sourceSubmissionId)
+              : undefined
 
         resolvedProjects.push({
           ...project,
-          submissionId: persistedSubmissionId,
-        })
+          submissionId,
+        } as AdminProject)
       }
       
       // Get all submission IDs that have assignments
