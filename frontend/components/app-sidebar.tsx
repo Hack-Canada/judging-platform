@@ -8,7 +8,6 @@ import {
   IconCalendar,
   IconFolder,
   IconUser,
-  IconUsers,
   IconShield,
 } from "@tabler/icons-react"
 
@@ -37,11 +36,6 @@ const data = {
       title: "Judges View",
       url: "/dashboard/judges",
       icon: IconGavel,
-    },
-    {
-      title: "Hackers Submission",
-      url: "/dashboard/hackers",
-      icon: IconUsers,
     },
     {
       title: "Hacker View",

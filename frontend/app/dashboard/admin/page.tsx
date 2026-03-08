@@ -80,8 +80,6 @@ export default function AdminPage() {
   const [scheduleEndTime, setScheduleEndTime] = React.useState("17:00") // Default 5 PM
   const [minInvestment, setMinInvestment] = React.useState("0")
   const [maxInvestment, setMaxInvestment] = React.useState(String(POINTS_PER_JUDGE))
-  const [submissionFormEnabled, setSubmissionFormEnabled] = React.useState(true)
-  const [savingSubmissionFormVisibility, setSavingSubmissionFormVisibility] = React.useState(false)
   const [hackerScheduleVisibilityEnabled, setHackerScheduleVisibilityEnabled] = React.useState(false)
   const [savingHackerScheduleVisibility, setSavingHackerScheduleVisibility] = React.useState(false)
   const [scheduleDate, setScheduleDate] = React.useState(() =>
@@ -411,11 +409,6 @@ export default function AdminPage() {
                   ? String(parsed)
                   : String(POINTS_PER_JUDGE)
               )
-            }
-
-            const submissionFormVisibility = settingsMap.get("submission_form_visibility")
-            if (submissionFormVisibility) {
-              setSubmissionFormEnabled(submissionFormVisibility !== "disabled")
             }
 
             const hackerScheduleVisibility = settingsMap.get("hacker_schedule_visibility")
@@ -949,39 +942,6 @@ export default function AdminPage() {
       })
     } finally {
       setSavingHackerScheduleVisibility(false)
-    }
-  }
-
-  const handleSaveSubmissionFormVisibility = async (nextEnabled: boolean) => {
-    setSavingSubmissionFormVisibility(true)
-    try {
-      const { error } = await supabase
-        .from("admin_settings")
-        .upsert(
-          {
-            setting_key: "submission_form_visibility",
-            setting_value: nextEnabled ? "enabled" : "disabled",
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "setting_key",
-          }
-        )
-
-      if (error) throw error
-
-      toast.success("Submission form visibility updated", {
-        description: nextEnabled
-          ? "Hackers can now access the project submission form."
-          : 'The public submission page now shows "Not open - check again."',
-      })
-    } catch (error) {
-      setSubmissionFormEnabled((current) => !current)
-      toast.error("Failed to update submission form visibility", {
-        description: error instanceof Error ? error.message : "Unknown error",
-      })
-    } finally {
-      setSavingSubmissionFormVisibility(false)
     }
   }
 
@@ -1788,37 +1748,6 @@ export default function AdminPage() {
                           />
                         </div>
                         <Button onClick={handleSaveFund}>Save Points</Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="mb-6">
-                    <CardHeader>
-                      <CardTitle>Submission Form Visibility</CardTitle>
-                      <CardDescription>
-                        Control whether hackers can access the public submission form. When disabled, the public
-                        submission page will show a closed message instead.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            checked={submissionFormEnabled}
-                            disabled={savingSubmissionFormVisibility}
-                            onCheckedChange={(checked) => {
-                              setSubmissionFormEnabled(checked)
-                              void handleSaveSubmissionFormVisibility(checked)
-                            }}
-                            id="submission-form-visibility"
-                          />
-                          <Label htmlFor="submission-form-visibility">
-                            Allow hackers to access the submission form
-                          </Label>
-                        </div>
-                        {savingSubmissionFormVisibility ? (
-                          <span className="text-sm text-muted-foreground">Saving...</span>
-                        ) : null}
                       </div>
                     </CardContent>
                   </Card>
