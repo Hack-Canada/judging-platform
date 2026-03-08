@@ -2426,17 +2426,45 @@ export default function AdminPage() {
                   {/* Submissions */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <CardTitle>Submissions ({submissions.length})</CardTitle>
-                          <CardDescription>
-                            Import a CSV to load submissions. Use Step 1 above to assign judges.
-                          </CardDescription>
+                      <CardTitle>Submissions ({submissions.length})</CardTitle>
+                      <CardDescription>
+                        Project submissions from hackers. Use Step 1 above to assign judges.
+                      </CardDescription>
+                      {submissions.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-3">
+                          {(() => {
+                            const sponsorTracks = [
+                              "Most technically complex AI hack",
+                              "Best Virtual Reality & WebXR Hack: Immersive Experiences for the Open Web",
+                              "Reactiv - ClipKit Lab",
+                              "Tailscale Integration Challenge",
+                              "Stan - Build in Public, Win in Public",
+                              "Cloudinary Challenge",
+                              "Backboard.io - Best use of Backboard",
+                              "Vivirion Solutions - Best Practical Healthcare Hack",
+                              "Google - Build with AI Track",
+                              "SPUR Founder Track - Build a Real Canadian Startup",
+                            ];
+                            const trackCounts = new Map<string, number>();
+                            sponsorTracks.forEach(track => trackCounts.set(track, 0));
+                            submissions.forEach(sub => {
+                              if (sub.tracks && Array.isArray(sub.tracks)) {
+                                sub.tracks.forEach((track: string) => {
+                                  if (sponsorTracks.includes(track)) {
+                                    trackCounts.set(track, (trackCounts.get(track) || 0) + 1);
+                                  }
+                                });
+                              }
+                            });
+                            return sponsorTracks.map(track => (
+                              <div key={track} className="flex items-center gap-1.5 px-2 py-1 bg-muted rounded text-xs">
+                                <span className="font-medium">{track}</span>
+                                <Badge variant="secondary" className="text-xs px-1.5 py-0">{trackCounts.get(track)}</Badge>
+                              </div>
+                            ));
+                          })()}
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setCsvImportOpen(true)}>
-                          Import CSV
-                        </Button>
-                      </div>
+                      )}
                     </CardHeader>
                     <CardContent>
                       {loadingSubmissions ? (
