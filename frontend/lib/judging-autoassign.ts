@@ -103,6 +103,125 @@ export const autoAssignByTrackMatch = (
 }
 
 // ---------------------------------------------------------------------------
+// Auto-assign: room-aware — all judges in the same room share the same projects
+// ---------------------------------------------------------------------------
+
+/**
+ * Room-aware auto-assign. Judges are grouped by their room assignment.
+ * The greedy round-robin operates on rooms instead of individual judges,
+ * so every judge in a room receives the same set of projects.
+ * Each judge still ranks/scores independently.
+ *
+ * Fallback: projects with no matching track judge fall back to rooms that
+ * cover "General", round-robin across those rooms.
+ *
+ * @param judges          - All judges with their tracks
+ * @param projects        - All projects to assign
+ * @param judgeRoomMap    - judgeId (as string) → roomId
+ */
+export const autoAssignByRoomAndTrack = (
+  judges: Judge[],
+  projects: AdminProject[],
+  judgeRoomMap: JudgeRoomMap,
+): AutoAssignResult => {
+  // Build roomId → Judge[] from the room map
+  const roomToJudges = new Map<number, Judge[]>()
+  judges.forEach((judge) => {
+    const roomId = judgeRoomMap.get(String(judge.id))
+    if (roomId === undefined) return
+    if (!roomToJudges.has(roomId)) roomToJudges.set(roomId, [])
+    roomToJudges.get(roomId)!.push(judge)
+  })
+
+  // Build track → roomId[] lookup: which rooms cover each track
+  // A room covers a track if at least one judge in that room has that track
+  const trackToRooms = new Map<string, number[]>()
+  roomToJudges.forEach((roomJudges, roomId) => {
+    const tracksInRoom = new Set<string>()
+    roomJudges.forEach((judge) => {
+      judge.tracks?.forEach((track) => tracksInRoom.add(track))
+    })
+    tracksInRoom.forEach((track) => {
+      if (!trackToRooms.has(track)) trackToRooms.set(track, [])
+      trackToRooms.get(track)!.push(roomId)
+    })
+  })
+
+  // Round-robin cursor per track (across rooms)
+  const trackRoundRobin = new Map<string, number>()
+  trackToRooms.forEach((_, track) => trackRoundRobin.set(track, 0))
+
+  // Rooms that cover "General" — used as fallback
+  const generalRooms = trackToRooms.get("General") ?? []
+  let generalRoomCursor = 0
+
+  const judgeAssignmentCount = new Map<string, number>()
+  judges.forEach((judge) => judgeAssignmentCount.set(judge.name, 0))
+
+  const underAssignedProjects: AutoAssignResult["underAssignedProjects"] = []
+
+  const updatedProjects = projects.map((project) => {
+    const projectTracks: string[] =
+      Array.isArray(project.tracks) && project.tracks.length > 0
+        ? (project.tracks as string[])
+        : []
+
+    // Collect the set of rooms to assign for this project
+    const assignedRoomIds = new Set<number>()
+
+    for (const track of projectTracks) {
+      const rooms = trackToRooms.get(track)
+      if (!rooms || rooms.length === 0) continue
+
+      // Round-robin: pick the next room in rotation for this track
+      const cursor = trackRoundRobin.get(track) ?? 0
+      const roomId = rooms[cursor % rooms.length]
+      trackRoundRobin.set(track, cursor + 1)
+      assignedRoomIds.add(roomId)
+    }
+
+    // Fallback to General rooms if no room matched
+    if (assignedRoomIds.size === 0 && generalRooms.length > 0) {
+      const roomId = generalRooms[generalRoomCursor % generalRooms.length]
+      generalRoomCursor++
+      assignedRoomIds.add(roomId)
+    }
+
+    // Expand rooms → all judges in those rooms
+    const assignedJudges: string[] = []
+    assignedRoomIds.forEach((roomId) => {
+      const roomJudges = roomToJudges.get(roomId) ?? []
+      roomJudges.forEach((judge) => {
+        if (!assignedJudges.includes(judge.name)) {
+          assignedJudges.push(judge.name)
+          judgeAssignmentCount.set(
+            judge.name,
+            (judgeAssignmentCount.get(judge.name) ?? 0) + 1,
+          )
+        }
+      })
+    })
+
+    if (assignedJudges.length === 0) {
+      underAssignedProjects.push({
+        projectName: project.name,
+        assigned: 0,
+        minimumRequired: 1,
+        eligibleJudges: 0,
+      })
+    }
+
+    return { ...project, assignedJudges }
+  })
+
+  return {
+    updatedProjects,
+    judgeAssignedCountByName: judgeAssignmentCount,
+    underAssignedProjects,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Schedule builder: one slot per (project, judge) pair, judge in fixed room
 // ---------------------------------------------------------------------------
 

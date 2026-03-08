@@ -54,6 +54,7 @@ import { supabase } from "@/lib/supabase-client"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   autoAssignByTrackMatch,
+  autoAssignByRoomAndTrack,
   buildSchedulePerJudgeRoom,
   type JudgeRoomMap,
 } from "@/lib/judging-autoassign"
@@ -1396,10 +1397,16 @@ export default function AdminPage() {
     }
     
     const activeProjects = projectsList
-    const assignmentResult = autoAssignByTrackMatch(
-      judgesList,
-      projectsList,
+
+    // Use room-aware assignment if any judge has a room assigned,
+    // otherwise fall back to the original per-judge track match
+    const hasRoomAssignments = Object.keys(judgeRoomAssignments).length > 0
+    const judgeRoomMap: JudgeRoomMap = new Map(
+      Object.entries(judgeRoomAssignments).map(([judgeId, roomId]) => [judgeId, roomId])
     )
+    const assignmentResult = hasRoomAssignments
+      ? autoAssignByRoomAndTrack(judgesList, projectsList, judgeRoomMap)
+      : autoAssignByTrackMatch(judgesList, projectsList)
     const updatedProjects = assignmentResult.updatedProjects
 
     setProjectsList(updatedProjects)
