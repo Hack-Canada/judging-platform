@@ -74,6 +74,7 @@ headerRow.forEach((h, i) => { colIdx[h.trim()] = i })
 const isTitleFirst = headerRow[0].trim() === "Project Title"
 const titleCol = isTitleFirst ? 0 : 1
 const devpostCol = isTitleFirst ? 1 : 2
+const statusCol = isTitleFirst ? (colIdx["Project Status"] ?? 2) : -1
 const tracksCol = isTitleFirst ? (colIdx["Opt-In Prizes"] ?? 9) : 0
 const firstNameCol = colIdx["Submitter First Name"] ?? 11
 const lastNameCol = colIdx["Submitter Last Name"] ?? 12
@@ -87,6 +88,7 @@ const byProject = new Map()
 for (const row of dataRows) {
   const title = get(row, titleCol)
   if (!title || title.toLowerCase() === "untitled" || title.toLowerCase() === "w") continue
+  if (statusCol >= 0 && !get(row, statusCol).toLowerCase().includes("submitted")) continue
 
   if (!byProject.has(title)) {
     const firstName = get(row, firstNameCol)
@@ -155,4 +157,5 @@ for (const p of byProject.values()) {
 }
 
 fs.writeFileSync(outputPath, lines.join("\n"), "utf8")
-console.log(`Written ${byProject.size} projects to: ${outputPath}`)
+const skipped = dataRows.length - byProject.size
+console.log(`Written ${byProject.size} submitted projects to: ${outputPath} (${skipped} skipped — draft or untitled)`)
