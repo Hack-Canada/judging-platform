@@ -10,6 +10,7 @@ import {
   IconUser,
   IconShield,
   IconChartBar,
+  IconClipboardList,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -54,6 +55,11 @@ const data = {
     //   url: "/dashboard/calendar",
     //   icon: IconCalendar,
     // },
+    {
+      title: "Schedule",
+      url: "/dashboard/schedule",
+      icon: IconClipboardList,
+    },
     {
       title: "Analytics",
       url: "/dashboard/analytics",
