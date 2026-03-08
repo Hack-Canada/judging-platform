@@ -136,13 +136,19 @@ export function HackerScheduleView({ embedded = false }: HackerScheduleViewProps
 
   const slotsForSelectedTeam = React.useMemo(() => {
     if (!activeSubmissionId) return []
-    const projectSlots = slots
+    const seen = new Set<string>()
+    return slots
       .filter((slot) => slot.submission_id === activeSubmissionId)
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date)
         return a.start_time.localeCompare(b.start_time)
       })
-    return projectSlots
+      .filter((slot) => {
+        const key = `${slot.date}|${slot.start_time}|${slot.end_time}|${slot.room_id}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
   }, [slots, activeSubmissionId])
 
   const groupSlotsByDate = React.useMemo(() => {
