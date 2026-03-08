@@ -296,7 +296,7 @@ export default function RolesPage() {
 
   const credentialHint =
     newUserForm.role === "judge" || newUserForm.role === "sponsor"
-      ? "Use exactly 4 digits for judge/sponsor sign-in."
+      ? "Use exactly 6 digits for judge/sponsor sign-in."
       : "Use at least 6 characters."
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -463,9 +463,9 @@ export default function RolesPage() {
                       type="password"
                       required
                       inputMode={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "numeric" : undefined}
-                      minLength={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? 4 : 6}
-                      maxLength={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? 4 : undefined}
-                      pattern={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "\\d{4}" : undefined}
+                      minLength={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? 6 : 6}
+                      maxLength={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? 6 : undefined}
+                      pattern={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "\\d{6}" : undefined}
                       value={newUserForm.password}
                       onChange={(e) =>
                         setNewUserForm((prev) => ({
@@ -473,7 +473,7 @@ export default function RolesPage() {
                           password: e.target.value,
                         }))
                       }
-                      placeholder={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "1234" : "At least 6 characters"}
+                      placeholder={newUserForm.role === "judge" || newUserForm.role === "sponsor" ? "123456" : "At least 6 characters"}
                     />
                     <p className="text-xs text-muted-foreground">{credentialHint}</p>
                   </div>

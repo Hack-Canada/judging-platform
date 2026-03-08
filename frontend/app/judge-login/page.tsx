@@ -60,7 +60,7 @@ export default function JudgeLoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Judge/Sponsor Login</CardTitle>
-          <CardDescription>Sign in with your email and admin-issued PIN code.</CardDescription>
+          <CardDescription>Sign in with your email and admin-issued 6-digit PIN code.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -77,9 +77,9 @@ export default function JudgeLoginPage() {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 required
-                minLength={4}
-                maxLength={4}
-                pattern="\d{4}"
+                minLength={6}
+                maxLength={6}
+                pattern="\d{6}"
               />
             </div>
             <Button type="submit" disabled={loading} className="w-full">

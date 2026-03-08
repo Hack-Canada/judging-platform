@@ -92,7 +92,7 @@ function buildJudgeSeed(index) {
   return {
     name,
     email: `extra.judge.${humanIndex}@hackcanada.test`,
-    pin: `3${String(humanIndex).padStart(3, "0")}`,
+    pin: `3${String(humanIndex).padStart(5, "0")}`,
     tracks: TRACK_ROTATION[index % TRACK_ROTATION.length],
   }
 }

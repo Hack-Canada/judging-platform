@@ -215,9 +215,9 @@ export async function POST(request: Request) {
 
     const requiresPin = role === "judge" || role === "sponsor"
     if (requiresPin) {
-      if (!/^\d{4}$/.test(password)) {
+      if (!/^\d{6}$/.test(password)) {
         return NextResponse.json(
-          { error: "Judge and sponsor accounts require a 4-digit PIN" },
+          { error: "Judge and sponsor accounts require a 6-digit PIN" },
           { status: 400 }
         )
       }

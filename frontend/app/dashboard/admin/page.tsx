@@ -1154,25 +1154,46 @@ export default function AdminPage() {
   }
 
   const syncJudgeAuthPin = async (payload: { name: string; email: string; pin: string }) => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    if (!session?.access_token) {
-      throw new Error("Session expired. Please sign in again.")
+    const getAccessToken = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (session?.access_token) {
+        return session.access_token
+      }
+
+      const { data, error } = await supabase.auth.refreshSession()
+      if (error || !data.session?.access_token) {
+        throw new Error("Session expired. Please sign in again.")
+      }
+
+      return data.session.access_token
     }
 
-    const response = await fetch("/api/judges/auth", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(payload),
-    })
+    const makeRequest = async (accessToken: string) =>
+      fetch("/api/judges/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+      })
+
+    let response = await makeRequest(await getAccessToken())
+
+    if (response.status === 401) {
+      const { data, error } = await supabase.auth.refreshSession()
+      if (error || !data.session?.access_token) {
+        throw new Error("Session expired. Please sign in again.")
+      }
+      response = await makeRequest(data.session.access_token)
+    }
 
     const result = await response.json()
     if (!response.ok) {
-      throw new Error(result.error || "Failed to configure judge login")
+      throw new Error(result.error || "Failed to configure judge PIN login")
     }
   }
 
@@ -1207,15 +1228,22 @@ export default function AdminPage() {
     }
     const normalizedEmail = judgeFormData.email.trim().toLowerCase()
     const normalizedPin = judgeFormData.pin.trim()
-    if (!editingJudge && !/^\d{4}$/.test(normalizedPin)) {
+    const shouldResetPin = normalizedPin.length > 0
+    if (!editingJudge && !/^\d{6}$/.test(normalizedPin)) {
       toast.error("Validation error", {
-        description: "PIN is required and must be exactly 4 digits.",
+        description: "PIN is required and must be exactly 6 digits.",
       })
       return
     }
-    if (editingJudge && editingJudge.email.trim().toLowerCase() !== normalizedEmail && !/^\d{4}$/.test(normalizedPin)) {
+    if (editingJudge && shouldResetPin && !/^\d{6}$/.test(normalizedPin)) {
+      toast.error("Invalid PIN", {
+        description: "Reset PIN must be exactly 6 digits.",
+      })
+      return
+    }
+    if (editingJudge && editingJudge.email.trim().toLowerCase() !== normalizedEmail && !/^\d{6}$/.test(normalizedPin)) {
       toast.error("PIN required", {
-        description: "Set a 4-digit PIN when changing a judge email so login is provisioned for the new email.",
+        description: "Set a 6-digit PIN when changing a judge email so login is provisioned for the new email.",
       })
       return
     }
@@ -1246,9 +1274,6 @@ export default function AdminPage() {
           return
         }
 
-        toast.success("Judge updated!", {
-          description: `${judgeFormData.name} has been updated`,
-        })
       } else {
 
         // Create new judge in Supabase
@@ -1273,19 +1298,23 @@ export default function AdminPage() {
           })
           return
         }
-
-        toast.success("Judge added!", {
-          description: `${judgeFormData.name} has been added`,
-        })
       }
 
-      if (normalizedPin.length >= 4) {
+      if (shouldResetPin) {
         await syncJudgeAuthPin({
           name: judgeFormData.name.trim(),
           email: normalizedEmail,
           pin: normalizedPin,
         })
       }
+
+      toast.success(editingJudge ? "Judge updated!" : "Judge added!", {
+        description: editingJudge
+          ? shouldResetPin
+            ? `${judgeFormData.name}'s login PIN has been reset.`
+            : `${judgeFormData.name} has been updated.`
+          : `${judgeFormData.name} has been added with a 6-digit login PIN.`,
+      })
 
       // Reload judges from Supabase
       await loadJudgesFromSupabase()
@@ -2701,14 +2730,14 @@ export default function AdminPage() {
                   inputMode="numeric"
                   value={judgeFormData.pin}
                   onChange={(e) => setJudgeFormData({ ...judgeFormData, pin: e.target.value })}
-                  placeholder={editingJudge ? "Leave blank to keep current PIN" : "Enter PIN (e.g., 1234)"}
+                  placeholder={editingJudge ? "Leave blank to keep current PIN" : "Enter PIN (e.g., 123456)"}
                   required={!editingJudge}
-                  minLength={4}
-                  maxLength={4}
-                  pattern="\d{4}"
+                  minLength={6}
+                  maxLength={6}
+                  pattern="\d{6}"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Judge login uses email + a 4-digit PIN only. Magic-link login is not used.
+                  Judge login uses email + a 6-digit PIN only. Magic-link login is not used.
                 </p>
               </div>
               <div className="flex flex-col gap-2">
