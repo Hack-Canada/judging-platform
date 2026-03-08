@@ -7,9 +7,9 @@
  * Notes:
  * - This script upserts rows in public.judges only.
  * - It does not create auth users because the current Supabase auth policy
- *   rejects 4-digit passwords, while judge/sponsor login in this app expects a PIN.
+ *   may reject short PINs, while judge/sponsor login in this app expects a 6-digit PIN.
  * - If you want these users to log in later, create matching auth accounts separately
- *   once the auth password policy matches the 4-digit PIN flow.
+ *   once the auth password policy matches the 6-digit PIN flow.
  */
 require("dotenv").config({ path: ".env.local" })
 const { createClient } = require("@supabase/supabase-js")

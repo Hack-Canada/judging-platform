@@ -22,7 +22,7 @@ type JudgeAuthPayload = {
 }
 
 function isValidJudgePin(pin: string): boolean {
-  return /^\d{4}$/.test(pin)
+  return /^\d{6}$/.test(pin)
 }
 
 export async function POST(request: Request) {
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 })
     }
     if (!isValidJudgePin(pin)) {
-      return NextResponse.json({ error: "PIN must be exactly 4 digits" }, { status: 400 })
+      return NextResponse.json({ error: "PIN must be exactly 6 digits" }, { status: 400 })
     }
 
     const { data: usersPage, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
@@ -54,6 +54,8 @@ export async function POST(request: Request) {
     const existingUser = usersPage.users.find((u) => (u.email ?? "").toLowerCase() === email)
     if (existingUser) {
       const { data, error } = await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
+        // Supabase Auth stores judge credentials in the password field, but the app
+        // treats this strictly as a 6-digit PIN for /judge-login.
         password: pin,
         app_metadata: {
           ...(existingUser.app_metadata ?? {}),
@@ -73,6 +75,8 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
+      // Supabase Auth uses the password field under the hood; for judges this value
+      // is always an admin-issued 6-digit PIN rather than a general password.
       password: pin,
       email_confirm: true,
       app_metadata: { role: "judge" },

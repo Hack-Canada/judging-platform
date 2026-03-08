@@ -6,7 +6,7 @@
  *
  * Examples:
  *   node scripts/seed-triple-timing-sample.js
- *   node scripts/seed-triple-timing-sample.js sample.judge@hackcanada.test 1234 2026-02-14
+ *   node scripts/seed-triple-timing-sample.js sample.judge@hackcanada.test 123456 2026-02-14
  *
  * What this script does:
  * - creates/updates a judge auth user with role=judge
@@ -22,7 +22,7 @@ const { createClient } = require("@supabase/supabase-js")
 const SAMPLE = {
   judgeName: "Sample Judge",
   judgeEmail: process.argv[2] || "sample.judge@hackcanada.test",
-  judgePin: process.argv[3] || "1234",
+  judgePin: process.argv[3] || "123456",
   date: process.argv[4] || "2026-03-08",
   teamName: "Triple Timing Test Team",
   projectName: "Triple Timing Demo Project",

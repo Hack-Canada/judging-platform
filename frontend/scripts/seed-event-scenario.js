@@ -23,7 +23,7 @@ const { createClient } = require("@supabase/supabase-js")
 const TOTAL_PROJECTS = Math.max(1, parseInt(process.argv[2] || "100", 10))
 const EVENT_DATE = process.argv[3] || "2026-03-08"
 const DEVPOST_PREFIX = "https://devpost.com/software/event-scenario-project-"
-const DEFAULT_PIN_PREFIX = "20"
+const DEFAULT_PIN_PREFIX = "2000"
 
 const TRACKS = [
   { id: 1, name: "General", description: "General category for all projects" },
