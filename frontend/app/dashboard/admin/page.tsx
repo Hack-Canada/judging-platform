@@ -53,10 +53,11 @@ import { DashboardAdminSkeleton } from "@/components/page-skeletons"
 import { supabase } from "@/lib/supabase-client"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
-  autoAssignProjectsByTrack,
-  buildScheduleWithMinimalRoomMoves,
-  clampJudgesPerProject,
+  autoAssignByTrackMatch,
+  buildSchedulePerJudgeRoom,
+  type JudgeRoomMap,
 } from "@/lib/judging-autoassign"
+import { Textarea } from "@/components/ui/textarea"
 
 
 export default function AdminPage() {
@@ -120,6 +121,23 @@ export default function AdminPage() {
   })
   const [manualAssignmentDialogOpen, setManualAssignmentDialogOpen] = React.useState(false)
   const [manualProjectsList, setManualProjectsList] = React.useState<AdminProject[]>([])
+
+  // Judge-room assignment state: judgeId → roomId
+  const [judgeRoomAssignments, setJudgeRoomAssignments] = React.useState<Record<string, number>>({})
+
+  // CSV import state
+  type ParsedProject = {
+    project_name: string
+    devpost_link: string | null
+    tracks: string[]
+    submitter_name: string | null
+    submitter_email: string | null
+    members: string[]
+  }
+  const [csvImportOpen, setCsvImportOpen] = React.useState(false)
+  const [csvText, setCsvText] = React.useState("")
+  const [csvPreview, setCsvPreview] = React.useState<ParsedProject[] | null>(null)
+  const [csvImporting, setCsvImporting] = React.useState(false)
 
   // Backup state
   type BackupSnapshot = {
@@ -436,6 +454,19 @@ export default function AdminPage() {
                 const parsed = JSON.parse(roomsData)
                 if (Array.isArray(parsed) && parsed.length > 0) {
                   setRoomsList(parsed)
+                }
+              } catch (e) {
+
+              }
+            }
+
+            // Load judge-room assignments
+            const judgeRoomsData = settingsMap.get("judge_room_assignments")
+            if (judgeRoomsData) {
+              try {
+                const parsed = JSON.parse(judgeRoomsData)
+                if (parsed && typeof parsed === "object") {
+                  setJudgeRoomAssignments(parsed)
                 }
               } catch (e) {
 
@@ -780,6 +811,156 @@ export default function AdminPage() {
       toast.error("Failed to load judges", {
         description: error instanceof Error ? error.message : "An unexpected error occurred",
       })
+    }
+  }
+
+  const saveJudgeRoomAssignment = async (judgeId: string, roomId: number) => {
+    const next = { ...judgeRoomAssignments, [judgeId]: roomId }
+    setJudgeRoomAssignments(next)
+    try {
+      await saveSettingToSupabase("judge_room_assignments", JSON.stringify(next))
+    } catch {
+      toast.error("Failed to save room assignment")
+    }
+  }
+
+  // CSV parsing: one row per track, grouped by project_name / devpost_link
+  const parseCsvForImport = (raw: string): ParsedProject[] => {
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    if (lines.length < 2) return []
+
+    // Parse a single CSV line respecting quoted fields
+    const parseLine = (line: string): string[] => {
+      const fields: string[] = []
+      let field = ""
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (inQuotes) {
+          if (ch === '"' && line[i + 1] === '"') { field += '"'; i++ }
+          else if (ch === '"') { inQuotes = false }
+          else { field += ch }
+        } else {
+          if (ch === '"') { inQuotes = true }
+          else if (ch === ',') { fields.push(field.trim()); field = "" }
+          else { field += ch }
+        }
+      }
+      fields.push(field.trim())
+      return fields
+    }
+
+    const [, ...dataLines] = lines // skip header
+    const byKey = new Map<string, ParsedProject>()
+
+    for (const line of dataLines) {
+      const cols = parseLine(line)
+      const project_name = cols[0]?.trim() || ""
+      const devpost_link = cols[1]?.trim() || null
+      const track = cols[2]?.trim() || ""
+      const submitter_name = cols[3]?.trim() || null
+      const submitter_email = cols[4]?.trim() || null
+      const membersRaw = cols[5]?.trim() || ""
+      const members = membersRaw
+        ? membersRaw.split(/[;,]/).map((m) => m.trim()).filter(Boolean)
+        : []
+
+      if (!project_name) continue
+
+      const key = devpost_link || project_name
+
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          project_name,
+          devpost_link: devpost_link || null,
+          tracks: [],
+          submitter_name,
+          submitter_email,
+          members,
+        })
+      }
+
+      const entry = byKey.get(key)!
+      if (track && !entry.tracks.includes(track)) {
+        entry.tracks.push(track)
+      }
+    }
+
+    return Array.from(byKey.values())
+  }
+
+  const handleCsvParse = () => {
+    const parsed = parseCsvForImport(csvText)
+    if (parsed.length === 0) {
+      toast.error("No projects found", { description: "Check that your CSV has a header row and data rows." })
+      return
+    }
+    setCsvPreview(parsed)
+  }
+
+  const handleCsvImport = async () => {
+    if (!csvPreview || csvPreview.length === 0) return
+    try {
+      setCsvImporting(true)
+
+      // Clear existing test_submissions
+      const { error: deleteError } = await supabase
+        .from("test_submissions")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000")
+
+      if (deleteError) throw deleteError
+
+      // Insert in batches of 20
+      const BATCH = 20
+      for (let i = 0; i < csvPreview.length; i += BATCH) {
+        const batch = csvPreview.slice(i, i + BATCH)
+        const { error: insertError } = await supabase.from("test_submissions").insert(batch)
+        if (insertError) throw insertError
+      }
+
+      toast.success(`Imported ${csvPreview.length} project(s)`, {
+        description: "test_submissions table has been replaced.",
+      })
+
+      // Reload submissions + projects list
+      const [{ data: newSubs }, { data: assignments }] = await Promise.all([
+        supabase.from("test_submissions").select("id, project_name, tracks"),
+        supabase.from("judge_project_assignments").select("judge_id, submission_id"),
+      ])
+
+      if (newSubs) {
+        const assignmentMap = new Map<string, string[]>()
+        if (assignments) {
+          assignments.forEach((a: any) => {
+            const judge = judgesList.find((j: any) => String(j.id) === String(a.judge_id))
+            if (judge && a.submission_id) {
+              if (!assignmentMap.has(a.submission_id)) assignmentMap.set(a.submission_id, [])
+              assignmentMap.get(a.submission_id)!.push(judge.name)
+            }
+          })
+        }
+        const mapped = (newSubs as any[]).map((row, index) => ({
+          id: index + 1,
+          name: row.project_name ?? "Untitled Project",
+          assignedJudges: assignmentMap.get(row.id) || [],
+          totalInvestment: 0,
+          tracks: Array.isArray(row.tracks) && row.tracks.length > 0 ? row.tracks : [],
+          submissionId: row.id,
+        }))
+        setProjectsList(mapped as any)
+        setSubmissions(newSubs as any[])
+      }
+
+      setCsvImportOpen(false)
+      setCsvText("")
+      setCsvPreview(null)
+    } catch (error) {
+      toast.error("Import failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      })
+    } finally {
+      setCsvImporting(false)
     }
   }
 
@@ -1159,11 +1340,9 @@ export default function AdminPage() {
     }
     
     const activeProjects = projectsList
-    const targetJudgesPerProject = clampJudgesPerProject(TARGET_JUDGES_PER_PROJECT)
-    const assignmentResult = autoAssignProjectsByTrack(
+    const assignmentResult = autoAssignByTrackMatch(
       judgesList,
       projectsList,
-      targetJudgesPerProject,
     )
     const updatedProjects = assignmentResult.updatedProjects
 
@@ -1196,7 +1375,7 @@ export default function AdminPage() {
       const totalAssignments = updatedProjects.reduce((sum, p) => sum + p.assignedJudges.length, 0)
       if (totalAssignments > 0) {
         toast.success("Judges auto-assigned!", {
-          description: `${totalAssignments} judge assignment(s) across ${activeProjectsCount} active submission(s) (target: 2-3 per project).`,
+          description: `${totalAssignments} judge assignment(s) across ${activeProjectsCount} submission(s) by track match.`,
         })
       }
     }
@@ -1422,17 +1601,37 @@ export default function AdminPage() {
 
     if (subsWithJudges.length === 0) {
       toast.error("No assignments", {
-        description: "Run “Auto-assign judges” first, then publish.",
+        description: "Run 'Auto-assign judges' first, then publish.",
       })
       return
     }
 
-      const { slots, unscheduledSubmissionIds, roomMoveCount } = buildScheduleWithMinimalRoomMoves({
+    // Build judgeRoomMap from current judgeRoomAssignments state
+    const judgeRoomMap: JudgeRoomMap = new Map(
+      Object.entries(judgeRoomAssignments).map(([judgeId, roomId]) => [judgeId, roomId])
+    )
+
+    // Warn if any assigned judge has no room
+    const allAssignedJudgeIds = subsWithJudges.flatMap((s) => s.judgeIds)
+    const judgesWithoutRoom = [...new Set(allAssignedJudgeIds)].filter(
+      (id) => !judgeRoomMap.has(id)
+    )
+    if (judgesWithoutRoom.length > 0) {
+      const names = judgesWithoutRoom
+        .map((id) => judgesList.find((j) => String(j.id) === id)?.name ?? id)
+        .join(", ")
+      toast.warning("Some judges have no room assigned", {
+        description: `Assign a room to: ${names}`,
+      })
+      return
+    }
+
+    const { slots, unscheduledSubmissionIds, roomMoveCount } = buildSchedulePerJudgeRoom({
       submissions: subsWithJudges.map((submission) => ({
         submissionId: submission.submissionId,
         judgeIds: submission.judgeIds,
       })),
-      rooms: roomsList,
+      judgeRoomMap,
       scheduleDate,
       startTime: scheduleStartTime,
       endTime: scheduleEndTime,
@@ -1560,11 +1759,8 @@ export default function AdminPage() {
   const totalPointsBudget = pointsPerJudge * judgesList.length
   const remainingFund = totalPointsBudget - totalJudgesInvestment
   const projectsWithSubmission = projectsList.filter((project) => Boolean((project as any).submissionId))
-  const projectsUnderMin = projectsWithSubmission.filter((project) => project.assignedJudges.length < 2).length
-  const projectsOverMax = projectsWithSubmission.filter((project) => project.assignedJudges.length > 3).length
-  const projectsInRange = projectsWithSubmission.filter(
-    (project) => project.assignedJudges.length >= 2 && project.assignedJudges.length <= 3,
-  ).length
+  const projectsWithNoJudge = projectsWithSubmission.filter((project) => project.assignedJudges.length === 0).length
+  const projectsWithJudge = projectsWithSubmission.filter((project) => project.assignedJudges.length > 0).length
   const assignedJudgesBySubmission = React.useMemo(() => {
     const map = new Map<string, string[]>()
     projectsList.forEach((project) => {
@@ -1787,7 +1983,7 @@ export default function AdminPage() {
                     <CardHeader>
                       <CardTitle>Step 1: Auto-assign judges to submissions</CardTitle>
                       <CardDescription>
-                        Assign judges to every submission by track (round-robin), targeting 2-3 judges per submission. Then publish the schedule in Step 2.
+                        Assigns each submission to the judge who owns that track. Each submission gets one slot per matched judge. Publish the schedule in Step 2.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -1822,26 +2018,22 @@ export default function AdminPage() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                         <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Target judges/project</p>
-                          <p className="text-lg font-semibold">2-3</p>
+                          <p className="text-xs text-muted-foreground">Total submissions</p>
+                          <p className="text-lg font-semibold">{projectsWithSubmission.length}</p>
                         </div>
                         <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Projects in 2-3 range</p>
-                          <p className="text-lg font-semibold">{projectsInRange} / {projectsWithSubmission.length}</p>
+                          <p className="text-xs text-muted-foreground">Submissions assigned</p>
+                          <p className="text-lg font-semibold">{projectsWithJudge} / {projectsWithSubmission.length}</p>
                         </div>
                         <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Projects under 2 judges</p>
-                          <p className="text-lg font-semibold">{projectsUnderMin}</p>
+                          <p className="text-xs text-muted-foreground">No judge match</p>
+                          <p className={`text-lg font-semibold ${projectsWithNoJudge > 0 ? "text-destructive" : ""}`}>{projectsWithNoJudge}</p>
                         </div>
                         <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Projects over 3 judges</p>
-                          <p className="text-lg font-semibold">{projectsOverMax}</p>
-                        </div>
-                        <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">Last schedule room moves</p>
-                          <p className="text-lg font-semibold">{scheduleQuality.roomMoves}</p>
+                          <p className="text-xs text-muted-foreground">Last publish slots</p>
+                          <p className="text-lg font-semibold">{scheduleQuality.slots}</p>
                         </div>
                       </div>
                       <div className="mt-3 text-xs text-muted-foreground">
@@ -1946,6 +2138,7 @@ export default function AdminPage() {
                             <TableHead>Judge Name</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Tracks</TableHead>
+                            <TableHead>Room</TableHead>
                             <TableHead>Assigned Projects</TableHead>
                             <TableHead>Points Used</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
@@ -1954,7 +2147,7 @@ export default function AdminPage() {
                         <TableBody>
                           {judgesList.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                                 No judges found. Click "Add Judge" to create one.
                               </TableCell>
                             </TableRow>
@@ -1969,6 +2162,27 @@ export default function AdminPage() {
                                       <Badge key={idx} variant="outline">{track}</Badge>
                                     ))}
                                   </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Select
+                                    value={judgeRoomAssignments[String(judge.id)] !== undefined
+                                      ? String(judgeRoomAssignments[String(judge.id)])
+                                      : ""}
+                                    onValueChange={(val) => {
+                                      void saveJudgeRoomAssignment(String(judge.id), parseInt(val))
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-[120px] h-8 text-xs">
+                                      <SelectValue placeholder="No room" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {roomsList.map((room) => (
+                                        <SelectItem key={room.id} value={String(room.id)}>
+                                          {room.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="secondary">{judge.assignedProjects}</Badge>
@@ -2107,13 +2321,20 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Hacker Submissions (read-only) */}
+                  {/* Submissions */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <CardTitle>Submissions ({submissions.length})</CardTitle>
-                      <CardDescription>
-                        Project submissions from hackers. Use Step 1 above to assign judges.
-                      </CardDescription>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle>Submissions ({submissions.length})</CardTitle>
+                          <CardDescription>
+                            Import a CSV to load submissions. Use Step 1 above to assign judges.
+                          </CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setCsvImportOpen(true)}>
+                          Import CSV
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {loadingSubmissions ? (
@@ -2483,6 +2704,93 @@ export default function AdminPage() {
             </Button>
             <Button type="button" variant="destructive" onClick={handleDeleteJudgeConfirm}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={csvImportOpen} onOpenChange={(open) => {
+        setCsvImportOpen(open)
+        if (!open) { setCsvText(""); setCsvPreview(null) }
+      }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Import Submissions from CSV</DialogTitle>
+            <DialogDescription>
+              Paste your CSV below. Expected format (one row per track):
+              <code className="block mt-1 text-xs bg-muted rounded px-2 py-1">
+                project_name,devpost_link,tracks,submitter_name,submitter_email,members
+              </code>
+              Members can be semicolon or comma separated within their cell. This will <strong>replace all existing submissions</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Textarea
+              className="font-mono text-xs min-h-[180px]"
+              placeholder={"project_name,devpost_link,tracks,submitter_name,submitter_email,members\nMy Project,https://devpost.com/...,General,Jane Doe,jane@example.com,Jane Doe;Bob Smith"}
+              value={csvText}
+              onChange={(e) => { setCsvText(e.target.value); setCsvPreview(null) }}
+            />
+
+            <Button variant="outline" onClick={handleCsvParse} disabled={!csvText.trim()}>
+              Parse &amp; Preview
+            </Button>
+
+            {csvPreview && csvPreview.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{csvPreview.length} project(s) found — preview:</p>
+                <div className="max-h-[240px] overflow-y-auto rounded border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Project Name</TableHead>
+                        <TableHead>Tracks</TableHead>
+                        <TableHead>Members</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {csvPreview.slice(0, 20).map((proj, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium text-sm">{proj.project_name}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {proj.tracks.map((t, ti) => (
+                                <Badge key={ti} variant="outline" className="text-xs">{t}</Badge>
+                              ))}
+                              {proj.tracks.length === 0 && <span className="text-muted-foreground text-xs">none</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {proj.members.slice(0, 3).join(", ")}{proj.members.length > 3 ? ` +${proj.members.length - 3}` : ""}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {csvPreview.length > 20 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground text-xs py-2">
+                            … and {csvPreview.length - 20} more
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => { setCsvImportOpen(false); setCsvText(""); setCsvPreview(null) }}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!csvPreview || csvPreview.length === 0 || csvImporting}
+              onClick={() => void handleCsvImport()}
+            >
+              {csvImporting ? "Importing..." : `Import ${csvPreview?.length ?? 0} project(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>
