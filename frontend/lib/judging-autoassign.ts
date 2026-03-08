@@ -232,7 +232,7 @@ type ScheduleSubmission = {
 
 type BuildSchedulePerJudgeRoomInput = {
   submissions: ScheduleSubmission[]
-  judgeRoomMap: JudgeRoomMap
+  generalRoomIds: number[]
   scheduleDate: string
   startTime: string
   endTime: string
@@ -257,83 +257,71 @@ const minutesToTime = (totalMinutes: number): string => {
 }
 
 /**
- * Builds a schedule where each judge has a fixed room and teams rotate between
- * rooms. Each (submission, judge) pair gets its own time slot.
+ * Builds a schedule with exactly one slot per project in a general room.
+ * All assigned judges for that project are attached to the same slot, so the
+ * team stays in one room instead of rotating across judge-specific rooms.
  *
- * Constraint: a team cannot appear in two rooms at the same time tick.
- *
- * Returns slots with exactly one judge_id per slot.
+ * Constraint: a judge cannot appear in two projects in the same time tick.
  */
 export const buildSchedulePerJudgeRoom = (
   input: BuildSchedulePerJudgeRoomInput,
 ): BuildScheduleResult => {
   const {
     submissions,
-    judgeRoomMap,
+    generalRoomIds,
     scheduleDate,
     startTime,
     endTime,
     slotDurationMinutes,
   } = input
 
-  // Build per-judge queue: judgeId → submissionId[]
-  // Preserve insertion order for consistent scheduling
-  const judgeQueue = new Map<string, string[]>()
-  for (const sub of submissions) {
-    for (const judgeId of sub.judgeIds) {
-      if (!judgeQueue.has(judgeId)) judgeQueue.set(judgeId, [])
-      judgeQueue.get(judgeId)!.push(sub.submissionId)
-    }
-  }
+  const remaining = submissions
+    .map((submission) => ({
+      submissionId: submission.submissionId,
+      judgeIds: Array.from(new Set(submission.judgeIds)),
+    }))
+    .filter((submission) => submission.judgeIds.length > 0)
 
   const slots: ScheduleSlot[] = []
   let currentTick = timeToMinutes(startTime)
   const scheduleEnd = timeToMinutes(endTime)
+  let roomStartCursor = 0
 
-  while (currentTick + slotDurationMinutes <= scheduleEnd) {
-    // Track which submission teams are already placed this tick
-    const teamsThisTick = new Set<string>()
+  while (currentTick + slotDurationMinutes <= scheduleEnd && remaining.length > 0) {
+    const judgesThisTick = new Set<string>()
     let anyPlaced = false
 
-    for (const [judgeId, queue] of judgeQueue) {
-      if (queue.length === 0) continue
+    for (let offset = 0; offset < generalRoomIds.length; offset++) {
+      const roomId = generalRoomIds[(roomStartCursor + offset) % generalRoomIds.length]
+      const submissionIndex = remaining.findIndex((submission) =>
+        submission.judgeIds.every((judgeId) => !judgesThisTick.has(judgeId))
+      )
 
-      const roomId = judgeRoomMap.get(judgeId)
-      if (roomId === undefined) continue
+      if (submissionIndex === -1) continue
 
-      // Find the first project in this judge's queue not already scheduled this tick
-      const idx = queue.findIndex((submId) => !teamsThisTick.has(submId))
-      if (idx === -1) continue
-
-      const submId = queue.splice(idx, 1)[0]
-      teamsThisTick.add(submId)
+      const [submission] = remaining.splice(submissionIndex, 1)
+      submission.judgeIds.forEach((judgeId) => judgesThisTick.add(judgeId))
       anyPlaced = true
 
       slots.push({
         date: scheduleDate,
         start_time: minutesToTime(currentTick),
         end_time: minutesToTime(currentTick + slotDurationMinutes),
-        submission_id: submId,
+        submission_id: submission.submissionId,
         room_id: roomId,
-        judge_ids: [judgeId],
+        judge_ids: submission.judgeIds,
       })
     }
 
-    // If nothing was placed this tick (all queues empty or all blocked), stop
     if (!anyPlaced) break
 
+    roomStartCursor = (roomStartCursor + 1) % generalRoomIds.length
     currentTick += slotDurationMinutes
-  }
-
-  // Any submissions still remaining in queues are unscheduled
-  const remainingSet = new Set<string>()
-  for (const queue of judgeQueue.values()) {
-    queue.forEach((submId) => remainingSet.add(submId))
   }
 
   return {
     slots,
-    unscheduledSubmissionIds: Array.from(remainingSet),
+    unscheduledSubmissionIds: remaining.map((submission) => submission.submissionId),
     roomMoveCount: 0, // not applicable in the fixed-room model
   }
 }

@@ -1618,22 +1618,13 @@ export default function AdminPage() {
       return
     }
 
-    // Build judgeRoomMap from current judgeRoomAssignments state
-    const judgeRoomMap: JudgeRoomMap = new Map(
-      Object.entries(judgeRoomAssignments).map(([judgeId, roomId]) => [judgeId, roomId])
-    )
+    const generalRoomIds = roomsList
+      .filter((room) => (room.description || "").trim().toLowerCase() === "general")
+      .map((room) => room.id)
 
-    // Warn if any assigned judge has no room
-    const allAssignedJudgeIds = subsWithJudges.flatMap((s) => s.judgeIds)
-    const judgesWithoutRoom = [...new Set(allAssignedJudgeIds)].filter(
-      (id) => !judgeRoomMap.has(id)
-    )
-    if (judgesWithoutRoom.length > 0) {
-      const names = judgesWithoutRoom
-        .map((id) => judgesList.find((j) => String(j.id) === id)?.name ?? id)
-        .join(", ")
-      toast.warning("Some judges have no room assigned", {
-        description: `Assign a room to: ${names}`,
+    if (generalRoomIds.length === 0) {
+      toast.error("No general rooms", {
+        description: "Add at least one room with description 'general' before publishing.",
       })
       return
     }
@@ -1643,7 +1634,7 @@ export default function AdminPage() {
         submissionId: submission.submissionId,
         judgeIds: submission.judgeIds,
       })),
-      judgeRoomMap,
+      generalRoomIds,
       scheduleDate,
       startTime: scheduleStartTime,
       endTime: scheduleEndTime,
