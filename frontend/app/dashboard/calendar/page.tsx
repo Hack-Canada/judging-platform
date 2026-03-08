@@ -65,6 +65,10 @@ export default function CalendarPage() {
   const [saving, setSaving] = React.useState(false)
   const [unscheduledSubmissions, setUnscheduledSubmissions] = React.useState<CalendarSubmission[]>([])
 
+  // Refs so loadSlotsForDate always reads the latest data without stale closures
+  const submissionsRef = React.useRef<CalendarSubmission[]>([])
+  const roomsRef = React.useRef<Room[]>(defaultRooms)
+  const judgesRef = React.useRef<Judge[]>([])
 
   const [formData, setFormData] = React.useState({
     startTime: "09:00",
@@ -696,7 +700,7 @@ const handleOpenDialog = (slot?: TimeSlot, time?: string, roomId?: number) => {
                   {/* Calendar View */}
                   <Card>
                     <CardHeader>
-                      <CardTitle>Time Slots - {formatDate(selectedDate)}</CardTitle>
+                      <CardTitle>Time Slots - Sunday, March 8, 2026</CardTitle>
                       <CardDescription>
                         Click on a time slot to assign or edit judge-submission assignments. All rooms are shown for each time frame.
                       </CardDescription>
