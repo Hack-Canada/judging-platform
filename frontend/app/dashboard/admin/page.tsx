@@ -76,7 +76,7 @@ export default function AdminPage() {
   const [investmentFund, setInvestmentFund] = React.useState(String(POINTS_PER_JUDGE))
   const [judgesList, setJudgesList] = React.useState<Judge[]>([])
   const [projectsList, setProjectsList] = React.useState<AdminProject[]>([])
-  const [slotDuration, setSlotDuration] = React.useState(5) // Calendar slot duration in minutes
+  const [slotDuration, setSlotDuration] = React.useState(8) // Calendar slot duration in minutes
   const [scheduleStartTime, setScheduleStartTime] = React.useState("10:00") // Default 10 AM
   const [scheduleEndTime, setScheduleEndTime] = React.useState("17:00") // Default 5 PM
   const [minInvestment, setMinInvestment] = React.useState("0")
