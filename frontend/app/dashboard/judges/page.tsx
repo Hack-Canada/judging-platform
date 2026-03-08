@@ -35,7 +35,6 @@ import { DashboardJudgesSkeleton } from "@/components/page-skeletons"
 import type { Judge } from "@/lib/judges-data"
 import { JudgesDataTable } from "@/components/judges-data-table"
 import type { DashboardEntry } from "@/lib/dashboard-entries-data"
-import { NumberTicker } from "@/components/ui/number-ticker"
 import { IconNotes } from "@tabler/icons-react"
 import { getUserRole, type AppRole } from "@/lib/rbac"
 
@@ -57,8 +56,6 @@ type ScheduleSlotInfo = {
   room_id: number
 }
 
-const POINTS_PER_JUDGE = 20
-
 export default function JudgesPage() {
   const [currentRole, setCurrentRole] = React.useState<AppRole | null>(null)
   const [judgeName, setJudgeName] = React.useState<string>("")
@@ -78,10 +75,6 @@ export default function JudgesPage() {
   
   // Load assigned submissions for this judge
   const [assignedSubmissionIds, setAssignedSubmissionIds] = React.useState<string[]>([])
-  
-  // Points allocation
-  const [totalInvestmentFund, setTotalInvestmentFund] = React.useState(0)
-  const [judgeAllocation, setJudgeAllocation] = React.useState(0)
   
   // Schedule slots mapping (submission_id -> schedule info)
   const [scheduleSlotsMap, setScheduleSlotsMap] = React.useState<Map<string, ScheduleSlotInfo[]>>(new Map())
@@ -232,18 +225,11 @@ export default function JudgesPage() {
         setJudge(judgeData)
         setJudgeName(judgeData.name || judgeData.email || "")
 
-        const [{ data: roomsSetting }, { data: pointsSetting }] = await Promise.all([
-          supabase
-            .from("admin_settings")
-            .select("setting_value")
-            .eq("setting_key", "rooms_data")
-            .single(),
-          supabase
-            .from("admin_settings")
-            .select("setting_value")
-            .eq("setting_key", "investment_fund")
-            .maybeSingle(),
-        ])
+        const { data: roomsSetting } = await supabase
+          .from("admin_settings")
+          .select("setting_value")
+          .eq("setting_key", "rooms_data")
+          .single()
 
         if (roomsSetting?.setting_value) {
           try {
@@ -253,17 +239,10 @@ export default function JudgesPage() {
               roomsMapData.set(room.id, room.name)
             })
             setRoomsMap(roomsMapData)
-
           } catch (e) {
-
+            // ignore parse errors
           }
         }
-
-        const parsedPoints = parseFloat(pointsSetting?.setting_value ?? "")
-        const pointsPerJudge =
-          Number.isFinite(parsedPoints) && parsedPoints > 0 ? parsedPoints : POINTS_PER_JUDGE
-        setTotalInvestmentFund(pointsPerJudge)
-        setJudgeAllocation(pointsPerJudge)
 
         // Load assigned submissions from BOTH sources:
         // 1) calendar_schedule_slots (when a schedule has been built/saved)
@@ -590,17 +569,6 @@ export default function JudgesPage() {
     setInvestmentInput(value)
     const numValue = parseFloat(value)
     if (!isNaN(numValue) && numValue >= 0) {
-      // Calculate what the new total would be
-      const currentTotal = Object.entries(investments).reduce((sum, [id, amount]) => {
-        return sum + (id === submissionId ? 0 : amount)
-      }, 0)
-      const newTotal = currentTotal + numValue
-      
-      // Warn if exceeding allocation (but allow input)
-      if (newTotal > judgeAllocation && judgeAllocation > 0) {
-        // Still allow input, but validation will happen on save
-      }
-      
       setInvestments(prev => ({
         ...prev,
         [submissionId]: numValue,
@@ -616,22 +584,16 @@ export default function JudgesPage() {
       return
     }
 
-    // Calculate current total invested (including this new investment)
-    const currentTotal = Object.entries(investments).reduce((sum, [id, amount]) => {
-      return sum + (id === submissionId ? investment : amount)
-    }, 0)
-
-    // Check if investment exceeds judge's allocation
-    if (currentTotal > judgeAllocation) {
-      const remaining = judgeAllocation - (currentTotal - investment)
-      toast.error("Point limit exceeded", {
-        description: `You have ${remaining.toFixed(2)} points remaining of your ${judgeAllocation.toLocaleString()}-point allocation.`,
+    // Validate 1–10 integer range
+    if (!Number.isInteger(investment) || investment < 1 || investment > 10) {
+      toast.error("Invalid rank", {
+        description: "Enter a whole number from 1 to 10.",
       })
       return
     }
 
     try {
-      // Save investment to Supabase (upsert - insert or update)
+      // Save rank to Supabase (upsert - insert or update)
       const { error: investmentError } = await supabase
         .from("judge_investments")
         .upsert({
@@ -646,23 +608,6 @@ export default function JudgesPage() {
       if (investmentError) {
         throw investmentError
       }
-
-      // Calculate and update judge's total invested
-      const updatedInvestments = { ...investments, [submissionId]: investment }
-      const updatedTotal = Object.values(updatedInvestments).reduce((sum, inv) => sum + inv, 0)
-      
-      const { error: judgeUpdateError } = await supabase
-        .from("judges")
-        .update({ total_invested: updatedTotal })
-        .eq("id", judge.id)
-
-      if (judgeUpdateError) {
-
-        // Continue anyway as investment was saved
-      }
-
-      // Update local judge state
-      setJudge(prev => prev ? { ...prev, totalInvested: updatedTotal } : null)
 
       // Update investments map
       setInvestments(prev => ({
@@ -686,7 +631,7 @@ export default function JudgesPage() {
       setEditingInvestment(null)
       setInvestmentInput("")
     } catch (error) {
-      toast.error("Failed to save points", {
+      toast.error("Failed to save rank", {
         description: error instanceof Error ? error.message : "Unknown error",
       })
     }
@@ -905,31 +850,7 @@ export default function JudgesPage() {
                           <p className="text-sm text-muted-foreground">No judges match the selected assignment filter.</p>
                         ) : null
                       ) : (
-                      <div className="grid gap-4 md:grid-cols-4">
-                        <div>
-                          <Label className="text-muted-foreground">Your Allocation</Label>
-                          <p className="text-2xl font-bold">
-                            <NumberTicker value={judgeAllocation} /> pts
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            of <NumberTicker value={totalInvestmentFund} /> points total
-                          </p>
-                        </div>
-                        <div>
-                          <Label className="text-muted-foreground">Points Used</Label>
-                          <p className="text-2xl font-bold">
-                            <NumberTicker value={judge.totalInvested} /> pts
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {(judgeAllocation - judge.totalInvested) >= 0 ? (
-                              <><NumberTicker value={judgeAllocation - judge.totalInvested} decimalPlaces={2} /> points remaining</>
-                            ) : (
-                              <span className="text-destructive">
-                                <NumberTicker value={Math.abs(judgeAllocation - judge.totalInvested)} decimalPlaces={2} /> points over
-                              </span>
-                            )}
-                          </p>
-                        </div>
+                      <div className="grid gap-4 md:grid-cols-2">
                         <div>
                           <Label className="text-muted-foreground">Assigned Projects</Label>
                           <p className="text-2xl font-bold">{judge.assignedProjects}</p>
@@ -977,8 +898,6 @@ export default function JudgesPage() {
                             return e
                           }))
                         }}
-                        remainingAllocation={Math.max(0, judgeAllocation - judge.totalInvested)}
-                        totalInvested={judge.totalInvested}
                         onOpenNotes={openNotesDialog}
                       />
                     </div>

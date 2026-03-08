@@ -57,8 +57,6 @@ export const judgesSchema = z.object({
 type JudgesTableProps = {
   data: (z.infer<typeof judgesSchema> & { time?: string; room?: string; startTimeSort?: number; submissionId?: string })[]
   onInvestmentChange: (entryId: number, investment: number) => Promise<void>
-  remainingAllocation: number
-  totalInvested: number
   onOpenNotes?: (submissionId: string) => void
 }
 
@@ -192,11 +190,9 @@ function ProjectNameCell({ row }: { row: { original: JudgeRow } }) {
 function InvestmentCell({
   row,
   onInvestmentChange,
-  remainingAllocation,
 }: {
   row: { original: JudgeRow }
   onInvestmentChange: (entryId: number, investment: number) => Promise<void>
-  remainingAllocation: number
 }) {
   const entry = row.original
   const investment = entry.investment
@@ -209,18 +205,10 @@ function InvestmentCell({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const numValue = parseFloat(inputValue)
-    if (isNaN(numValue) || numValue < 0) {
-      toast.error("Invalid points", {
-        description: "Please enter a valid positive number",
-      })
-      return
-    }
-    const currentInvestment = parseFloat(entry.investment || "0")
-    const difference = numValue - currentInvestment
-    if (remainingAllocation - difference < 0) {
-      toast.error("Insufficient points", {
-        description: `You have ${remainingAllocation.toFixed(2)} points remaining. Please adjust your points.`,
+    const numValue = parseInt(inputValue, 10)
+    if (!Number.isInteger(numValue) || numValue < 1 || numValue > 10) {
+      toast.error("Invalid rank", {
+        description: "Enter a whole number from 1 to 10.",
       })
       return
     }
@@ -228,7 +216,7 @@ function InvestmentCell({
     try {
       await onInvestmentChange(entry.id, numValue)
     } catch (err) {
-      toast.error("Failed to save points", {
+      toast.error("Failed to save rank", {
         description: err instanceof Error ? err.message : "Unknown error",
       })
     } finally {
@@ -239,15 +227,16 @@ function InvestmentCell({
   return (
     <form onSubmit={handleSubmit}>
       <Label htmlFor={`${entry.id}-investment`} className="sr-only">
-        Points
+        Rank
       </Label>
       <div className="flex items-center justify-end gap-1">
         <Input
           className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-24 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
-          placeholder="0"
+          placeholder="—"
           type="number"
           step="1"
-          min="0"
+          min="1"
+          max="10"
           id={`${entry.id}-investment`}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
@@ -271,7 +260,6 @@ function InvestmentCell({
 
 const createColumns = (
   onInvestmentChange: (entryId: number, investment: number) => Promise<void>,
-  remainingAllocation: number,
   _onOpenNotes?: (submissionId: string) => void
 ): ColumnDef<JudgeRow>[] => [
   {
@@ -314,12 +302,11 @@ const createColumns = (
   },
   {
     accessorKey: "investment",
-    header: () => <div className="w-full text-right">Points</div>,
+    header: () => <div className="w-full text-right">Rank</div>,
     cell: ({ row }) => (
       <InvestmentCell
         row={row}
         onInvestmentChange={onInvestmentChange}
-        remainingAllocation={remainingAllocation}
       />
     ),
   },
@@ -328,8 +315,6 @@ const createColumns = (
 export function JudgesDataTable({
   data: initialData,
   onInvestmentChange,
-  remainingAllocation,
-  totalInvested,
   onOpenNotes,
 }: JudgesTableProps) {
   const [data, setData] = React.useState(() => initialData)
@@ -347,8 +332,8 @@ export function JudgesDataTable({
   }, [initialData])
 
   const columns = React.useMemo(
-    () => createColumns(onInvestmentChange, remainingAllocation, onOpenNotes),
-    [onInvestmentChange, remainingAllocation, onOpenNotes]
+    () => createColumns(onInvestmentChange, onOpenNotes),
+    [onInvestmentChange, onOpenNotes]
   )
 
   const table = useReactTable({
@@ -372,23 +357,11 @@ export function JudgesDataTable({
 
   return (
     <div className="space-y-4">
-      {/* Investment Summary */}
+      {/* Summary */}
       <div className="rounded-lg border bg-card p-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div>
-            <p className="text-sm text-muted-foreground">Total Points Used</p>
-            <p className="text-2xl font-bold"><NumberTicker value={totalInvested} /></p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Points Remaining</p>
-            <p className={`text-2xl font-bold ${remainingAllocation < 0 ? "text-destructive" : ""}`}>
-              <NumberTicker value={remainingAllocation} decimalPlaces={2} />
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Assigned Submissions</p>
-            <p className="text-2xl font-bold"><NumberTicker value={data.length} /></p>
-          </div>
+        <div>
+          <p className="text-sm text-muted-foreground">Assigned Submissions</p>
+          <p className="text-2xl font-bold"><NumberTicker value={data.length} /></p>
         </div>
       </div>
 
@@ -406,12 +379,11 @@ export function JudgesDataTable({
                   </div>
                   <div className="w-[140px] shrink-0">
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">
-                      Points
+                      Rank
                     </p>
                     <InvestmentCell
                       row={row}
                       onInvestmentChange={onInvestmentChange}
-                      remainingAllocation={remainingAllocation}
                     />
                   </div>
                 </div>
