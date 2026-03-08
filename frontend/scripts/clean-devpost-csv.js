@@ -62,47 +62,71 @@ function parseCsv(text) {
 
 const rows = parseCsv(content).filter(r => r.some(f => f.trim()))
 
-const [, ...dataRows] = rows // skip header
-
+const [headerRow, ...dataRows] = rows
 const get = (row, i) => (i < row.length ? row[i] : "").trim()
+
+// Auto-detect format by reading header names
+// Format A (testing1.csv):  col0=Opt-In Prize, col1=Project Title, one row per track
+// Format B (new_testing.csv): col0=Project Title, col9=Opt-In Prizes, one row per project
+const colIdx = {}
+headerRow.forEach((h, i) => { colIdx[h.trim()] = i })
+
+const isTitleFirst = headerRow[0].trim() === "Project Title"
+const titleCol       = isTitleFirst ? 0 : 1
+const devpostCol     = isTitleFirst ? 1 : 2
+const tracksCol      = isTitleFirst ? (colIdx["Opt-In Prizes"] ?? 9) : 0
+const firstNameCol   = colIdx["Submitter First Name"] ?? 11
+const lastNameCol    = colIdx["Submitter Last Name"]  ?? 12
+const emailCol       = colIdx["Submitter Email"]      ?? 13
+const memberStartCol = colIdx["Team Member 1 First Name"] ?? 23
+
+console.log(`Detected format: ${isTitleFirst ? "B (one row per project)" : "A (one row per track)"}`)
 
 const byProject = new Map()
 
 for (const row of dataRows) {
-  const title = get(row, 1)
-  if (!title || title.toLowerCase() === "untitled") continue
+  const title = get(row, titleCol)
+  if (!title || title.toLowerCase() === "untitled" || title.toLowerCase() === "w") continue
 
   if (!byProject.has(title)) {
-    const firstName = get(row, 11)
-    const lastName = get(row, 12)
+    const firstName = get(row, firstNameCol)
+    const lastName  = get(row, lastNameCol)
     const submitterName = [firstName, lastName].filter(Boolean).join(" ")
 
     const members = []
     if (submitterName) members.push(submitterName)
 
-    let idx = 23
+    let idx = memberStartCol
     while (idx < row.length) {
       const mFirst = get(row, idx)
-      const mLast = get(row, idx + 1)
+      const mLast  = get(row, idx + 1)
       const name = [mFirst, mLast].filter(Boolean).join(" ")
       if (name) members.push(name)
       idx += 3
     }
 
     byProject.set(title, {
-      project_name: title,
-      devpost_link: get(row, 2),
-      tracks: [],
-      submitter_name: submitterName,
-      submitter_email: get(row, 13),
+      project_name:    title,
+      devpost_link:    get(row, devpostCol),
+      tracks:          [],
+      submitter_name:  submitterName,
+      submitter_email: get(row, emailCol),
       members,
     })
   }
 
-  const track = get(row, 0)
   const entry = byProject.get(title)
-  if (track && !entry.tracks.includes(track)) {
-    entry.tracks.push(track)
+
+  if (isTitleFirst) {
+    // Format B: all tracks are comma-separated in one cell
+    const rawTracks = get(row, tracksCol)
+    rawTracks.split(",").map(t => t.trim()).filter(Boolean).forEach(t => {
+      if (!entry.tracks.includes(t)) entry.tracks.push(t)
+    })
+  } else {
+    // Format A: one track per row
+    const track = get(row, tracksCol)
+    if (track && !entry.tracks.includes(track)) entry.tracks.push(track)
   }
 }
 

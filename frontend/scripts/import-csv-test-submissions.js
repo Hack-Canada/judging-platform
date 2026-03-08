@@ -1,14 +1,19 @@
 /**
- * Import CSV submissions into the test_submissions table.
+ * Import a cleaned CSV into the test_submissions table.
  *
  * Prerequisites:
  *   1. Run supabase/test-submissions-table.sql in the Supabase SQL Editor first.
  *   2. Ensure .env.local has NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
+ *   3. Generate the cleaned CSV first:
+ *        node scripts/clean-devpost-csv.js ../data/your-devpost-export.csv
  *
  * Usage:
- *   node scripts/import-csv-test-submissions.js [path/to/file.csv]
+ *   node scripts/import-csv-test-submissions.js [path/to/clean.csv]
  *
- * Defaults to: ../data/testing1.csv
+ * Defaults to: ../data/new_testing_clean.csv
+ *
+ * The cleaned CSV must have these columns (pipe-separated tracks/members):
+ *   project_name, devpost_link, tracks, submitter_name, submitter_email, members
  */
 require("dotenv").config({ path: ".env.local" })
 const fs = require("fs")
@@ -17,7 +22,7 @@ const { createClient } = require("@supabase/supabase-js")
 
 const CSV_PATH = process.argv[2]
   ? path.resolve(process.argv[2])
-  : path.resolve(__dirname, "../../data/testing1.csv")
+  : path.resolve(__dirname, "../../data/new_testing_clean.csv")
 
 function getClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -82,60 +87,31 @@ function parseCsv(content) {
   return rows
 }
 
+// Parse the cleaned CSV (columns: project_name, devpost_link, tracks, submitter_name, submitter_email, members)
 function extractProjects(rows) {
-  const [, ...dataRows] = rows // skip header row
+  const [headerRow, ...dataRows] = rows
+  const headers = headerRow.map((h) => h.trim())
+  const idx = (name) => headers.indexOf(name)
 
-  // Group rows by project title (col 1)
-  const byProject = new Map()
+  return dataRows
+    .map((row) => {
+      const get = (col) => (row[idx(col)] || "").trim()
+      const title = get("project_name")
+      if (!title) return null
 
-  for (const row of dataRows) {
-    const get = (i) => (row[i] || "").trim()
+      const rawTracks = get("tracks")
+      const rawMembers = get("members")
 
-    const title = get(1)
-    if (!title || title.toLowerCase() === "untitled") continue
-
-    if (!byProject.has(title)) {
-      // First time seeing this project — capture submitter info
-      const firstName = get(11)
-      const lastName = get(12)
-      const submitterName = [firstName, lastName].filter(Boolean).join(" ")
-      const submitterEmail = get(13)
-      const devpostLink = get(2)
-
-      // Collect members: submitter first, then additional members in groups of 3
-      const members = []
-      if (submitterName) members.push(submitterName)
-
-      let idx = 23
-      while (idx < row.length) {
-        const mFirst = get(idx)
-        const mLast = get(idx + 1)
-        const memberName = [mFirst, mLast].filter(Boolean).join(" ")
-        if (memberName) members.push(memberName)
-        idx += 3
+      return {
+        project_name:    title,
+        devpost_link:    get("devpost_link") || null,
+        tracks:          rawTracks ? rawTracks.split("|").map((t) => t.trim()).filter(Boolean) : [],
+        submitter_name:  get("submitter_name") || null,
+        submitter_email: get("submitter_email") || null,
+        members:         rawMembers ? rawMembers.split("|").map((m) => m.trim()).filter(Boolean) : [],
       }
-
-      byProject.set(title, {
-        project_name: title,
-        devpost_link: devpostLink || null,
-        tracks: [],
-        submitter_name: submitterName || null,
-        submitter_email: submitterEmail || null,
-        members,
-      })
-    }
-
-    // Add track if non-empty and not already recorded
-    const track = get(0)
-    if (track) {
-      const entry = byProject.get(title)
-      if (!entry.tracks.includes(track)) {
-        entry.tracks.push(track)
-      }
-    }
-  }
-
-  return Array.from(byProject.values())
+    })
+    .filter(Boolean)
 }
 
 async function main() {
@@ -152,6 +128,17 @@ async function main() {
   console.log(`Parsed ${projects.length} unique projects from ${rows.length - 1} CSV rows`)
 
   const supabase = getClient()
+
+  // Clear existing data before import to avoid stale duplicates
+  console.log("Clearing existing test_submissions...")
+  const { error: deleteError } = await supabase
+    .from("test_submissions")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000") // delete all rows
+  if (deleteError) {
+    console.error("Failed to clear table:", deleteError.message)
+    process.exit(1)
+  }
 
   // Insert in batches of 20
   const BATCH = 20

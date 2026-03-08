@@ -328,25 +328,28 @@ export default function JudgesPage() {
         })
         setScheduleSlotsMap(slotsMap)
 
-        // Load submission details from Supabase (only assigned ones)
+        // Load submission details from test_submissions by judge's tracks
         let submissionsData: any[] | null = null
-        if (assignedSubmissionIds.length > 0) {
-
+        if (judgeData.tracks && judgeData.tracks.length > 0) {
           const { data, error: submissionsError } = await supabase
-            .from("submissions")
-            .select("id, project_name, tracks, team_name, devpost_link")
-            .in("id", assignedSubmissionIds)
-            .order("submitted_at", { ascending: false })
+            .from("test_submissions")
+            .select("id, project_name, tracks, devpost_link")
+            .overlaps("tracks", judgeData.tracks)
+            .order("created_at", { ascending: false })
 
-          if (submissionsError) {
-
-
-          } else {
+          if (!submissionsError) {
             submissionsData = data
-
           }
-        } else {
+        } else if (assignedSubmissionIds.length > 0) {
+          const { data, error: submissionsError } = await supabase
+            .from("test_submissions")
+            .select("id, project_name, tracks, devpost_link")
+            .in("id", assignedSubmissionIds)
+            .order("created_at", { ascending: false })
 
+          if (!submissionsError) {
+            submissionsData = data
+          }
         }
 
         // Load investments from Supabase (using submission_id)
