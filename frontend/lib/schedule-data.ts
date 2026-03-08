@@ -15,34 +15,34 @@ export type DaySchedule = {
   slots: TimeSlot[]
 }
 
-// Generate time slots for a day with dynamic range (10 min before start, 10 min after end, 5-minute intervals)
+// Generate time slots for a day with dynamic range (10 min before start, 10 min after end)
 export function generateTimeSlots(
-  date: string, 
-  startTime: string = "09:00", 
-  endTime: string = "17:00"
+  date: string,
+  startTime: string = "09:00",
+  endTime: string = "17:00",
+  intervalMinutes: number = 8
 ): string[] {
   const slots: string[] = []
-  
+
   // Parse start and end times
   const [startHour, startMinute] = startTime.split(":").map(Number)
   const [endHour, endMinute] = endTime.split(":").map(Number)
-  
+
   // Calculate buffer times (10 minutes before start, 10 minutes after end)
   const bufferMinutes = 10
   const startTotalMinutes = startHour * 60 + startMinute - bufferMinutes
   const endTotalMinutes = endHour * 60 + endMinute + bufferMinutes
-  
-  // Generate slots in 5-minute intervals
-  for (let totalMinutes = startTotalMinutes; totalMinutes <= endTotalMinutes; totalMinutes += 5) {
+
+  for (let totalMinutes = startTotalMinutes; totalMinutes <= endTotalMinutes; totalMinutes += intervalMinutes) {
     if (totalMinutes < 0) continue // Skip negative times (before midnight)
     if (totalMinutes >= 24 * 60) break // Skip times after midnight
-    
+
     const hours = Math.floor(totalMinutes / 60)
     const minutes = totalMinutes % 60
     const timeString = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`
     slots.push(timeString)
   }
-  
+
   return slots
 }
 

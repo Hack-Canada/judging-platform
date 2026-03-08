@@ -60,7 +60,7 @@ export default function CalendarPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingSlot, setEditingSlot] = React.useState<TimeSlot | null>(null)
   const [judgesPerProject, setJudgesPerProject] = React.useState(2)
-  const [slotDuration, setSlotDuration] = React.useState(5)
+  const [slotDuration, setSlotDuration] = React.useState(8)
   const [scheduleStartTime, setScheduleStartTime] = React.useState("10:00")
   const [scheduleEndTime, setScheduleEndTime] = React.useState("17:00")
   const [saving, setSaving] = React.useState(false)
@@ -323,8 +323,8 @@ export default function CalendarPage() {
 
   // Generate time slots dynamically based on the configured time range
   const timeSlots = React.useMemo(
-    () => generateTimeSlots(selectedDate, scheduleStartTime, scheduleEndTime),
-    [selectedDate, scheduleStartTime, scheduleEndTime]
+    () => generateTimeSlots(selectedDate, scheduleStartTime, scheduleEndTime, slotDuration),
+    [selectedDate, scheduleStartTime, scheduleEndTime, slotDuration]
   )
 
 const handleOpenDialog = (slot?: TimeSlot, time?: string, roomId?: number) => {

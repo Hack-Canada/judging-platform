@@ -39,13 +39,18 @@ export const autoAssignByTrackMatch = (
   judges: Judge[],
   projects: AdminProject[],
 ): AutoAssignResult => {
-  // Build track → Judge lookup
-  const trackToJudge = new Map<string, Judge>()
+  // Build track → Judge[] lookup (all judges sharing a track)
+  const trackToJudges = new Map<string, Judge[]>()
   judges.forEach((judge) => {
     judge.tracks?.forEach((track) => {
-      trackToJudge.set(track, judge)
+      if (!trackToJudges.has(track)) trackToJudges.set(track, [])
+      trackToJudges.get(track)!.push(judge)
     })
   })
+
+  // Round-robin cursor per track so assignments are spread evenly
+  const trackRoundRobin = new Map<string, number>()
+  trackToJudges.forEach((_, track) => trackRoundRobin.set(track, 0))
 
   const judgeAssignmentCount = new Map<string, number>()
   judges.forEach((judge) => judgeAssignmentCount.set(judge.name, 0))
@@ -61,8 +66,15 @@ export const autoAssignByTrackMatch = (
     const assignedJudges: string[] = []
 
     for (const track of projectTracks) {
-      const judge = trackToJudge.get(track)
-      if (judge && !assignedJudges.includes(judge.name)) {
+      const judgesForTrack = trackToJudges.get(track)
+      if (!judgesForTrack || judgesForTrack.length === 0) continue
+
+      // Round-robin: pick next judge in rotation for this track
+      const cursor = trackRoundRobin.get(track) ?? 0
+      const judge = judgesForTrack[cursor % judgesForTrack.length]
+      trackRoundRobin.set(track, cursor + 1)
+
+      if (!assignedJudges.includes(judge.name)) {
         assignedJudges.push(judge.name)
         judgeAssignmentCount.set(
           judge.name,
