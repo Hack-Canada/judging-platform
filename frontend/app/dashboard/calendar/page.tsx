@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { IconPlus, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconDeviceFloppy } from "@tabler/icons-react"
+import { IconPlus, IconEdit, IconTrash, IconDeviceFloppy } from "@tabler/icons-react"
 import { toast } from "sonner"
 import type { Judge } from "@/lib/judges-data"
 import { generateTimeSlots, getEndTime, type TimeSlot, type DaySchedule } from "@/lib/schedule-data"
@@ -51,10 +51,7 @@ type CalendarSubmission = {
 
 
 export default function CalendarPage() {
-  const [selectedDate, setSelectedDate] = React.useState(() => {
-    const today = new Date()
-    return today.toISOString().split("T")[0]
-  })
+  const [selectedDate] = React.useState("2026-03-08")
   const [judges, setJudges] = React.useState<Judge[]>([])
   const [submissions, setSubmissions] = React.useState<CalendarSubmission[]>([])
   const [rooms, setRooms] = React.useState<Room[]>(defaultRooms)
@@ -68,26 +65,6 @@ export default function CalendarPage() {
   const [saving, setSaving] = React.useState(false)
   const [unscheduledSubmissions, setUnscheduledSubmissions] = React.useState<CalendarSubmission[]>([])
 
-  const persistSelectedCalendarDate = React.useCallback(async (nextDate: string) => {
-    try {
-      const { error } = await supabase
-        .from("admin_settings")
-        .upsert(
-          {
-            setting_key: "calendar_selected_date",
-            setting_value: nextDate,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "setting_key" }
-        )
-
-      if (error) {
-        throw error
-      }
-    } catch (error) {
-      console.error("Failed to persist selected calendar date", error)
-    }
-  }, [])
 
   const [formData, setFormData] = React.useState({
     startTime: "09:00",
@@ -137,11 +114,6 @@ export default function CalendarPage() {
               const endTime = settingsMap.get("calendar_end_time")
               if (endTime) {
                 setScheduleEndTime(endTime)
-              }
-
-              const selectedDate = settingsMap.get("calendar_selected_date")
-              if (selectedDate) {
-                setSelectedDate(selectedDate)
               }
 
               // Load rooms data
@@ -306,13 +278,7 @@ export default function CalendarPage() {
     [selectedDate, scheduleStartTime, scheduleEndTime]
   )
 
-  const navigateDate = (days: number) => {
-    const currentDate = new Date(selectedDate)
-    currentDate.setDate(currentDate.getDate() + days)
-    setSelectedDate(currentDate.toISOString().split("T")[0])
-  }
-
-  const handleOpenDialog = (slot?: TimeSlot, time?: string, roomId?: number) => {
+const handleOpenDialog = (slot?: TimeSlot, time?: string, roomId?: number) => {
     if (slot) {
       setEditingSlot(slot)
       setFormData({
@@ -685,48 +651,17 @@ export default function CalendarPage() {
                     )}
                   </div>
 
-                  {/* Date Navigation */}
+                  {/* Date Display */}
                   <Card className="mb-6">
                     <CardHeader>
-                      <CardTitle>Date Selection</CardTitle>
+                      <CardTitle>Date</CardTitle>
                       <CardDescription>
-                        Select the date for scheduling
+                        Sunday, March 8, 2026
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-2">
-                          <Label>Date</Label>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => navigateDate(-1)}
-                            >
-                              <IconChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <Input
-                              type="date"
-                              value={selectedDate}
-                              onChange={(e) => {
-                                const nextDate = e.target.value
-                                setSelectedDate(nextDate)
-                                void persistSelectedCalendarDate(nextDate)
-                              }}
-                              className="flex-1"
-                            />
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => navigateDate(1)}
-                            >
-                              <IconChevronRight className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {formatDate(selectedDate)}
-                          </p>
-                        </div>
                         <div className="p-3 bg-muted rounded-md">
                           <p className="text-sm text-muted-foreground">
                             <strong>Current Settings (from Admin):</strong> Schedule: {scheduleStartTime} - {scheduleEndTime}, Slot duration: {slotDuration} minutes, Judges per project: {judgesPerProject}. 
@@ -752,6 +687,7 @@ export default function CalendarPage() {
                           <p className="text-xs text-muted-foreground mt-1">
                             Available rooms: {rooms.map(r => r.name).join(", ")}
                           </p>
+                        </div>
                         </div>
                       </div>
                     </CardContent>
