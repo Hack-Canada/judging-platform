@@ -2153,6 +2153,93 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
 
+                  {/* Room Assignment Summary */}
+                  {Object.keys(judgeRoomAssignments).length > 0 && projectsList.some(p => p.assignedJudges.length > 0) && (
+                    <Card className="mb-6">
+                      <CardHeader>
+                        <CardTitle>Room Assignment Summary</CardTitle>
+                        <CardDescription>
+                          Projects assigned to each room. All judges in a room share the same projects.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {(() => {
+                            // Build roomId → judges map
+                            const roomToJudgeNames = new Map<number, string[]>()
+                            judgesList.forEach((judge) => {
+                              const roomId = judgeRoomAssignments[String(judge.id)]
+                              if (roomId !== undefined) {
+                                if (!roomToJudgeNames.has(roomId)) roomToJudgeNames.set(roomId, [])
+                                roomToJudgeNames.get(roomId)!.push(judge.name)
+                              }
+                            })
+
+                            // Build roomId → projects map (a project is in a room if any judge from that room is assigned)
+                            const roomToProjects = new Map<number, string[]>()
+                            projectsList.forEach((project) => {
+                              if (!project.assignedJudges || project.assignedJudges.length === 0) return
+                              const projectRooms = new Set<number>()
+                              project.assignedJudges.forEach((judgeName) => {
+                                const judge = judgesList.find((j) => j.name === judgeName)
+                                if (judge) {
+                                  const roomId = judgeRoomAssignments[String(judge.id)]
+                                  if (roomId !== undefined) projectRooms.add(roomId)
+                                }
+                              })
+                              projectRooms.forEach((roomId) => {
+                                if (!roomToProjects.has(roomId)) roomToProjects.set(roomId, [])
+                                roomToProjects.get(roomId)!.push(project.name)
+                              })
+                            })
+
+                            // Get rooms that have assignments
+                            const activeRoomIds = Array.from(new Set([...roomToJudgeNames.keys()]))
+                              .filter(roomId => (roomToProjects.get(roomId)?.length ?? 0) > 0)
+                              .sort((a, b) => a - b)
+
+                            if (activeRoomIds.length === 0) {
+                              return (
+                                <div className="text-center py-4 text-muted-foreground">
+                                  No room assignments yet. Run auto-assign after setting up judge rooms.
+                                </div>
+                              )
+                            }
+
+                            return activeRoomIds.map((roomId) => {
+                              const room = roomsList.find((r) => r.id === roomId)
+                              const judges = roomToJudgeNames.get(roomId) ?? []
+                              const projects = roomToProjects.get(roomId) ?? []
+
+                              return (
+                                <div key={roomId} className="border rounded-lg p-4">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                      <h4 className="font-semibold">{room?.name ?? `Room ${roomId}`}</h4>
+                                      <Badge variant="secondary">{projects.length} projects</Badge>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {judges.map((name, i) => (
+                                        <Badge key={i} variant="outline">{name}</Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {projects.map((projectName, i) => (
+                                      <span key={i} className="text-xs bg-muted px-2 py-1 rounded">
+                                        {projectName}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })
+                          })()}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Step 2: Publish schedule */}
                   <Card className="mb-6">
                     <CardHeader>
