@@ -11,6 +11,7 @@
     "lint": "eslint",
     "seed": "node scripts/seed-submissions.js",
     "seed:event-scenario": "node scripts/seed-event-scenario.js",
+    "seed:specialists": "node scripts/seed-specialist-judges.js",
     "seed:judges": "node scripts/seed-judges-only.js",
     "seed:projects": "node scripts/seed-projects-only.js",
     "seed:triple-timing": "node scripts/seed-triple-timing-sample.js",

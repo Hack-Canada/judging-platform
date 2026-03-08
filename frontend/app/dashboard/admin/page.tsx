@@ -283,6 +283,25 @@ export default function AdminPage() {
     }
   }, [])
 
+  const findMatchingSubmission = React.useCallback((sourceRow: any, existingRows: any[]) => {
+    const normalizedDevpostLink = (sourceRow?.devpost_link || "").trim()
+    if (normalizedDevpostLink) {
+      const byDevpost = existingRows.find(
+        (row) => (row.devpost_link || "").trim().toLowerCase() === normalizedDevpostLink.toLowerCase(),
+      )
+      if (byDevpost) return byDevpost
+    }
+
+    const normalizedProjectName = (sourceRow?.project_name || "").trim().toLowerCase()
+    if (!normalizedProjectName) return null
+
+    return (
+      existingRows.find(
+        (row) => (row.project_name || "").trim().toLowerCase() === normalizedProjectName,
+      ) || null
+    )
+  }, [])
+
   const loadLeaderboard = React.useCallback(async () => {
     try {
       setLoadingLeaderboard(true)
@@ -455,7 +474,8 @@ export default function AdminPage() {
         const [
           { data: supabaseJudges, error: judgesError }, 
           { data: supabaseSubmissions, error: submissionsError },
-          { data: assignmentsData, error: assignmentsError }
+          { data: assignmentsData, error: assignmentsError },
+          { data: persistedSubmissions }
         ] = await Promise.all([
           supabase
             .from("judges")
@@ -463,10 +483,13 @@ export default function AdminPage() {
             .order("created_at", { ascending: false }),
           supabase
             .from("test_submissions")
-            .select("id, project_name, tracks"),
+            .select("id, project_name, devpost_link, submitter_name, submitter_email, members, tracks, created_at"),
           supabase
             .from("judge_project_assignments")
-            .select("judge_id, submission_id")
+            .select("judge_id, submission_id"),
+          supabase
+            .from("submissions")
+            .select("id, project_name, devpost_link")
         ])
 
 
@@ -526,16 +549,22 @@ export default function AdminPage() {
           }
           
           // Map submissions to AdminProject format with assignments
-          const mappedProjects: AdminProject[] = (supabaseSubmissions as any[]).map((row, index) => ({
-            id: index + 1, // Internal ID for AdminProject (for UI state)
-            name: row.project_name ?? "Untitled Project",
-            assignedJudges: assignmentMap.get(row.id) || [],
-            totalInvestment: 0,
-            tracks: (row.tracks && Array.isArray(row.tracks) && row.tracks.length > 0)
-              ? row.tracks
-              : ["General"],
-            submissionId: row.id, // Store actual submission UUID
-          }))
+          const mappedProjects: AdminProject[] = (supabaseSubmissions as any[]).map((row, index) => {
+            const matchedSubmission = findMatchingSubmission(row, persistedSubmissions || [])
+            const persistedSubmissionId = matchedSubmission ? String(matchedSubmission.id) : undefined
+
+            return {
+              id: index + 1,
+              name: row.project_name ?? "Untitled Project",
+              assignedJudges: persistedSubmissionId ? assignmentMap.get(persistedSubmissionId) || [] : [],
+              totalInvestment: 0,
+              tracks: (row.tracks && Array.isArray(row.tracks) && row.tracks.length > 0)
+                ? row.tracks
+                : ["General"],
+              submissionId: persistedSubmissionId,
+              sourceSubmissionId: String(row.id),
+            } as AdminProject
+          })
           setProjectsList(mappedProjects as any)
         }
 
@@ -563,7 +592,7 @@ export default function AdminPage() {
     }
 
     void loadFromSupabase()
-  }, [])
+  }, [findMatchingSubmission, loadTrackStats])
   
   // Helper function to save a setting to Supabase
   const saveSettingToSupabase = async (key: string, value: string) => {
@@ -1225,9 +1254,90 @@ export default function AdminPage() {
 
     try {
       setSavingAssignments(true)
+
+      const sourceSubmissionIds = sourceProjects
+        .map((project) => String((project as any).sourceSubmissionId || ""))
+        .filter(Boolean)
+
+      const sourceRowsById = new Map<string, any>()
+      if (sourceSubmissionIds.length > 0) {
+        const { data: sourceRows, error: sourceRowsError } = await supabase
+          .from("test_submissions")
+          .select("id, project_name, devpost_link, submitter_name, submitter_email, members, tracks, created_at")
+          .in("id", sourceSubmissionIds)
+
+        if (sourceRowsError) throw sourceRowsError
+        ;(sourceRows || []).forEach((row: any) => {
+          sourceRowsById.set(String(row.id), row)
+        })
+      }
+
+      const { data: existingSubmissionRows, error: existingSubmissionRowsError } = await supabase
+        .from("submissions")
+        .select("id, project_name, devpost_link")
+
+      if (existingSubmissionRowsError) throw existingSubmissionRowsError
+
+      const resolvedProjects: AdminProject[] = []
+      for (const project of sourceProjects) {
+        const sourceSubmissionId = String((project as any).sourceSubmissionId || "")
+        const sourceRow = sourceRowsById.get(sourceSubmissionId)
+
+        let persistedSubmissionId = (project as any).submissionId
+          ? String((project as any).submissionId)
+          : undefined
+
+        if (!persistedSubmissionId && sourceRow) {
+          const matchedSubmission = findMatchingSubmission(sourceRow, existingSubmissionRows || [])
+
+          if (matchedSubmission) {
+            persistedSubmissionId = String(matchedSubmission.id)
+          } else {
+            const fallbackName =
+              sourceRow.submitter_name ||
+              (Array.isArray(sourceRow.members) && sourceRow.members.length > 0 ? sourceRow.members[0] : "") ||
+              "Imported Submitter"
+
+            const fallbackTeamName =
+              sourceRow.submitter_email ||
+              sourceRow.project_name ||
+              "Imported Team"
+
+            const fallbackDevpostLink =
+              sourceRow.devpost_link ||
+              `https://hack-canada.local/test-submissions/${sourceRow.id}`
+
+            const { data: insertedSubmissionRows, error: insertSubmissionError } = await supabase
+              .from("submissions")
+              .insert({
+                name: fallbackName,
+                team_name: fallbackTeamName,
+                members: Array.isArray(sourceRow.members) ? sourceRow.members : [],
+                devpost_link: fallbackDevpostLink,
+                project_name: sourceRow.project_name || "Untitled Project",
+                tracks: Array.isArray(sourceRow.tracks) && sourceRow.tracks.length > 0 ? sourceRow.tracks : ["General"],
+                submitted_at: sourceRow.created_at || new Date().toISOString(),
+              })
+              .select("id, project_name, devpost_link")
+
+            if (insertSubmissionError) throw insertSubmissionError
+
+            const insertedSubmission = insertedSubmissionRows?.[0]
+            persistedSubmissionId = insertedSubmission ? String(insertedSubmission.id) : undefined
+            if (insertedSubmission) {
+              ;(existingSubmissionRows || []).push(insertedSubmission)
+            }
+          }
+        }
+
+        resolvedProjects.push({
+          ...project,
+          submissionId: persistedSubmissionId,
+        })
+      }
       
       // Get all submission IDs that have assignments
-      const submissionIds = sourceProjects
+      const submissionIds = resolvedProjects
         .filter(p => (p as any).submissionId)
         .map(p => (p as any).submissionId)
       
@@ -1246,7 +1356,7 @@ export default function AdminPage() {
       // Create new assignments (with deduplication)
       const assignmentsMap = new Map<string, { judge_id: string; submission_id: string }>()
       
-      sourceProjects.forEach((project) => {
+      resolvedProjects.forEach((project) => {
         const submissionId = (project as any).submissionId
         if (submissionId && project.assignedJudges.length > 0) {
           // Remove duplicate judge names from assignedJudges
@@ -1296,14 +1406,21 @@ export default function AdminPage() {
           .eq("id", judgeId)
       }
 
+      setProjectsList(resolvedProjects)
       setAssignmentsModified(false)
       toast.success("Assignments saved!", {
         description: `Saved ${assignmentsToInsert.length} judge assignment(s)`,
       })
     } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" && error !== null && "message" in error
+            ? String((error as { message: unknown }).message)
+            : "Unknown error"
 
       toast.error("Failed to save assignments", {
-        description: error instanceof Error ? error.message : "Unknown error",
+        description: errorMessage,
       })
     } finally {
       setSavingAssignments(false)
