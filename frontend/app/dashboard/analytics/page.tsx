@@ -755,7 +755,7 @@ function JudgingAnalyticsTab() {
       if (showRefreshing) setRefreshing(true)
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
 
       const [judgingRes, tracksRes] = await Promise.all([
         fetch("/api/analytics/judging", { headers, cache: "no-store" }),
