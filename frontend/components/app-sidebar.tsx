@@ -6,6 +6,7 @@ import {
   IconGavel,
   IconSettings,
   IconCalendar,
+  IconCalendarEvent,
   IconFolder,
   IconUser,
   IconShield,
@@ -39,6 +40,11 @@ const data = {
       title: "Judges View",
       url: "/dashboard/judges",
       icon: IconGavel,
+    },
+    {
+      title: "Room Schedule",
+      url: "/room-schedule",
+      icon: IconCalendarEvent,
     },
     {
       title: "Hacker View",
