@@ -7,6 +7,12 @@ const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID
 
 type HogQLResult = { results: (string | number)[][]; columns: string[] }
 
+function intervalFor(range: string): string {
+  if (range === "7d") return "7 DAY"
+  if (range === "30d") return "30 DAY"
+  return "24 HOUR"
+}
+
 async function hogql(query: string): Promise<HogQLResult> {
   const res = await fetch(
     `${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query`,
@@ -69,21 +75,30 @@ export async function GET(request: Request) {
   const authResult = await requireAdminOrSuperadmin(request)
   if (!authResult.ok) return authResult.response
 
-  const [eventsBreakdown, uniqueVisitors, trend, live, recent, topPages] =
+  const { searchParams } = new URL(request.url)
+  const range = searchParams.get("range") ?? "24h"
+  const interval = intervalFor(range)
+
+  // For hourly trend: use hours for 24h, days for 7d/30d
+  const trendGroupBy = range === "24h"
+    ? `toStartOfHour(timestamp) AS hour`
+    : `toStartOfDay(timestamp) AS hour`
+
+  const [eventsBreakdown, uniqueVisitors, trend, live, recent, topPages, browserBreakdown] =
     await Promise.allSettled([
-      // Event counts by type — last 24 h
+      // Event counts by type
       hogql(
-        "SELECT event, count() AS cnt FROM events WHERE timestamp > now() - INTERVAL 24 HOUR GROUP BY event ORDER BY cnt DESC LIMIT 25"
+        `SELECT event, count() AS cnt FROM events WHERE timestamp > now() - INTERVAL ${interval} GROUP BY event ORDER BY cnt DESC LIMIT 25`
       ),
-      // Unique visitors — last 24 h
+      // Unique visitors
       hogql(
-        "SELECT count(DISTINCT distinct_id) AS visitors FROM events WHERE timestamp > now() - INTERVAL 24 HOUR AND event = '$pageview'"
+        `SELECT count(DISTINCT distinct_id) AS visitors FROM events WHERE timestamp > now() - INTERVAL ${interval} AND event = '$pageview'`
       ),
-      // Hourly page-view trend — last 24 h
+      // Hourly/daily page-view trend
       hogql(
-        "SELECT toStartOfHour(timestamp) AS hour, count() AS views FROM events WHERE event = '$pageview' AND timestamp > now() - INTERVAL 24 HOUR GROUP BY hour ORDER BY hour ASC"
+        `SELECT ${trendGroupBy}, count() AS views FROM events WHERE event = '$pageview' AND timestamp > now() - INTERVAL ${interval} GROUP BY hour ORDER BY hour ASC`
       ),
-      // Live users — last 5 min
+      // Live users — last 5 min (always 5 min regardless of range)
       hogql(
         "SELECT count(DISTINCT distinct_id) AS live FROM events WHERE timestamp > now() - INTERVAL 5 MINUTE"
       ),
@@ -100,20 +115,26 @@ export async function GET(request: Request) {
         ["-timestamp"],
         30
       ),
-      // Top pages by views — last 24 h
+      // Top pages by views
       hogql(
-        "SELECT properties.$current_url AS url, count() AS views FROM events WHERE event = '$pageview' AND timestamp > now() - INTERVAL 24 HOUR AND properties.$current_url IS NOT NULL GROUP BY url ORDER BY views DESC LIMIT 10"
+        `SELECT properties.$current_url AS url, count() AS views FROM events WHERE event = '$pageview' AND timestamp > now() - INTERVAL ${interval} AND properties.$current_url IS NOT NULL GROUP BY url ORDER BY views DESC LIMIT 10`
+      ),
+      // Browser breakdown
+      hogql(
+        `SELECT properties.$browser AS browser, count() AS cnt FROM events WHERE timestamp > now() - INTERVAL ${interval} AND properties.$browser IS NOT NULL GROUP BY browser ORDER BY cnt DESC LIMIT 8`
       ),
     ])
 
   return NextResponse.json({
     configured: true,
     fetchedAt: new Date().toISOString(),
+    range,
     eventsBreakdown: wrap(eventsBreakdown),
     uniqueVisitors: wrap(uniqueVisitors),
     trend: wrap(trend),
     live: wrap(live),
     recent: wrap(recent),
     topPages: wrap(topPages),
+    browserBreakdown: wrap(browserBreakdown),
   })
 }

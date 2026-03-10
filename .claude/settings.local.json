@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(node scripts/import-csv-test-submissions.js:*)",
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(python3 -c \":*)"
     ]
   }
 }
