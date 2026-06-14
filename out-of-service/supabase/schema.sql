@@ -1,0 +1,91 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.admin_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  setting_key text NOT NULL UNIQUE,
+  setting_value text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT admin_settings_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.calendar_schedule_slots (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  date date NOT NULL,
+  start_time time without time zone NOT NULL,
+  end_time time without time zone NOT NULL,
+  submission_id uuid NOT NULL,
+  room_id integer NOT NULL,
+  judge_ids ARRAY NOT NULL DEFAULT ARRAY[]::uuid[],
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT calendar_schedule_slots_pkey PRIMARY KEY (id),
+  CONSTRAINT calendar_schedule_slots_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+);
+CREATE TABLE public.judge_investments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  judge_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  amount numeric NOT NULL DEFAULT 0, -- stores judge's 1–10 rank for this project
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_investments_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_investments_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
+  CONSTRAINT judge_investments_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+);
+CREATE TABLE public.judge_notes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  judge_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_notes_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
+  CONSTRAINT judge_notes_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+);
+CREATE TABLE public.judge_project_assignments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  judge_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_project_assignments_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_project_assignments_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
+  CONSTRAINT judge_project_assignments_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+);
+CREATE TABLE public.judges (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  email text NOT NULL UNIQUE,
+  assigned_projects integer NOT NULL DEFAULT 0,
+  total_invested numeric NOT NULL DEFAULT 0, -- legacy column, no longer actively used
+  tracks ARRAY NOT NULL DEFAULT ARRAY['General'::text],
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judges_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.submissions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  team_name text NOT NULL,
+  members ARRAY NOT NULL DEFAULT ARRAY[]::text[],
+  devpost_link text NOT NULL,
+  project_name text NOT NULL,
+  tracks ARRAY NOT NULL DEFAULT ARRAY[]::text[],
+  submitted_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT submissions_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.db_backups (
+  id             uuid                     NOT NULL DEFAULT gen_random_uuid(),
+  snapshot_at    timestamp with time zone NOT NULL DEFAULT now(),
+  triggered_by   text                     NOT NULL DEFAULT 'pg_cron',
+  judge_investments          jsonb,
+  judge_notes                jsonb,
+  judge_project_assignments  jsonb,
+  submissions                jsonb,
+  calendar_schedule_slots    jsonb,
+  row_counts     jsonb,
+  error_info     text,
+  CONSTRAINT db_backups_pkey PRIMARY KEY (id)
+);
+CREATE INDEX db_backups_snapshot_at_idx ON public.db_backups (snapshot_at DESC);
