@@ -4,7 +4,16 @@
       "Bash(node scripts/import-csv-test-submissions.js:*)",
       "Bash(npm run build)",
       "Bash(npx tsc --noEmit)",
-      "Bash(python3 -c \":*)"
+      "Bash(python3 -c \":*)",
+      "Bash(git check-ignore -v frontend/app/api/analytics/tracks/route.ts)",
+      "Bash(git -C /Applications/vscode/judging-platform status --porcelain frontend/app/api/analytics/tracks/route.ts)",
+      "Bash(git -C /Applications/vscode/judging-platform ls-files --others --exclude-standard frontend/app/api/analytics/)",
+      "Bash(git -C /Applications/vscode/judging-platform ls-files frontend/app/api/analytics/tracks/route.ts)",
+      "Bash(git -C /Applications/vscode/judging-platform add frontend/app/dashboard/analytics/page.tsx)",
+      "Bash(git -C:*)",
+      "Bash(git add frontend/app/dashboard/analytics/page.tsx)",
+      "Bash(git commit:*)",
+      "Bash(git push origin main)"
     ]
   }
 }
