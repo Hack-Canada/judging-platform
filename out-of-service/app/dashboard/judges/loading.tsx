@@ -1,0 +1,5 @@
+import { DashboardJudgesSkeleton } from "@/components/page-skeletons"
+
+export default function Loading() {
+  return <DashboardJudgesSkeleton />
+}
