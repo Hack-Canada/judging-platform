@@ -1,5 +1,42 @@
-This project is a streamlined hackathon judging platform that enables organizers to manage projects, judges, rooms, and schedules from a single interface. Instead of traditional numeric scores, judges allocate virtual investment funds to projects, providing a more intuitive signal of interest and quality, while administrators configure tracks, rooms, and calendar settings through a dedicated dashboard. The web app is built with Next.js (App Router), React, TypeScript, Tailwind CSS, shadcn/ui, and Recharts.
+# Judging Platform
 
-## Operations
+Web app for hackathon judging. Organizers run schedules, rooms, and tracks. Judges allocate virtual investment funds across submissions instead of numeric scores.
 
-S3 database backup setup and restore instructions live in `docs/s3-db-backups.md`.
+## Tech stack
+
+**Frontend**
+- Next.js 15, TypeScript, Tailwind, shadcn/ui
+
+**Backend**
+- Next.js Server Actions, Route Handlers, Zod validation
+
+**Database**
+- Neon Postgres, Drizzle ORM
+
+**Auth**
+- Better Auth or Clerk
+
+**Analytics**
+- PostHog
+
+**Hosting**
+- Vercel
+
+**Monitoring**
+- Sentry
+
+**Email**
+- Resend
+
+## Getting started
+
+```bash
+npm install
+npm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## License
+
+Private — Hack Canada / judging platform team.
