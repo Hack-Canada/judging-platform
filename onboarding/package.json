@@ -7,9 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
-    "import": "tsx scripts/import-devpost.ts"
+    "db:push": "node --env-file=.env.local node_modules/.bin/drizzle-kit push",
+    "db:studio": "node --env-file=.env.local node_modules/.bin/drizzle-kit studio",
+    "import": "node --env-file=.env.local --import tsx scripts/import-devpost.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
