@@ -2,41 +2,46 @@
 
 Web app for hackathon judging. Organizers run schedules, rooms, and tracks. Judges allocate virtual investment funds across submissions instead of numeric scores.
 
-## Tech stack
+## Check it out
 
-**Frontend**
-- Next.js 15, TypeScript, Tailwind, shadcn/ui
+👉👉👉 [hackcanada-judging.vercel.app](https://hackcanada-judging.vercel.app/) 👈👈👈
 
-**Backend**
-- Next.js Server Actions, Route Handlers, Zod validation
+## Running locally
 
-**Database**
-- Neon Postgres, Drizzle ORM
+First, clone the repo:
 
-**Auth**
-- Better Auth or Clerk
+```bash
+git clone https://github.com/Hack-Canada/judging-platform.git
+cd judging-platform/onboarding
+```
 
-**Analytics**
-- PostHog
-
-**Hosting**
-- Vercel
-
-**Monitoring**
-- Sentry
-
-**Email**
-- Resend
-
-## Getting started
+Then install dependencies and get it running:
 
 ```bash
 npm install
-npm dev
+npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Navigate to [localhost:3000](http://localhost:3000) in your browser and give it a look 👀
+
+Copy `.env.example` to `.env.local` and fill in your Neon database URL before working with the database.
+
+## Tech stack
+
+- [Next.js](https://nextjs.org/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Neon](https://neon.tech/) + [Drizzle ORM](https://orm.drizzle.team/)
+- [Zod](https://zod.dev/)
+- [PostHog](https://posthog.com/)
+- [Vercel](https://vercel.com/)
+- [Sentry](https://sentry.io/)
+- [Resend](https://resend.com/)
 
 ## License
 
 Private — Hack Canada / judging platform team.
+
+## Cheers
+
+Built with ❤️ by the Hack Canada team.
