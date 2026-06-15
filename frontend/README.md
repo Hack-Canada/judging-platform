@@ -8,11 +8,7 @@ You'll build an app that imports hackathon project data, lets an admin assign ju
 
 ## A note on auth
 
-No authentication is required for any of this. All pages including the admin panel are fully public. We'll add auth to the real platform later, so don't spend time on it here.
-
-## A note on AI usage
-
-AI usage is encouraged. Use it to understand unfamiliar APIs, generate boilerplate, debug errors, and speed things up. What matters is that you understand the code you're shipping. If you couldn't explain or rewrite it yourself, keep digging.
+No authentication is required for any of this. All pages including the admin panel are fully public. 
 
 ## Getting started
 
