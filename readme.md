@@ -12,7 +12,7 @@ First, clone the repo:
 
 ```bash
 git clone https://github.com/Hack-Canada/judging-platform.git
-cd judging-platform/onboarding
+cd judging-platform/frontend
 ```
 
 Then install dependencies and get it running:

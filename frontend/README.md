@@ -25,7 +25,7 @@ Welcome to the team. Before you touch the main codebase, you're going to build a
 ```bash
 git checkout onboarding
 git checkout -b dev/<your-name>
-cd onboarding
+cd frontend
 npm install
 ```
 
