@@ -95,14 +95,14 @@ npm run db:push
 
 **Goal:** Populate your `submissions` table with all 208 real hackathon projects.
 
-Open `scripts/import-devpost.ts`. The CSV is at `../../data/final_clean_with_general.csv` relative to this file.
+Open `scripts/import-devpost.ts`. The CSV is at `../../data/mock_submissions.csv` relative to this file.
 
 The CSV columns are: `project_name, devpost_link, tracks, submitter_name, submitter_email, members`
 
 A few things to watch out for:
 - The first row is a header — skip it
 - Some fields may be empty (e.g. no tracks assigned) — that's fine, store an empty string
-- The CSV has quoted fields that may contain commas — look at the raw file first before you write your parser: `head -5 ../../data/final_clean_with_general.csv`
+- The CSV has quoted fields that may contain commas — look at the raw file first before you write your parser: `head -5 ../../data/mock_submissions.csv`
 
 Use Drizzle's insert API to bulk-insert all rows:
 
@@ -116,7 +116,7 @@ Run your script:
 npm run import
 ```
 
-**Acceptance criteria:** The script runs without errors and logs a count. Open `db:studio` and confirm you see ~208 rows in the `submissions` table.
+**Acceptance criteria:** The script runs without errors and logs a count. Open `db:studio` and confirm you see 20 rows in the `submissions` table.
 
 **Docs:** [orm.drizzle.team/docs/insert](https://orm.drizzle.team/docs/insert)
 

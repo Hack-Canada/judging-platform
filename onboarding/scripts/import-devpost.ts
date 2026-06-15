@@ -2,7 +2,7 @@
 // TASK 3: Import DevPost submissions into your database
 // ============================================================
 //
-// The CSV lives at: ../../data/final_clean_with_general.csv
+// The CSV lives at: ../../data/mock_submissions.csv
 // (relative to this file, i.e. two levels up from onboarding/)
 //
 // Columns: project_name, devpost_link, tracks, submitter_name,
@@ -30,7 +30,7 @@ import * as path from "path";
 async function importDevPost() {
   console.log("📥 Importing DevPost submissions...");
 
-  const csvPath = path.resolve(__dirname, "../../data/final_clean_with_general.csv");
+  const csvPath = path.resolve(__dirname, "../../data/mock_submissions.csv");
 
   // TODO: Read and parse the CSV
   // TODO: Import db and submissions table from @/db
