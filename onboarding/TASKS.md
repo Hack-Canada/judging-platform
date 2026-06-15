@@ -8,6 +8,12 @@ Welcome to the team. Before you touch the main codebase, you're going to build a
 
 ---
 
+## A note on auth
+
+**No authentication is required for this task.** All pages — including the admin panel — are fully public. Don't spend time on login flows, sessions, or protected routes. In the real platform we'll add auth later; for now, treat everything as accessible to anyone.
+
+---
+
 ## A note on AI usage
 
 **AI is encouraged and expected.** Use it to understand unfamiliar APIs, generate boilerplate, debug errors, and speed up your work. What matters is that you understand what the code does — don't blindly paste output you can't explain. A good rule: if you couldn't re-write it from scratch after reading it, keep digging.
