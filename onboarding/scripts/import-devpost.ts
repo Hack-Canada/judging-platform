@@ -1,4 +1,4 @@
-import "dotenv/config";
+// DATABASE_URL is loaded via --env-file=.env.local in the npm script
 import * as fs from "fs";
 import * as path from "path";
 import { db } from "../db";
