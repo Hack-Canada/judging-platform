@@ -1,42 +1,49 @@
-// ============================================================
-// TASK 3: Import DevPost submissions into your database
-// ============================================================
-//
-// The CSV lives at: ../../data/mock_submissions.csv
-// (relative to this file, i.e. two levels up from onboarding/)
-//
-// Columns: project_name, devpost_link, tracks, submitter_name,
-//          submitter_email, members
-//
-// Steps:
-//  1. Read the CSV file using Node's built-in `fs` module
-//  2. Parse it line by line — skip the header row
-//  3. Use db.insert(submissions).values([...]) to bulk-insert all rows
-//  4. Log how many rows were inserted
-//
-// Tips:
-//  - Use `fs.readFileSync` + `.split("\n")` + `.split(",")` for basic parsing
-//  - Watch out for rows where `tracks` or `members` contain commas inside
-//    quotes — look at the raw CSV first with `head -5 ../../data/final_clean_with_general.csv`
-//  - AI is encouraged: ask it to help you write a CSV parser or handle edge cases
-//
-// Run with: npm run import
-// ============================================================
-
 import "dotenv/config";
 import * as fs from "fs";
 import * as path from "path";
+import { db } from "../db";
+import { submissions } from "../db/schema";
 
 async function importDevPost() {
   console.log("📥 Importing DevPost submissions...");
 
   const csvPath = path.resolve(__dirname, "../../data/mock_submissions.csv");
+  const content = fs.readFileSync(csvPath, "utf-8");
+  const lines = content.trim().split("\n");
+  const headers = lines[0].split(",");
 
-  // TODO: Read and parse the CSV
-  // TODO: Import db and submissions table from @/db
-  // TODO: Insert all rows into the database
+  console.log(`   Found ${lines.length - 1} rows`);
 
-  console.log("✅ Import complete!");
+  const rows = lines.slice(1).map((line) => {
+    // Handle quoted CSV fields
+    const values: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (const char of line) {
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        values.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+
+    return {
+      projectName: values[0] ?? "",
+      devpostLink: values[1] ?? "",
+      tracks: values[2] ?? "",
+      submitterName: values[3] ?? "",
+      submitterEmail: values[4] ?? "",
+      members: values[5] ?? "",
+    };
+  }).filter((r) => r.projectName);
+
+  await db.insert(submissions).values(rows);
+
+  console.log(`✅ Imported ${rows.length} submissions`);
   process.exit(0);
 }
 
