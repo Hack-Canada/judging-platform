@@ -3,6 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { fredoka, rubik } from "@/lib/fonts";
 import { PostHogProvider } from "@/components/posthog-provider";
+import Navbar from "@/src/Navbar";
 
 export const metadata: Metadata = {
   title: {
@@ -37,12 +38,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <body
-        className={`${fredoka.className} ${rubik.variable} antialiased`}
+        className={`${fredoka.className} ${rubik.variable} min-h-full bg-slate-50 antialiased`}
       >
         <PostHogProvider>
-          {children}
+          <Navbar />
+          <section className="min-h-[calc(100vh-4rem)]">{children}</section>
           <Toaster />
         </PostHogProvider>
       </body>
