@@ -5,14 +5,10 @@ import { db } from "../db";
 import { submissions } from "../db/schema";
 
 async function importDevPost() {
-  console.log("📥 Importing DevPost submissions...");
-
   const csvPath = path.resolve(__dirname, "../../data/mock_submissions.csv");
   const content = fs.readFileSync(csvPath, "utf-8");
   const lines = content.trim().split("\n");
   const headers = lines[0].split(",");
-
-  console.log(`   Found ${lines.length - 1} rows`);
 
   const rows = lines.slice(1).map((line) => {
     // Handle quoted CSV fields
@@ -43,7 +39,6 @@ async function importDevPost() {
 
   await db.insert(submissions).values(rows);
 
-  console.log(`✅ Imported ${rows.length} submissions`);
   process.exit(0);
 }
 

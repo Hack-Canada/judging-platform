@@ -9,21 +9,21 @@ import { judgingSlots } from "@/db/schema";
 
 const slotSchema = z.object({
   submissionId: z.string().min(1, "Please select a project"),
-  startTime: z.string().min(1, "Start time is required"),
-  endTime: z.string().min(1, "End time is required"),
+  startDate: z.string().min(1, "Start date is required"),
+  startTimeOfDay: z.string().min(1, "Start time is required"),
+  endDate: z.string().min(1, "End date is required"),
+  endTimeOfDay: z.string().min(1, "End time is required"),
   room: z.string().min(1, "Room is required"),
   notes: z.string().optional(),
 });
 
-function parseDateTime(value: string): Date {
-  return new Date(value);
-}
-
 export async function createSlot(formData: FormData) {
   const raw = {
     submissionId: formData.get("submissionId") as string,
-    startTime: formData.get("startTime") as string,
-    endTime: formData.get("endTime") as string,
+    startDate: formData.get("startDate") as string,
+    startTimeOfDay: formData.get("startTimeOfDay") as string,
+    endDate: formData.get("endDate") as string,
+    endTimeOfDay: formData.get("endTimeOfDay") as string,
     room: formData.get("room") as string,
     notes: (formData.get("notes") as string) || undefined,
   };
@@ -33,20 +33,19 @@ export async function createSlot(formData: FormData) {
     throw new Error(result.error.issues.map((i) => i.message).join(", "));
   }
 
-  const { submissionId, startTime, endTime, room, notes } = result.data;
-  const start = parseDateTime(startTime);
-  const end = parseDateTime(endTime);
+  const start = new Date(`${result.data.startDate}T${result.data.startTimeOfDay}`);
+  const end = new Date(`${result.data.endDate}T${result.data.endTimeOfDay}`);
 
   if (end <= start) {
     throw new Error("End time must be after start time");
   }
 
   await db.insert(judgingSlots).values({
-    submissionId,
+    submissionId: result.data.submissionId,
     startTime: start,
     endTime: end,
-    room,
-    notes: notes ?? null,
+    room: result.data.room,
+    notes: result.data.notes ?? null,
   });
 
   revalidatePath("/schedule");
@@ -57,8 +56,10 @@ export async function createSlot(formData: FormData) {
 export async function updateSlot(id: string, formData: FormData) {
   const raw = {
     submissionId: formData.get("submissionId") as string,
-    startTime: formData.get("startTime") as string,
-    endTime: formData.get("endTime") as string,
+    startDate: formData.get("startDate") as string,
+    startTimeOfDay: formData.get("startTimeOfDay") as string,
+    endDate: formData.get("endDate") as string,
+    endTimeOfDay: formData.get("endTimeOfDay") as string,
     room: formData.get("room") as string,
     notes: (formData.get("notes") as string) || undefined,
   };
@@ -68,9 +69,8 @@ export async function updateSlot(id: string, formData: FormData) {
     throw new Error(result.error.issues.map((i) => i.message).join(", "));
   }
 
-  const { submissionId, startTime, endTime, room, notes } = result.data;
-  const start = parseDateTime(startTime);
-  const end = parseDateTime(endTime);
+  const start = new Date(`${result.data.startDate}T${result.data.startTimeOfDay}`);
+  const end = new Date(`${result.data.endDate}T${result.data.endTimeOfDay}`);
 
   if (end <= start) {
     throw new Error("End time must be after start time");
@@ -78,7 +78,13 @@ export async function updateSlot(id: string, formData: FormData) {
 
   await db
     .update(judgingSlots)
-    .set({ submissionId, startTime: start, endTime: end, room, notes: notes ?? null })
+    .set({
+      submissionId: result.data.submissionId,
+      startTime: start,
+      endTime: end,
+      room: result.data.room,
+      notes: result.data.notes ?? null,
+    })
     .where(eq(judgingSlots.id, id));
 
   revalidatePath("/schedule");

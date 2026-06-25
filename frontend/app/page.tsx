@@ -6,11 +6,7 @@ export default function Home() {
       <h1 className="text-4xl font-bold text-zinc-900 dark:text-zinc-100">
         Judging Platform — Onboarding
       </h1>
-      <p className="text-zinc-600 dark:text-zinc-400 max-w-lg text-lg">
-        Your goal: build a working judging timetable using real hackathon data.
-        Read <code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-sm font-mono">TASKS.md</code> and
-        work through each task on your own branch.
-      </p>
+     
       <div className="flex gap-3 mt-2">
         <Link
           href="/schedule"
@@ -25,9 +21,6 @@ export default function Home() {
           Admin Panel
         </Link>
       </div>
-      <p className="text-xs text-zinc-400 mt-4">
-        Start with <strong>Task 1</strong> in <code className="font-mono">TASKS.md</code>
-      </p>
     </div>
   );
 }
