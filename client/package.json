@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "db:setup": "node scripts/setup-projects-db.js",
+    "db:seed": "node scripts/seed-projects.js",
     "lint": "eslint"
   },
   "dependencies": {

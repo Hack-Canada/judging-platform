@@ -1,0 +1,32 @@
+import type { Metadata } from "next";
+import "../globals.css";
+import { fredoka, rubik } from "@/lib/fonts";
+import { Navbar } from "./Navbar";
+
+export const metadata: Metadata = {
+  title: "HackCanada Judging Platform",
+  description:
+    "Hackathon judging platform for organizers, judges, hackers, volunteers, and sponsors.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="en"
+      className={`${rubik.variable} h-full`}
+      suppressHydrationWarning
+    >
+      <Navbar></Navbar>
+      <body
+        className={`${fredoka.className} min-h-full flex flex-col bg-primary text-primary-foreground antialiased`}
+        suppressHydrationWarning
+      >
+        {children}
+      </body>
+    </html>
+  );
+}
