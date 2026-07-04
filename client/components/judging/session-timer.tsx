@@ -1,0 +1,78 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  formatRelativeUntil,
+  formatSlotTime,
+  getTimeRemaining,
+} from "@/lib/judging/format";
+import type { SlotStatus } from "@/lib/judging/types";
+
+type SessionTimerProps = {
+  startTime: string;
+  endTime: string;
+  status: SlotStatus;
+  isJudged: boolean;
+  variant?: "hero" | "inline";
+};
+
+export function SessionTimer({
+  startTime,
+  endTime,
+  status,
+  isJudged,
+  variant = "inline",
+}: SessionTimerProps) {
+  const [now, setNow] = useState(() => Date.now());
+  const needsTick = status === "live" || status === "upcoming";
+
+  useEffect(() => {
+    if (!needsTick) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [needsTick]);
+
+  const remaining = getTimeRemaining(endTime, now);
+  const heroClass = variant === "hero" ? "j-hero-timer" : "text-sm";
+
+  if (isJudged) {
+    return (
+      <p className={`${heroClass} text-[rgb(245_243_239/0.5)]`}>
+        You marked this project as judged
+      </p>
+    );
+  }
+
+  if (status === "done") {
+    return (
+      <p className={`${heroClass} text-[rgb(245_243_239/0.45)]`}>
+        Ended {formatSlotTime(endTime)}
+      </p>
+    );
+  }
+
+  if (status === "upcoming") {
+    const relative = formatRelativeUntil(startTime, now);
+    return (
+      <p className={`${heroClass} text-[rgb(245_243_239/0.55)]`}>
+        Starts {formatSlotTime(startTime)}
+        <span className="text-[rgb(245_243_239/0.35)]"> · {relative}</span>
+      </p>
+    );
+  }
+
+  if (remaining.overtime) {
+    return (
+      <p className={heroClass}>
+        <span className="text-[var(--j-overtime)]">Overtime {remaining.label}</span>
+      </p>
+    );
+  }
+
+  return (
+    <p className={heroClass}>
+      <span className="text-[var(--j-live)]">{remaining.label}</span>
+      <span className="text-[rgb(245_243_239/0.4)]"> left</span>
+    </p>
+  );
+}

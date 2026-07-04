@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${rubik.variable} h-full`} suppressHydrationWarning>
+    <html lang="en" className={`${rubik.variable} ${fredoka.variable} h-full`} suppressHydrationWarning>
       <body
         className={`${fredoka.className} min-h-full flex flex-col bg-primary text-primary-foreground antialiased`}
         suppressHydrationWarning
