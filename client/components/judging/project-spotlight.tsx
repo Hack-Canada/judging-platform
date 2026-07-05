@@ -14,6 +14,10 @@ type ProjectHeroProps = {
   slotRoom?: string | null;
   isJudged: boolean;
   judgedEarly?: boolean;
+  /** When project has zero derivable slots from real data */
+  notScheduled?: boolean;
+  /** When project has multiple slots (show quiet hint) */
+  multipleSlots?: boolean;
 };
 
 export function ProjectHero({
@@ -24,6 +28,8 @@ export function ProjectHero({
   slotRoom,
   isJudged,
   judgedEarly,
+  notScheduled,
+  multipleSlots,
 }: ProjectHeroProps) {
   const room = resolveSlotRoom(slotRoom ?? null, project.room);
   const hasRoom = isValidRoom(room);
@@ -52,11 +58,7 @@ export function ProjectHero({
                   Live
                 </span>
               )}
-              {isJudged && (
-                <span className="rounded-sm bg-[var(--j-done)] px-3 py-1 text-sm font-bold uppercase tracking-wide text-white">
-                  Judged
-                </span>
-              )}
+              {isJudged && <span className="j-judged-pill">Judged</span>}
               {slotStatus === "upcoming" && !isJudged && (
                 <span className="text-sm font-semibold uppercase tracking-widest text-[rgb(245_243_239/0.45)]">
                   Up next
@@ -67,7 +69,7 @@ export function ProjectHero({
             <h1 className="j-hero-title">{project.name}</h1>
             <p className="j-hero-team">{project.team}</p>
 
-            {slotStartTime && slotEndTime && (
+            {slotStartTime && slotEndTime && !notScheduled && (
               <SessionTimer
                 startTime={slotStartTime}
                 endTime={slotEndTime}
@@ -75,6 +77,12 @@ export function ProjectHero({
                 isJudged={isJudged}
                 variant="hero"
               />
+            )}
+            {notScheduled && !isJudged && (
+              <p className="text-sm font-medium text-[rgb(245_243_239/0.55)]">Not scheduled</p>
+            )}
+            {multipleSlots && !notScheduled && (
+              <p className="text-xs text-[rgb(245_243_239/0.4)]">Showing nearest slot</p>
             )}
           </div>
         </div>
@@ -102,9 +110,20 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
       {description ? (
         <p className="j-description">{description}</p>
       ) : (
-        <p className="text-base text-[var(--j-muted)]">
-          No project summary yet.
-          {project.devpostUrl && " Open Devpost below for details."}
+        <p className="text-base leading-relaxed text-[var(--j-muted)]">
+          {project.members.length > 0 ? (
+            <>
+              Built by <span className="font-medium text-[var(--j-ink)]">{project.team}</span>
+              {project.devpostUrl
+                ? " — open Devpost for the full write-up."
+                : "."}
+            </>
+          ) : (
+            <>
+              No summary yet.
+              {project.devpostUrl && " Open Devpost below for details."}
+            </>
+          )}
         </p>
       )}
 
