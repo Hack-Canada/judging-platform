@@ -27,17 +27,15 @@ export function LiveRibbon({ liveSlot, liveProject, onGoToLive }: LiveRibbonProp
 
   return (
     <div className="j-live-ribbon" role="status">
-      <p className="min-w-0 flex-1 text-sm">
-        <span className="font-semibold text-[var(--j-live)]">Live now:</span>{" "}
-        <span className="font-medium text-[var(--j-ink)]">{liveProject.name}</span>
+      <p className="min-w-0 flex-1 text-sm text-[var(--j-paper)]">
+        <span className="font-semibold">Live now:</span>{" "}
+        <span className="font-medium">{liveProject.name}</span>
         {remaining.overtime ? (
           <span className="text-[var(--j-overtime)]"> · overtime {remaining.label}</span>
         ) : (
-          <span className="text-[var(--j-muted)]"> · {remaining.label} left</span>
+          <span className="opacity-70"> · {remaining.label} left</span>
         )}
-        {room && (
-          <span className="hidden text-[var(--j-muted)] sm:inline"> · {room}</span>
-        )}
+        {room && <span className="hidden opacity-70 sm:inline"> · {room}</span>}
       </p>
       <button type="button" onClick={onGoToLive} className="j-live-ribbon-btn shrink-0">
         Go there

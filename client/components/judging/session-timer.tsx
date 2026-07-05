@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   formatRelativeUntil,
   formatSlotTime,
+  getSlotProgress,
   getTimeRemaining,
 } from "@/lib/judging/format";
 import type { SlotStatus } from "@/lib/judging/types";
@@ -63,16 +64,34 @@ export function SessionTimer({
 
   if (remaining.overtime) {
     return (
-      <p className={heroClass}>
-        <span className="text-[var(--j-overtime)]">Overtime {remaining.label}</span>
-      </p>
+      <div>
+        <p className={heroClass}>
+          <span className="text-[var(--j-overtime)]">Overtime {remaining.label}</span>
+        </p>
+      </div>
     );
   }
 
+  const progress = getSlotProgress(startTime, endTime, now);
+
   return (
-    <p className={heroClass}>
-      <span className="text-[var(--j-live)]">{remaining.label}</span>
-      <span className="text-[rgb(245_243_239/0.4)]"> left</span>
-    </p>
+    <div>
+      <p className={heroClass}>
+        <span className="text-[var(--j-live)]">{remaining.label}</span>
+        <span className="text-[rgb(245_243_239/0.4)]"> left</span>
+      </p>
+      {variant === "hero" && (
+        <div
+          className="j-slot-progress"
+          role="progressbar"
+          aria-valuenow={progress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Time remaining in slot"
+        >
+          <div className="j-slot-progress-fill" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+    </div>
   );
 }

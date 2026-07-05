@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Toaster } from "@/components/ui/sonner";
 import "./judging.css";
 
 export const metadata: Metadata = {
@@ -8,10 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function JudgingLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="judging-shell">
-      {children}
-      <Toaster position="bottom-right" richColors closeButton />
-    </div>
-  );
+  return <div className="judging-shell">{children}</div>;
 }

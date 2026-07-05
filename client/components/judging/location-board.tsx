@@ -14,18 +14,20 @@ export function LocationBoard({ room, isJudged, judgedEarly }: LocationBoardProp
 
   if (isJudged) {
     return (
-      <div>
-        <p className="j-location-label">Judged</p>
+      <div className="j-location-judged">
+        <p className="j-location-label">Done</p>
         {tableNumber ? (
-          <>
-            <p className="j-location-table-num tabular-nums">{tableNumber}</p>
-            <p className="j-location-venue">{venue}</p>
-          </>
+          <p className="j-location-judged-table tabular-nums">
+            Table {tableNumber}
+            <span className="block text-base font-normal text-[rgb(245_243_239/0.45)]">
+              {venue}
+            </span>
+          </p>
         ) : (
-          <p className="mt-2 text-lg text-[rgb(245_243_239/0.55)]">{venue}</p>
+          <p className="text-lg text-[rgb(245_243_239/0.55)]">{venue}</p>
         )}
         {judgedEarly && (
-          <p className="mt-3 text-sm text-[rgb(245_243_239/0.45)]">Marked before slot time</p>
+          <p className="mt-2 text-sm text-[rgb(245_243_239/0.4)]">Marked early</p>
         )}
       </div>
     );
