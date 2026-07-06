@@ -1,5 +1,5 @@
-import { PortalStub } from "@/components/portal-stub";
+import { SponsorDashboard } from "@/app/sponsor/components/sponsor-dashboard";
 
 export default function SponsorPage() {
-  return <PortalStub title="Sponsor" />;
+  return <SponsorDashboard />;
 }
