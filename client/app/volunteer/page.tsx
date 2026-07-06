@@ -1,5 +1,6 @@
-import { PortalStub } from "@/components/portal-stub";
+import { VolunteerDashboard } from "@/app/volunteer/components/volunteer-dashboard";
+import { mockShifts } from "@/app/volunteer/data/shifts";
 
 export default function VolunteerPage() {
-  return <PortalStub title="Volunteer" />;
+  return <VolunteerDashboard shifts={mockShifts} />;
 }
