@@ -45,7 +45,7 @@ export function streamProgress(
   const judged = slots.filter(
     (s) => judgedIds.has(s.projectId) && !skippedIds.has(s.projectId)
   ).length;
-  const remaining = slots.filter((s) => !judgedIds.has(s.projectId)).length;
+  const remaining = total - judged - skipped;
   return { judged, skipped, total, remaining };
 }
 
@@ -56,7 +56,9 @@ export function slotsForProject(
   return slots.filter((s) => s.projectId === projectId);
 }
 
-/** Pick the best slot to display when a project may have 0 or many slots. */
+/** Pick the best slot when a project has 0 or many slots.
+ * Priority: live now, then earliest upcoming, then most recently ended.
+ * "Nearest" means nearest to device clock at render time, not queue position. */
 export function pickPrimarySlot(
   slots: JudgingSlot[],
   at = Date.now()

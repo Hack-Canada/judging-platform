@@ -5,12 +5,12 @@ import { ActionFeedback } from "@/components/judging/action-feedback";
 import { BreakBanner } from "@/components/judging/break-banner";
 import { CompletionBanner } from "@/components/judging/completion-banner";
 import { JudgeNotesPanel } from "@/components/judging/judge-notes-panel";
+import { JudgingFooter } from "@/components/judging/judging-footer";
 import { JudgingHeader } from "@/components/judging/judging-header";
 import { LiveRibbon } from "@/components/judging/live-ribbon";
 import { LoadingShell } from "@/components/judging/loading-shell";
 import { ProjectDetails, ProjectHero } from "@/components/judging/project-spotlight";
 import { ResetStreamConfirm } from "@/components/judging/reset-stream-confirm";
-import { ScheduleOffsetPanel } from "@/components/judging/schedule-offset-panel";
 import { ScheduleDock } from "@/components/judging/schedule-dock";
 import { SessionRail } from "@/components/judging/session-rail";
 import { SkipReasonPicker } from "@/components/judging/skip-reason-picker";
@@ -21,10 +21,13 @@ import {
   resolveJudgeId,
   saveJudgeCode,
 } from "@/lib/judging/judge-identity";
+import { mergeStorageWithServer, serverRowsToStorage } from "@/lib/judging/hydrate-judgments";
 import {
   enqueueJudgment,
   fetchJudgingConfig,
+  fetchJudgmentsFromServer,
   syncNotesNow,
+  type JudgmentAction,
 } from "@/lib/judging/offline-queue";
 import {
   findBreakState,
@@ -50,25 +53,25 @@ import {
 } from "@/lib/judging/storage";
 import { useJudgingSync } from "@/lib/judging/use-judging-sync";
 import type {
-  DataSource,
   JudgeNotes,
   JudgingProject,
   JudgingSlot,
   JudgingStream,
-  MockReason,
   SkipReason,
 } from "@/lib/judging/types";
+
+const JUDGING_ROUND = 1;
 
 type JudgingPortalProps = {
   projects: JudgingProject[];
   slots: JudgingSlot[];
   streams: JudgingStream[];
-  dataSource: DataSource;
-  mockReason?: MockReason;
   initialStreamId?: string;
   initialScheduleOffset?: number;
   initialJudgeCode?: string;
-  showOrganizerPanel?: boolean;
+  scheduleApproximate?: boolean;
+  /** When set via ?stream=, judge cannot switch to other tracks. */
+  streamLocked?: boolean;
 };
 
 function scrollToTop() {
@@ -92,7 +95,7 @@ function applyStorage(
     setEarlyMarkedIds: (v: Set<string>) => void;
   }
 ) {
-  const stored = loadJudgingStorage(streamId);
+  const stored = loadJudgingStorage(streamId, JUDGING_ROUND);
   setters.setJudgedIds(new Set(stored.judgedIds));
   setters.setSkippedIds(new Set(stored.skippedIds));
   setters.setSkipReasons(stored.skipReasons);
@@ -104,12 +107,11 @@ export function JudgingPortal({
   projects,
   slots,
   streams,
-  dataSource,
-  mockReason,
   initialStreamId,
   initialScheduleOffset = 0,
   initialJudgeCode,
-  showOrganizerPanel = false,
+  scheduleApproximate = false,
+  streamLocked = false,
 }: JudgingPortalProps) {
   const [now, setNow] = useState(() => Date.now());
   const [clientServerDeltaMs, setClientServerDeltaMs] = useState(0);
@@ -135,9 +137,6 @@ export function JudgingPortal({
 
   const judgeId = resolveJudgeId(judgeCode);
   const adjustedNow = now + clientServerDeltaMs;
-  const isProdMock =
-    process.env.NODE_ENV === "production" && dataSource === "mock";
-  const actionsDisabled = isProdMock;
 
   useEffect(() => {
     const fromUrl = normalizeJudgeCode(initialJudgeCode);
@@ -153,7 +152,6 @@ export function JudgingPortal({
     void fetchJudgingConfig().then(({ scheduleOffsetMinutes: minutes, serverNow }) => {
       setScheduleOffsetMinutes(minutes);
       saveLocalScheduleOffset(minutes);
-      // Mitigates device clock skew at load; does not correct mid-session drift.
       if (serverNow) {
         setClientServerDeltaMs(new Date(serverNow).getTime() - Date.now());
       }
@@ -165,7 +163,7 @@ export function JudgingPortal({
     saveLocalScheduleOffset(minutes);
   }, []);
 
-  const { status: syncStatus, pendingCount, syncNow, refreshPending } =
+  const { status: syncStatus, pendingCount, pendingSummary, syncNow, refreshPending } =
     useJudgingSync(handleOffsetChange);
 
   const offsetSlots = useMemo(
@@ -195,7 +193,7 @@ export function JudgingPortal({
       if (stream.id === activeStreamId) {
         map[stream.id] = streamProgress(streamOnly, judgedIds, skippedIds);
       } else if (hydrated) {
-        const stored = loadJudgingStorage(stream.id);
+        const stored = loadJudgingStorage(stream.id, JUDGING_ROUND);
         map[stream.id] = streamProgress(
           streamOnly,
           new Set(stored.judgedIds),
@@ -229,6 +227,23 @@ export function JudgingPortal({
   }, [activeStreamId, streams]);
 
   useEffect(() => {
+    if (!hydrated || !activeStreamId || !judgeId) return;
+    void fetchJudgmentsFromServer({
+      judgeId,
+      streamId: activeStreamId,
+      round: JUDGING_ROUND,
+    }).then((rows) => {
+      if (!rows.length) return;
+      const local = loadJudgingStorage(activeStreamId, JUDGING_ROUND);
+      const merged = mergeStorageWithServer(local, serverRowsToStorage(rows));
+      setJudgedIds(new Set(merged.judgedIds));
+      setSkippedIds(new Set(merged.skippedIds));
+      setSkipReasons(merged.skipReasons);
+      setNotes(merged.notes);
+    });
+  }, [hydrated, activeStreamId, judgeId]);
+
+  useEffect(() => {
     if (!hydrated || streamSlots.length === 0) return;
     const live = findLiveSlot(streamSlots, judgedIds);
     const firstUnjudged =
@@ -244,22 +259,18 @@ export function JudgingPortal({
 
   useEffect(() => {
     if (!hydrated || !activeStreamId) return;
-    saveJudgingStorage(activeStreamId, {
-      judgedIds: [...judgedIds],
-      skippedIds: [...skippedIds],
-      skipReasons,
-      notes,
-      earlyMarkedIds: [...earlyMarkedIds],
-    });
-  }, [
-    hydrated,
-    activeStreamId,
-    judgedIds,
-    skippedIds,
-    skipReasons,
-    notes,
-    earlyMarkedIds,
-  ]);
+    saveJudgingStorage(
+      activeStreamId,
+      {
+        judgedIds: [...judgedIds],
+        skippedIds: [...skippedIds],
+        skipReasons,
+        notes,
+        earlyMarkedIds: [...earlyMarkedIds],
+      },
+      JUDGING_ROUND
+    );
+  }, [hydrated, activeStreamId, judgedIds, skippedIds, skipReasons, notes, earlyMarkedIds]);
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? projects[0];
   const projectSlots = useMemo(
@@ -290,13 +301,14 @@ export function JudgingPortal({
   const queueJudgment = useCallback(
     (
       projectId: string,
-      action: "judged" | "skipped" | "unmarked",
+      action: JudgmentAction,
       extras?: { skipReason?: SkipReason | null; notes?: string; streamId?: string }
     ) => {
       enqueueJudgment({
         judgeId,
         streamId: extras?.streamId ?? activeStreamId,
         projectId,
+        round: JUDGING_ROUND,
         action,
         notes: extras?.notes ?? notes[projectId],
         skipReason: extras?.skipReason,
@@ -321,13 +333,17 @@ export function JudgingPortal({
   const persistAndSwitchStream = useCallback(
     (nextStreamId: string) => {
       if (!activeStreamId) return;
-      saveJudgingStorage(activeStreamId, {
-        judgedIds: [...judgedIds],
-        skippedIds: [...skippedIds],
-        skipReasons,
-        notes,
-        earlyMarkedIds: [...earlyMarkedIds],
-      });
+      saveJudgingStorage(
+        activeStreamId,
+        {
+          judgedIds: [...judgedIds],
+          skippedIds: [...skippedIds],
+          skipReasons,
+          notes,
+          earlyMarkedIds: [...earlyMarkedIds],
+        },
+        JUDGING_ROUND
+      );
       setActiveStreamId(nextStreamId);
       applyStorage(nextStreamId, {
         setJudgedIds,
@@ -365,11 +381,12 @@ export function JudgingPortal({
     });
   }, []);
 
-  const completeJudging = useCallback(
+  const finishDecision = useCallback(
     (
       projectId: string,
-      mode: "judged" | "skipped",
-      reason: SkipReason | null = null
+      feedbackMessage: string,
+      syncAction: JudgmentAction,
+      extras?: { skipReason?: SkipReason | null }
     ) => {
       const project = projects.find((p) => p.id === projectId);
       if (!project || judgedIds.has(projectId)) return;
@@ -378,28 +395,26 @@ export function JudgingPortal({
       const wasUpcoming = slot?.status === "upcoming";
 
       setJudgedIds((prev) => new Set(prev).add(projectId));
-      if (mode === "skipped") {
+      if (syncAction === "skipped") {
         setSkippedIds((prev) => new Set(prev).add(projectId));
-        if (reason) {
-          setSkipReasons((prev) => ({ ...prev, [projectId]: reason }));
+        if (extras?.skipReason) {
+          setSkipReasons((prev) => ({ ...prev, [projectId]: extras.skipReason! }));
         }
       }
       if (wasUpcoming) {
         setEarlyMarkedIds((prev) => new Set(prev).add(projectId));
       }
 
-      const skipLabel =
-        reason === "absent"
-          ? "Skipped — absent"
-          : reason === "not_ready"
-            ? "Skipped — not ready"
-            : reason === "wrong_track"
-              ? "Skipped — wrong track"
-              : "Skipped";
+      const nextId = getNextUnjudgedProjectId(
+        streamSlots,
+        new Set([...judgedIds, projectId]),
+        projectId
+      );
+      const nextProject = nextId ? projects.find((p) => p.id === nextId) : undefined;
 
       setFeedback({
-        message: mode === "skipped" ? skipLabel : "Marked as judged",
-        detail: project.name,
+        message: feedbackMessage,
+        detail: nextProject ? `Up next: ${nextProject.name}` : project.name,
         actionLabel: "Undo",
         onAction: () => {
           unmarkJudging(projectId);
@@ -410,24 +425,42 @@ export function JudgingPortal({
         },
       });
 
-      queueJudgment(projectId, mode === "skipped" ? "skipped" : "judged", {
-        skipReason: reason,
-      });
+      queueJudgment(projectId, syncAction, { skipReason: extras?.skipReason ?? null });
 
       setSkipPickerProjectId(null);
       setPendingSkipReason(null);
 
-      const nextId = getNextUnjudgedProjectId(
-        streamSlots,
-        new Set([...judgedIds, projectId]),
-        projectId
-      );
       if (nextId) {
         setActiveProjectId(nextId);
         scrollToTop();
       }
     },
     [projects, streamSlots, judgedIds, unmarkJudging, queueJudgment]
+  );
+
+  const completeJudging = useCallback(
+    (
+      projectId: string,
+      mode: "reviewed" | "skipped",
+      reason: SkipReason | null = null
+    ) => {
+      const skipLabel =
+        reason === "absent"
+          ? "Skipped — absent"
+          : reason === "not_ready"
+            ? "Skipped — not ready"
+            : reason === "wrong_track"
+              ? "Skipped — wrong track"
+              : "Skipped";
+
+      finishDecision(
+        projectId,
+        mode === "skipped" ? skipLabel : "Marked reviewed",
+        mode === "skipped" ? "skipped" : "reviewed",
+        { skipReason: reason }
+      );
+    },
+    [finishDecision]
   );
 
   const unmarkWithToast = useCallback(
@@ -443,7 +476,7 @@ export function JudgingPortal({
         detail: project.name,
         actionLabel: "Redo",
         onAction: () => {
-          completeJudging(projectId, "judged");
+          completeJudging(projectId, "reviewed");
           setFeedback(null);
         },
       });
@@ -456,7 +489,7 @@ export function JudgingPortal({
     setSkippedIds(new Set());
     setSkipReasons({});
     setEarlyMarkedIds(new Set());
-    clearJudgingStorage(activeStreamId);
+    clearJudgingStorage(activeStreamId, JUDGING_ROUND);
     setShowResetConfirm(false);
 
     const first = streamSlots[0]?.projectId;
@@ -475,6 +508,7 @@ export function JudgingPortal({
         judgeId,
         streamId: activeStreamId,
         projectId: activeProject.id,
+        round: JUDGING_ROUND,
         notes: value,
       });
     }, 400);
@@ -493,13 +527,13 @@ export function JudgingPortal({
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (actionsDisabled || skipPickerProjectId) return;
+      if (skipPickerProjectId) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
 
       if (e.key === "j" && !isJudged && activeProject) {
         e.preventDefault();
-        completeJudging(activeProject.id, "judged");
+        completeJudging(activeProject.id, "reviewed");
       }
       if (e.key === "s" && !isJudged && activeProject) {
         e.preventDefault();
@@ -532,7 +566,6 @@ export function JudgingPortal({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
-    actionsDisabled,
     skipPickerProjectId,
     activeProject,
     isJudged,
@@ -549,28 +582,25 @@ export function JudgingPortal({
   if (!activeProject || streamSlots.length === 0) {
     return (
       <div className="flex min-h-dvh flex-col">
-        <JudgingHeader
-          dataSource={dataSource}
-          mockReason={mockReason}
-          judgedCount={0}
-          skippedCount={0}
-          totalCount={0}
-          judgeId={judgeId}
-        />
-        <StreamSelector
-          streams={streams}
-          activeStreamId={activeStreamId}
-          progressByStream={progressByStream}
-          onSelect={persistAndSwitchStream}
-        />
+        <JudgingHeader judgedCount={0} skippedCount={0} totalCount={0} />
+        {!streamLocked && (
+          <StreamSelector
+            streams={streams}
+            activeStreamId={activeStreamId}
+            progressByStream={progressByStream}
+            onSelect={persistAndSwitchStream}
+          />
+        )}
         <div className="mx-auto flex max-w-lg flex-1 flex-col justify-center px-6 py-24 text-center">
           <h2 className="text-3xl font-semibold tracking-tight text-[var(--j-ink)]">
             Nothing scheduled
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-[var(--j-muted)]">
-            {streams.length > 1
-              ? "Pick another stream above, or wait until projects are assigned to this block."
-              : "Your judging block will show up here once projects are assigned."}
+            {streamLocked
+              ? "No projects are assigned to this stream yet."
+              : streams.length > 1
+                ? "Pick another stream above, or wait until projects are assigned to this block."
+                : "Your judging block will show up here once projects are assigned."}
           </p>
         </div>
       </div>
@@ -584,31 +614,24 @@ export function JudgingPortal({
   return (
     <div className="flex min-h-dvh flex-col">
       <JudgingHeader
-        dataSource={dataSource}
-        mockReason={mockReason}
         judgedCount={judgedCount}
         skippedCount={skippedCount}
         totalCount={totalCount}
         streamName={activeStream?.shortName ?? activeStream?.name}
-        judgeId={judgeId}
         syncStatus={syncStatus}
         pendingSyncCount={pendingCount}
+        pendingSummary={pendingSummary}
         scheduleOffsetLabel={scheduleOffsetLabel}
       />
 
-      {showOrganizerPanel && (
-        <ScheduleOffsetPanel
-          initialOffset={scheduleOffsetMinutes}
-          onOffsetChange={handleOffsetChange}
+      {!streamLocked && (
+        <StreamSelector
+          streams={streams}
+          activeStreamId={activeStreamId}
+          progressByStream={progressByStream}
+          onSelect={persistAndSwitchStream}
         />
       )}
-
-      <StreamSelector
-        streams={streams}
-        activeStreamId={activeStreamId}
-        progressByStream={progressByStream}
-        onSelect={persistAndSwitchStream}
-      />
 
       {streamAllDone && activeStream && (
         <CompletionBanner
@@ -667,6 +690,8 @@ export function JudgingPortal({
               project={activeProject}
               notes={notes[activeProject.id] ?? ""}
               onChange={updateNotes}
+              syncStatus={syncStatus}
+              pendingNotesCount={pendingSummary.notesOnly}
             />
           </div>
 
@@ -678,6 +703,7 @@ export function JudgingPortal({
               judgedIds={judgedIds}
               skippedIds={skippedIds}
               onSelect={selectProject}
+              scheduleApproximate={scheduleApproximate}
             />
           </aside>
         </div>
@@ -693,6 +719,7 @@ export function JudgingPortal({
         skippedCount={skippedCount}
         totalCount={totalCount}
         onSelect={selectProject}
+        scheduleApproximate={scheduleApproximate}
       />
 
       <footer className="j-footer">
@@ -720,57 +747,17 @@ export function JudgingPortal({
               }}
             />
           ) : (
-            <>
-              <p className="hidden text-base text-[var(--j-muted)] sm:block">
-                {isJudged
-                  ? isSkipped
-                    ? "Marked skipped."
-                    : "Marked as judged — tap Unmark if this was a mistake."
-                  : activeSlot?.status === "live"
-                    ? "Visit the table, then mark as judged."
-                    : notScheduled
-                      ? "No slot assigned — review details or skip."
-                      : "Review details before your slot."}
-              </p>
-              {isJudged ? (
-                <button
-                  type="button"
-                  onClick={() => unmarkWithToast(activeProject.id)}
-                  disabled={actionsDisabled}
-                  className="j-cta-secondary w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Unmark
-                </button>
-              ) : (
-                <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-                  {liveSlot && activeProjectId !== liveSlot.projectId && (
-                    <button
-                      type="button"
-                      onClick={() => selectProject(liveSlot.projectId)}
-                      className="j-cta-secondary w-full sm:hidden"
-                    >
-                      Go to live slot
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => startSkipFlow(activeProject.id)}
-                    disabled={actionsDisabled}
-                    className="j-cta-skip w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Skip
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => completeJudging(activeProject.id, "judged")}
-                    disabled={actionsDisabled}
-                    className="j-cta j-cta--primary w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Mark judged
-                  </button>
-                </div>
-              )}
-            </>
+            <JudgingFooter
+              isJudged={isJudged}
+              isSkipped={isSkipped}
+              activeSlotLive={activeSlot?.status === "live"}
+              notScheduled={notScheduled}
+              showGoToLive={Boolean(liveSlot && activeProjectId !== liveSlot.projectId)}
+              onSkip={() => startSkipFlow(activeProject.id)}
+              onReviewed={() => completeJudging(activeProject.id, "reviewed")}
+              onUnmark={() => unmarkWithToast(activeProject.id)}
+              onGoToLive={() => liveSlot && selectProject(liveSlot.projectId)}
+            />
           )}
         </div>
       </footer>

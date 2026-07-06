@@ -19,16 +19,12 @@ export function LocationBoard({ room, isJudged, judgedEarly }: LocationBoardProp
         {tableNumber ? (
           <p className="j-location-judged-table tabular-nums">
             Table {tableNumber}
-            <span className="block text-base font-normal text-[rgb(245_243_239/0.45)]">
-              {venue}
-            </span>
+            <span className="j-hero-subtle block text-base font-normal">{venue}</span>
           </p>
         ) : (
-          <p className="text-lg text-[rgb(245_243_239/0.55)]">{venue}</p>
+          <p className="j-hero-muted text-lg">{venue}</p>
         )}
-        {judgedEarly && (
-          <p className="mt-2 text-sm text-[rgb(245_243_239/0.4)]">Marked early</p>
-        )}
+        {judgedEarly && <p className="j-hero-faint mt-2 text-sm">Marked early</p>}
       </div>
     );
   }
@@ -44,7 +40,7 @@ export function LocationBoard({ room, isJudged, judgedEarly }: LocationBoardProp
         <p className="j-location-table-num j-location-table-num--venue">{venue}</p>
       )}
       {tableNumber && (
-        <p className="mt-2 text-lg font-medium text-[rgb(245_243_239/0.75)]">
+        <p className="j-hero-soft mt-2 text-lg font-medium">
           {tableLabel ?? `Table ${tableNumber}`}
         </p>
       )}
@@ -55,9 +51,5 @@ export function LocationBoard({ room, isJudged, judgedEarly }: LocationBoardProp
 
 /** Quiet fallback when room is unknown — never a giant TBD */
 export function LocationPending() {
-  return (
-    <p className="text-sm text-[rgb(245_243_239/0.45)]">
-      Table not assigned yet — check with an organizer
-    </p>
-  );
+  return <p className="j-hero-subtle text-sm">Table not assigned yet</p>;
 }

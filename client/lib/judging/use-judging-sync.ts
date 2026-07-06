@@ -5,6 +5,8 @@ import {
   fetchScheduleOffset,
   flushJudgmentQueue,
   getPendingCount,
+  getPendingSummary,
+  type PendingSummary,
 } from "@/lib/judging/offline-queue";
 
 export type SyncStatus = "synced" | "pending" | "offline" | "syncing";
@@ -14,10 +16,16 @@ export function useJudgingSync(onOffsetChange?: (minutes: number) => void) {
     () => typeof navigator === "undefined" || navigator.onLine
   );
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingSummary, setPendingSummary] = useState<PendingSummary>({
+    total: 0,
+    marks: 0,
+    notesOnly: 0,
+  });
   const [syncing, setSyncing] = useState(false);
 
   const refreshPending = useCallback(() => {
     setPendingCount(getPendingCount());
+    setPendingSummary(getPendingSummary());
   }, []);
 
   const syncNow = useCallback(async () => {
@@ -88,5 +96,13 @@ export function useJudgingSync(onOffsetChange?: (minutes: number) => void) {
         ? "pending"
         : "synced";
 
-  return { online, pendingCount, status, syncNow, refreshPending, refreshOffset };
+  return {
+    online,
+    pendingCount,
+    pendingSummary,
+    status,
+    syncNow,
+    refreshPending,
+    refreshOffset,
+  };
 }

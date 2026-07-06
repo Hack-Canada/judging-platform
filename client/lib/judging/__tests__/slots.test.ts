@@ -57,7 +57,20 @@ describe("streamProgress", () => {
     expect(result.remaining).toBe(1);
   });
 
-  it("remaining uses judgedIds including skips", () => {
+  it("remaining equals total minus judged minus skipped at scale", () => {
+    const slots = Array.from({ length: 209 }, (_, i) =>
+      slot(String(i), `p${i}`, "2026-06-25T14:00:00.000Z", "2026-06-25T14:25:00.000Z")
+    );
+    const judgedIds = new Set(Array.from({ length: 14 }, (_, i) => `p${i}`));
+    const skippedIds = new Set(["p10", "p11", "p12", "p13"]);
+    const result = streamProgress(slots, judgedIds, skippedIds);
+    expect(result.judged).toBe(10);
+    expect(result.skipped).toBe(4);
+    expect(result.total).toBe(209);
+    expect(result.remaining).toBe(195);
+  });
+
+  it("remaining subtracts both judged and skipped", () => {
     const judged = new Set(["p1", "p2"]);
     const skipped = new Set(["p2"]);
     expect(streamProgress(slots, judged, skipped).remaining).toBe(1);

@@ -48,8 +48,10 @@ export function StreamSelector({
               <span className="block font-semibold">{label}</span>
               {progress && progress.total > 0 && (
                 <span className="mt-0.5 block text-xs tabular-nums opacity-80">
-                  {progress.judged}
-                  {progress.skipped > 0 ? `+${progress.skipped}s` : ""}/{progress.total}
+                  {progress.judged}/{progress.total}
+                  {progress.skipped > 0 ? (
+                    <span className="text-[var(--j-faint)]"> · {progress.skipped} skip</span>
+                  ) : null}
                 </span>
               )}
             </button>

@@ -1,16 +1,24 @@
 import { JudgingPortal } from "./judging-portal";
+
 import { JudgingErrorScreen } from "@/components/judging/judging-error-screen";
+
 import { getScheduleOffsetMinutes } from "@/lib/judging/db-setup";
+
 import {
-  getJudgingProjects,
-  getJudgingSlots,
+  getJudgingDataset,
+  parseProjectAllowList,
   pickInitialStream,
 } from "@/lib/judging/get-data";
 
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams: Promise<{ stream?: string; organizer?: string; code?: string }>;
+  searchParams: Promise<{
+    stream?: string;
+    code?: string;
+    /** Comma-separated project IDs — client-only assignment filter. */
+    projects?: string;
+  }>;
 };
 
 export default async function JudgingPage({ searchParams }: PageProps) {
@@ -18,20 +26,20 @@ export default async function JudgingPage({ searchParams }: PageProps) {
 
   let projects;
   let streams;
-  let source;
-  let mockReason;
   let slots;
   let initialStreamId;
   let initialScheduleOffset;
+  let scheduleApproximate;
   let loadError: string | undefined;
 
   try {
-    const data = await getJudgingProjects();
+    const data = await getJudgingDataset({
+      projectAllowList: parseProjectAllowList(params.projects),
+    });
     projects = data.projects;
     streams = data.streams;
-    source = data.source;
-    mockReason = data.mockReason;
-    slots = getJudgingSlots(projects, source);
+    slots = data.slots;
+    scheduleApproximate = data.scheduleApproximate;
     initialStreamId = pickInitialStream(streams, slots, params.stream);
     initialScheduleOffset = await getScheduleOffsetMinutes();
   } catch (error) {
@@ -43,19 +51,19 @@ export default async function JudgingPage({ searchParams }: PageProps) {
     return <JudgingErrorScreen message={loadError} />;
   }
 
-  const showOrganizerPanel = params.organizer === "1";
+  const streamLocked = Boolean(params.stream?.trim());
 
   return (
     <JudgingPortal
       projects={projects!}
       slots={slots!}
       streams={streams!}
-      dataSource={source!}
-      mockReason={mockReason}
       initialStreamId={initialStreamId}
       initialScheduleOffset={initialScheduleOffset}
       initialJudgeCode={params.code}
-      showOrganizerPanel={showOrganizerPanel}
+      scheduleApproximate={scheduleApproximate}
+      streamLocked={streamLocked}
     />
   );
 }
+

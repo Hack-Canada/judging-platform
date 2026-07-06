@@ -38,26 +38,22 @@ export function SessionTimer({
 
   if (isJudged) {
     return (
-      <p className={`${heroClass} text-[rgb(245_243_239/0.5)]`}>
-        You marked this project as judged
-      </p>
+      <p className={`${heroClass} j-hero-muted`}>You marked this project as judged</p>
     );
   }
 
   if (status === "done") {
     return (
-      <p className={`${heroClass} text-[rgb(245_243_239/0.45)]`}>
-        Ended {formatSlotTime(endTime)}
-      </p>
+      <p className={`${heroClass} j-hero-subtle`}>Ended {formatSlotTime(endTime)}</p>
     );
   }
 
   if (status === "upcoming") {
     const relative = formatRelativeUntil(startTime, now);
     return (
-      <p className={`${heroClass} text-[rgb(245_243_239/0.55)]`}>
+      <p className={`${heroClass} j-hero-muted`}>
         Starts {formatSlotTime(startTime)}
-        <span className="text-[rgb(245_243_239/0.35)]"> · {relative}</span>
+        <span className="j-hero-faint"> · {relative}</span>
       </p>
     );
   }
@@ -78,7 +74,7 @@ export function SessionTimer({
     <div>
       <p className={heroClass}>
         <span className="text-[var(--j-live)]">{remaining.label}</span>
-        <span className="text-[rgb(245_243_239/0.4)]"> left</span>
+        <span className="j-hero-faint"> left</span>
       </p>
       {variant === "hero" && (
         <div

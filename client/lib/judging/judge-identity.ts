@@ -1,6 +1,6 @@
 const JUDGE_CODE_KEY = "hc-judge-code";
 
-/** Used in sync keys when no organizer code is present. Marks are local-only on server. */
+/** Fallback when no ?code= in URL. Marks won't sync to a named judge on the server. */
 export const ANONYMOUS_JUDGE_ID = "__anonymous__";
 
 export function normalizeJudgeCode(raw: string | undefined | null): string | null {
@@ -33,8 +33,4 @@ export function saveJudgeCode(code: string) {
 
 export function resolveJudgeId(code: string | null | undefined): string {
   return normalizeJudgeCode(code) ?? ANONYMOUS_JUDGE_ID;
-}
-
-export function hasAttributableJudge(judgeId: string): boolean {
-  return judgeId !== ANONYMOUS_JUDGE_ID;
 }

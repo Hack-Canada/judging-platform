@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Search } from "lucide-react";
 import { formatSlotTime, resolveSlotRoom } from "@/lib/judging/format";
+import { streamProgress } from "@/lib/judging/slots";
 import type {
   JudgingProject,
   JudgingSlotWithStatus,
@@ -18,6 +20,7 @@ type SessionRailProps = {
   skippedIds: Set<string>;
   onSelect: (projectId: string) => void;
   embedded?: boolean;
+  scheduleApproximate?: boolean;
 };
 
 const FILTERS: { id: ScheduleFilter; label: string }[] = [
@@ -27,6 +30,72 @@ const FILTERS: { id: ScheduleFilter; label: string }[] = [
   { id: "skipped", label: "Skipped" },
 ];
 
+const ROW_HEIGHT = 72;
+const VIRTUALIZE_THRESHOLD = 40;
+
+type RowProps = {
+  slot: JudgingSlotWithStatus;
+  project: JudgingProject;
+  activeProjectId: string;
+  judgedIds: Set<string>;
+  skippedIds: Set<string>;
+  onSelect: (projectId: string) => void;
+};
+
+function SessionRailRow({
+  slot,
+  project,
+  activeProjectId,
+  judgedIds,
+  skippedIds,
+  onSelect,
+}: RowProps) {
+  const isActive = slot.projectId === activeProjectId;
+  const isJudged = judgedIds.has(slot.projectId);
+  const isSkipped = skippedIds.has(slot.projectId);
+  const isLive = slot.status === "live" && !isJudged;
+  const room = resolveSlotRoom(slot.room, project.room);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(slot.projectId)}
+      aria-current={isActive ? "true" : undefined}
+      className={cn("j-schedule-row", isLive && "j-schedule-row--live")}
+    >
+      <span className="j-schedule-time">{formatSlotTime(slot.startTime)}</span>
+      <span className="min-w-0 text-left">
+        <span
+          className={cn(
+            "j-schedule-name block truncate",
+            isJudged && "text-[var(--j-faint)] line-through"
+          )}
+        >
+          {project.name}
+        </span>
+        {room ? (
+          <span className="j-schedule-room block truncate">{room}</span>
+        ) : (
+          <span className="j-schedule-room block text-[var(--j-faint)]">Table pending</span>
+        )}
+      </span>
+      <span className="shrink-0">
+        {isJudged ? (
+          <Check className="size-5 text-[var(--j-faint)]" aria-label="Judged" />
+        ) : isLive ? (
+          <span className="text-sm font-bold uppercase tracking-wide text-[var(--j-live)]">
+            Now
+          </span>
+        ) : isSkipped ? (
+          <span className="text-xs font-medium text-[var(--j-muted)]">Skipped</span>
+        ) : slot.status === "upcoming" ? (
+          <span className="text-sm font-medium text-[var(--j-faint)]">Next</span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
 export function SessionRail({
   slots,
   projects,
@@ -35,9 +104,11 @@ export function SessionRail({
   skippedIds,
   onSelect,
   embedded = false,
+  scheduleApproximate = false,
 }: SessionRailProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ScheduleFilter>("remaining");
+  const listRef = useRef<HTMLDivElement>(null);
 
   const projectMap = useMemo(
     () => new Map(projects.map((p) => [p.id, p])),
@@ -66,7 +137,103 @@ export function SessionRail({
     });
   }, [slots, projectMap, judgedIds, skippedIds, filter, query]);
 
-  const remainingCount = slots.filter((s) => !judgedIds.has(s.projectId)).length;
+  const useVirtual = filteredSlots.length >= VIRTUALIZE_THRESHOLD;
+
+  const virtualizer = useVirtualizer({
+    count: filteredSlots.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  });
+
+  useEffect(() => {
+    if (!useVirtual || !activeProjectId) return;
+    const index = filteredSlots.findIndex((s) => s.projectId === activeProjectId);
+    if (index >= 0) {
+      virtualizer.scrollToIndex(index, { align: "auto" });
+    }
+  }, [activeProjectId, filteredSlots, useVirtual, virtualizer]);
+
+  const { remaining: remainingCount, total } = streamProgress(
+    slots,
+    judgedIds,
+    skippedIds
+  );
+
+  const listContent =
+    filteredSlots.length === 0 ? (
+      <p className="mt-5 text-sm text-[var(--j-muted)]">
+        {query.trim()
+          ? "No projects match your search."
+          : filter === "remaining"
+            ? "All projects in this stream are marked judged."
+            : "Nothing to show for this filter."}
+      </p>
+    ) : useVirtual ? (
+      <div
+        ref={listRef}
+        className="j-schedule-list mt-4"
+        role="list"
+        aria-label="Schedule projects"
+      >
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const slot = filteredSlots[virtualRow.index];
+            const project = projectMap.get(slot.projectId);
+            if (!project) return null;
+
+            return (
+              <div
+                key={slot.id}
+                role="listitem"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <SessionRailRow
+                  slot={slot}
+                  project={project}
+                  activeProjectId={activeProjectId}
+                  judgedIds={judgedIds}
+                  skippedIds={skippedIds}
+                  onSelect={onSelect}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ) : (
+      <ol className="j-schedule-list mt-4">
+        {filteredSlots.map((slot) => {
+          const project = projectMap.get(slot.projectId);
+          if (!project) return null;
+
+          return (
+            <li key={slot.id}>
+              <SessionRailRow
+                slot={slot}
+                project={project}
+                activeProjectId={activeProjectId}
+                judgedIds={judgedIds}
+                skippedIds={skippedIds}
+                onSelect={onSelect}
+              />
+            </li>
+          );
+        })}
+      </ol>
+    );
 
   const inner = (
     <>
@@ -74,9 +241,15 @@ export function SessionRail({
         <>
           <h2 className="j-schedule-title">Your schedule</h2>
           <p className="mt-1 text-sm text-[var(--j-muted)]">
-            {remainingCount} remaining · {slots.length} total in this stream
+            {remainingCount} remaining · {total} total in this stream
           </p>
         </>
+      )}
+
+      {scheduleApproximate && (
+        <p className="j-schedule-approx mt-3 text-xs leading-relaxed text-[var(--j-muted)]">
+          Times are approximate for ordering — use project order and search, not the clock.
+        </p>
       )}
 
       <div className={embedded ? "mt-0" : "relative mt-4"}>
@@ -107,71 +280,7 @@ export function SessionRail({
         ))}
       </div>
 
-      {filteredSlots.length === 0 ? (
-        <p className="mt-5 text-sm text-[var(--j-muted)]">
-          {query.trim()
-            ? "No projects match your search."
-            : filter === "remaining"
-              ? "All projects in this stream are marked judged."
-              : "Nothing to show for this filter."}
-        </p>
-      ) : (
-        <ol className="j-schedule-list mt-4">
-          {filteredSlots.map((slot) => {
-            const project = projectMap.get(slot.projectId);
-            if (!project) return null;
-
-            const isActive = slot.projectId === activeProjectId;
-            const isJudged = judgedIds.has(slot.projectId);
-            const isSkipped = skippedIds.has(slot.projectId);
-            const isLive = slot.status === "live" && !isJudged;
-            const room = resolveSlotRoom(slot.room, project.room);
-
-            return (
-              <li key={slot.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(slot.projectId)}
-                  aria-current={isActive ? "true" : undefined}
-                  className={cn("j-schedule-row", isLive && "j-schedule-row--live")}
-                >
-                  <span className="j-schedule-time">{formatSlotTime(slot.startTime)}</span>
-                  <span className="min-w-0 text-left">
-                    <span
-                      className={cn(
-                        "j-schedule-name block truncate",
-                        isJudged && "text-[var(--j-faint)] line-through"
-                      )}
-                    >
-                      {project.name}
-                    </span>
-                    {room ? (
-                      <span className="j-schedule-room block truncate">{room}</span>
-                    ) : (
-                      <span className="j-schedule-room block text-[var(--j-faint)]">
-                        Table pending
-                      </span>
-                    )}
-                  </span>
-                  <span className="shrink-0">
-                    {isJudged ? (
-                      <Check className="size-5 text-[var(--j-faint)]" aria-label="Judged" />
-                    ) : isLive ? (
-                      <span className="text-sm font-bold uppercase tracking-wide text-[var(--j-live)]">
-                        Now
-                      </span>
-                    ) : isSkipped ? (
-                      <span className="text-xs font-medium text-[var(--j-muted)]">Skipped</span>
-                    ) : slot.status === "upcoming" ? (
-                      <span className="text-sm font-medium text-[var(--j-faint)]">Next</span>
-                    ) : null}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+      {listContent}
 
       {filteredSlots.length > 0 && filteredSlots.length < slots.length && (
         <p className="mt-3 text-xs text-[var(--j-faint)]">

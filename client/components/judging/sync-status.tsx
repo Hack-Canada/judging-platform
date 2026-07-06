@@ -1,10 +1,12 @@
 "use client";
 
+import type { PendingSummary } from "@/lib/judging/offline-queue";
 import type { SyncStatus } from "@/lib/judging/use-judging-sync";
 
 type SyncStatusProps = {
   status: SyncStatus;
   pendingCount: number;
+  pendingSummary?: PendingSummary;
   scheduleOffsetLabel?: string | null;
 };
 
@@ -15,9 +17,24 @@ const LABELS: Record<SyncStatus, string> = {
   syncing: "Syncing…",
 };
 
+function pendingTooltip(count: number, summary?: PendingSummary): string {
+  if (!summary || summary.total !== count) {
+    return `${count} item${count === 1 ? "" : "s"} waiting to sync`;
+  }
+  const parts: string[] = [];
+  if (summary.marks > 0) {
+    parts.push(`${summary.marks} mark${summary.marks === 1 ? "" : "s"}`);
+  }
+  if (summary.notesOnly > 0) {
+    parts.push(`${summary.notesOnly} note${summary.notesOnly === 1 ? "" : "s"}`);
+  }
+  return parts.length ? `${parts.join(", ")} waiting to sync` : `${count} items waiting to sync`;
+}
+
 export function SyncStatusBadge({
   status,
   pendingCount,
+  pendingSummary,
   scheduleOffsetLabel,
 }: SyncStatusProps) {
   return (
@@ -28,9 +45,7 @@ export function SyncStatusBadge({
       <span
         className={`j-sync-badge j-sync-badge--${status}`}
         title={
-          pendingCount > 0
-            ? `${pendingCount} judgment${pendingCount === 1 ? "" : "s"} waiting to sync`
-            : LABELS[status]
+          pendingCount > 0 ? pendingTooltip(pendingCount, pendingSummary) : LABELS[status]
         }
       >
         {status === "pending" || status === "offline"

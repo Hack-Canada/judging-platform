@@ -1,4 +1,4 @@
-import type { SlotStatus } from "./types";
+import type { JudgingProject, SlotStatus } from "./types";
 
 const TIME_OPTS: Intl.DateTimeFormatOptions = {
   hour: "numeric",
@@ -164,4 +164,13 @@ export function resolveSlotRoom(
   if (isValidRoom(slotRoom)) return slotRoom!.trim();
   if (isValidRoom(projectRoom)) return projectRoom!.trim();
   return null;
+}
+
+/** Full team line under project title — all members, not submitter first name only. */
+export function formatTeamLabel(project: JudgingProject): string {
+  const members = project.members.map((m) => m.trim()).filter(Boolean);
+  if (members.length > 0) return members.join(", ");
+  const team = project.team.trim();
+  if (team) return team;
+  return "Independent team";
 }

@@ -23,6 +23,7 @@ type ScheduleDockProps = {
   skippedCount?: number;
   totalCount: number;
   onSelect: (projectId: string) => void;
+  scheduleApproximate?: boolean;
 };
 
 export function ScheduleDock({
@@ -35,6 +36,7 @@ export function ScheduleDock({
   skippedCount = 0,
   totalCount,
   onSelect,
+  scheduleApproximate = false,
 }: ScheduleDockProps) {
   const [open, setOpen] = useState(false);
   const activeProject = projects.find((p) => p.id === activeProjectId);
@@ -48,8 +50,7 @@ export function ScheduleDock({
       <DrawerTrigger asChild>
         <button type="button" className="j-schedule-dock lg:hidden" aria-label="Open schedule">
           <span className="j-schedule-dock-progress" aria-hidden>
-            {judgedCount}
-            {skippedCount > 0 ? `+${skippedCount}s` : ""}/{totalCount}
+            {judgedCount}/{totalCount}
           </span>
           <span className="min-w-0 flex-1 text-left">
             <span className="block truncate text-sm font-semibold text-[var(--j-ink)]">
@@ -84,6 +85,7 @@ export function ScheduleDock({
               setOpen(false);
             }}
             embedded
+            scheduleApproximate={scheduleApproximate}
           />
         </div>
       </DrawerContent>

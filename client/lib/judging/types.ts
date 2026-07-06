@@ -43,7 +43,3 @@ export type JudgingStorage = {
 };
 
 export type ScheduleFilter = "remaining" | "all" | "judged" | "skipped";
-
-export type DataSource = "database" | "mock";
-
-export type MockReason = "no_env" | "empty" | "error" | "demo";

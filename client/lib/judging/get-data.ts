@@ -1,18 +1,10 @@
 import { getSql } from "@/lib/db";
-import { snapToFiveMinutes } from "./format";
 import {
-  generateScaleMockSlots,
-  MOCK_PROJECTS,
-  MOCK_SLOTS,
-  MOCK_STREAMS,
-} from "./mock-data";
-import type {
-  DataSource,
-  JudgingProject,
-  JudgingSlot,
-  JudgingStream,
-  MockReason,
-} from "./types";
+  generateBoundedSyntheticSlots,
+  readSlotGenerationConfig,
+} from "./slot-generation";
+import { buildStreamsFromProjects, filterProjectsByAllowList } from "./streams";
+import type { JudgingProject, JudgingSlot, JudgingStream } from "./types";
 
 type ProjectRow = {
   id: string;
@@ -22,30 +14,6 @@ type ProjectRow = {
   devpost_link: string | null;
   submitter_name: string | null;
 };
-
-function slugifyTrack(track: string): string {
-  return track.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
-function streamIdFromProject(project: JudgingProject): string {
-  const primary = project.tracks[0];
-  return primary ? slugifyTrack(primary) : "general";
-}
-
-function buildStreamsFromProjects(projects: JudgingProject[]): JudgingStream[] {
-  const byId = new Map<string, JudgingStream>();
-  for (const project of projects) {
-    const id = streamIdFromProject(project);
-    if (!byId.has(id)) {
-      byId.set(id, {
-        id,
-        name: project.tracks[0] ?? "General",
-        shortName: project.tracks[0] ?? "General",
-      });
-    }
-  }
-  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
 
 function mapProject(row: ProjectRow): JudgingProject {
   return {
@@ -60,99 +28,70 @@ function mapProject(row: ProjectRow): JudgingProject {
   };
 }
 
-function mockDataset(): {
-  projects: JudgingProject[];
-  slots: JudgingSlot[];
-} {
-  if (process.env.JUDGING_SCALE_DEMO === "1") {
-    const scale = generateScaleMockSlots("stream-maple", 40, new Date());
-    return {
-      projects: [...MOCK_PROJECTS, ...scale.projects],
-      slots: [...MOCK_SLOTS, ...scale.slots],
-    };
+export class JudgingLoadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "JudgingLoadError";
   }
-  return { projects: MOCK_PROJECTS, slots: MOCK_SLOTS };
 }
 
-export async function getJudgingProjects(): Promise<{
+export type JudgingDataset = {
   projects: JudgingProject[];
   streams: JudgingStream[];
-  source: DataSource;
-  mockReason?: MockReason;
-}> {
+  slots: JudgingSlot[];
+  /** Synthetic times compressed to fit judging window; order > clock. */
+  scheduleApproximate: boolean;
+};
+
+export async function getJudgingDataset(options?: {
+  projectAllowList?: string[];
+}): Promise<JudgingDataset> {
+  const allowList = options?.projectAllowList;
+
   if (!process.env.DATABASE_URL) {
-    const mock = mockDataset();
-    return {
-      projects: mock.projects,
-      streams: MOCK_STREAMS,
-      source: "mock",
-      mockReason: "no_env",
-    };
+    throw new JudgingLoadError(
+      "DATABASE_URL is not set. Add your Neon connection string to client/.env.local."
+    );
   }
 
+  let rows: ProjectRow[];
   try {
     const sql = getSql();
-    const rows = await sql`
+    rows = (await sql`
       SELECT id, project_name, tracks, members, devpost_link, submitter_name
       FROM projects
       ORDER BY project_name
-    `;
-
-    if (!rows.length) {
-      const mock = mockDataset();
-      return {
-        projects: mock.projects,
-        streams: MOCK_STREAMS,
-        source: "mock",
-        mockReason: "empty",
-      };
-    }
-
-    const projects = (rows as ProjectRow[]).map(mapProject);
-    return {
-      projects,
-      streams: buildStreamsFromProjects(projects),
-      source: "database",
-    };
-  } catch {
-    const mock = mockDataset();
-    return {
-      projects: mock.projects,
-      streams: MOCK_STREAMS,
-      source: "mock",
-      mockReason: "error",
-    };
-  }
-}
-
-export function getJudgingSlots(
-  projects: JudgingProject[],
-  source: DataSource
-): JudgingSlot[] {
-  if (source === "mock") {
-    return mockDataset().slots;
+    `) as ProjectRow[];
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new JudgingLoadError(`Could not load projects from the database: ${detail}`);
   }
 
-  const base = snapToFiveMinutes(new Date());
-  const slotsByStream = new Map<string, number>();
+  if (!rows.length) {
+    throw new JudgingLoadError(
+      "No projects found in the database. Import submissions before opening the judge portal."
+    );
+  }
 
-  return projects.map((project) => {
-    const streamId = streamIdFromProject(project);
-    const indexInStream = slotsByStream.get(streamId) ?? 0;
-    slotsByStream.set(streamId, indexInStream + 1);
+  const projects = filterProjectsByAllowList(rows.map(mapProject), allowList);
 
-    const start = new Date(base.getTime() + indexInStream * 25 * 60_000);
-    const end = new Date(start.getTime() + 15 * 60_000);
+  if (!projects.length) {
+    throw new JudgingLoadError(
+      "No projects match the assignment filter. Check the ?projects= link."
+    );
+  }
 
-    return {
-      id: `slot-${project.id}`,
-      projectId: project.id,
-      streamId,
-      startTime: snapToFiveMinutes(start).toISOString(),
-      endTime: snapToFiveMinutes(end).toISOString(),
-      room: project.room,
-    };
-  });
+  const { slots, scheduleApproximate } = generateBoundedSyntheticSlots(
+    projects,
+    readSlotGenerationConfig()
+  );
+
+  return {
+    projects,
+    streams: buildStreamsFromProjects(projects),
+    slots,
+    scheduleApproximate,
+  };
 }
 
 export function pickInitialStream(
@@ -163,5 +102,16 @@ export function pickInitialStream(
   if (preferredStreamId && streams.some((s) => s.id === preferredStreamId)) {
     return preferredStreamId;
   }
+  const general = streams.find((s) => s.id === "general");
+  if (general) return general.id;
   return streams[0]?.id ?? slots[0]?.streamId ?? "general";
+}
+
+export function parseProjectAllowList(raw?: string): string[] | undefined {
+  if (!raw?.trim()) return undefined;
+  const ids = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ids.length ? ids : undefined;
 }

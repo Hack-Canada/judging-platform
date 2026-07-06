@@ -1,15 +1,25 @@
 "use client";
 
 import { useId } from "react";
+import { notesSyncHint } from "@/components/judging/judging-footer";
+import type { SyncStatus } from "@/lib/judging/use-judging-sync";
 import type { JudgingProject } from "@/lib/judging/types";
 
 type JudgeNotesPanelProps = {
   project: JudgingProject;
   notes: string;
   onChange: (notes: string) => void;
+  syncStatus?: SyncStatus;
+  pendingNotesCount?: number;
 };
 
-export function JudgeNotesPanel({ project, notes, onChange }: JudgeNotesPanelProps) {
+export function JudgeNotesPanel({
+  project,
+  notes,
+  onChange,
+  syncStatus,
+  pendingNotesCount = 0,
+}: JudgeNotesPanelProps) {
   const textareaId = useId();
 
   return (
@@ -22,7 +32,7 @@ export function JudgeNotesPanel({ project, notes, onChange }: JudgeNotesPanelPro
         Notes
       </label>
       <p className="mt-1 text-base text-[var(--j-muted)]">
-        Private notes for {project.name} — saved on this device only.
+        Private notes for {project.name} — {notesSyncHint(syncStatus, pendingNotesCount)}
       </p>
       <textarea
         id={textareaId}

@@ -1,5 +1,5 @@
 import { ArrowUpRight } from "lucide-react";
-import { getDisplayDescription, isValidRoom, resolveSlotRoom } from "@/lib/judging/format";
+import { getDisplayDescription, formatTeamLabel, isValidRoom, resolveSlotRoom } from "@/lib/judging/format";
 import type { JudgingProject, SlotStatus } from "@/lib/judging/types";
 import { LocationBoard } from "./location-board";
 import { SessionTimer } from "./session-timer";
@@ -60,14 +60,14 @@ export function ProjectHero({
               )}
               {isJudged && <span className="j-judged-pill">Judged</span>}
               {slotStatus === "upcoming" && !isJudged && (
-                <span className="text-sm font-semibold uppercase tracking-widest text-[rgb(245_243_239/0.45)]">
+                <span className="text-sm font-semibold uppercase tracking-widest j-hero-subtle">
                   Up next
                 </span>
               )}
             </div>
 
             <h1 className="j-hero-title">{project.name}</h1>
-            <p className="j-hero-team">{project.team}</p>
+            <p className="j-hero-team">{formatTeamLabel(project)}</p>
 
             {slotStartTime && slotEndTime && !notScheduled && (
               <SessionTimer
@@ -79,17 +79,15 @@ export function ProjectHero({
               />
             )}
             {notScheduled && !isJudged && (
-              <p className="text-sm font-medium text-[rgb(245_243_239/0.55)]">Not scheduled</p>
+              <p className="text-sm font-medium j-hero-muted">Not scheduled</p>
             )}
             {multipleSlots && !notScheduled && (
-              <p className="text-xs text-[rgb(245_243_239/0.4)]">Showing nearest slot</p>
+              <p className="text-xs j-hero-faint">Showing nearest slot</p>
             )}
           </div>
         </div>
         {!hasRoom && !isJudged && (
-          <p className="mt-5 text-sm text-[rgb(245_243_239/0.45)]">
-            Table not assigned yet — check with an organizer
-          </p>
+          <p className="mt-5 text-sm j-hero-subtle">Table not assigned yet</p>
         )}
       </div>
     </section>
@@ -113,7 +111,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
         <p className="text-base leading-relaxed text-[var(--j-muted)]">
           {project.members.length > 0 ? (
             <>
-              Built by <span className="font-medium text-[var(--j-ink)]">{project.team}</span>
+              Built by <span className="font-medium text-[var(--j-ink)]">{formatTeamLabel(project)}</span>
               {project.devpostUrl
                 ? " — open Devpost for the full write-up."
                 : "."}
@@ -162,7 +160,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
               href={project.devpostUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-lg font-semibold text-[var(--j-action)] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--j-action)]"
+              className="inline-flex items-center gap-2 text-lg font-semibold text-[var(--j-action)] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
             >
               Open Devpost
               <ArrowUpRight className="size-5" aria-hidden />

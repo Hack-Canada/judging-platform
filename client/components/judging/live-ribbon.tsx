@@ -27,7 +27,7 @@ export function LiveRibbon({ liveSlot, liveProject, onGoToLive }: LiveRibbonProp
 
   return (
     <div className="j-live-ribbon" role="status">
-      <p className="min-w-0 flex-1 text-sm text-[var(--j-paper)]">
+      <p className="min-w-0 flex-1 text-sm text-primary-foreground">
         <span className="font-semibold">Live now:</span>{" "}
         <span className="font-medium">{liveProject.name}</span>
         {remaining.overtime ? (

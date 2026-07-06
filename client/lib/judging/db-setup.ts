@@ -1,6 +1,70 @@
 import { getSql } from "@/lib/db";
-
+import type { NeonQueryFunction } from "@neondatabase/serverless";
 let ensured = false;
+
+async function migrateLegacySyncLog(sql: NeonQueryFunction<false, false>) {
+  const tables = await sql`
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name IN ('judging_sync_log', 'judging_sync_log_legacy_client_id')
+  `;
+  const tableNames = new Set(tables.map((r) => r.table_name as string));
+  if (!tableNames.has("judging_sync_log")) return;
+
+  const columns = await sql`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'judging_sync_log'
+  `;
+  const colNames = new Set(columns.map((r) => r.column_name as string));
+
+  // v1 audit table used client_id PK; v2 uses judge_id + append-only BIGSERIAL id.
+  if (colNames.has("client_id") && !colNames.has("judge_id")) {
+    if (tableNames.has("judging_sync_log_legacy_client_id")) {
+      await sql`DROP TABLE judging_sync_log`;
+    } else {
+      await sql`ALTER TABLE judging_sync_log RENAME TO judging_sync_log_legacy_client_id`;
+    }
+  }
+}
+
+async function migrateJudgmentsRound(sql: NeonQueryFunction<false, false>) {
+  const columns = await sql`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'judgments'
+  `;
+  const colNames = new Set(columns.map((r) => r.column_name as string));
+  if (!colNames.has("round")) {
+    await sql`ALTER TABLE judgments ADD COLUMN round INT NOT NULL DEFAULT 1`;
+  }
+
+  const pkCols = await sql`
+    SELECT a.attname AS column_name
+    FROM pg_index i
+    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+    WHERE i.indrelid = 'public.judgments'::regclass AND i.indisprimary
+    ORDER BY array_position(i.indkey, a.attnum)
+  `;
+  const pk = pkCols.map((r) => r.column_name as string);
+  if (!pk.includes("round")) {
+    await sql`ALTER TABLE judgments DROP CONSTRAINT IF EXISTS judgments_pkey`;
+    await sql`
+      ALTER TABLE judgments ADD PRIMARY KEY (judge_id, stream_id, project_id, round)
+    `;
+  }
+
+  const logCols = await sql`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'judging_sync_log'
+  `;
+  const logColNames = new Set(logCols.map((r) => r.column_name as string));
+  if (!logColNames.has("round")) {
+    await sql`ALTER TABLE judging_sync_log ADD COLUMN round INT NOT NULL DEFAULT 1`;
+  }
+}
 
 /**
  * Sync store decision: `judgments` is the authoritative current-state read model
@@ -24,14 +88,19 @@ export async function ensureJudgingTables() {
       judge_id TEXT NOT NULL,
       stream_id TEXT NOT NULL,
       project_id TEXT NOT NULL,
+      round INT NOT NULL DEFAULT 1,
       action TEXT NOT NULL,
       skip_reason TEXT,
       notes TEXT,
       client_timestamp TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY (judge_id, stream_id, project_id)
+      PRIMARY KEY (judge_id, stream_id, project_id, round)
     )
   `;
+
+  await migrateJudgmentsRound(sql);
+
+  await migrateLegacySyncLog(sql);
 
   await sql`
     CREATE TABLE IF NOT EXISTS judging_sync_log (
@@ -39,6 +108,7 @@ export async function ensureJudgingTables() {
       judge_id TEXT NOT NULL,
       stream_id TEXT NOT NULL,
       project_id TEXT NOT NULL,
+      round INT NOT NULL DEFAULT 1,
       action TEXT NOT NULL,
       skip_reason TEXT,
       notes TEXT,
@@ -65,20 +135,6 @@ export async function getScheduleOffsetMinutes(): Promise<number> {
   } catch {
     return Number(process.env.JUDGING_SCHEDULE_OFFSET_MINUTES ?? 0) || 0;
   }
-}
-
-export async function setScheduleOffsetMinutes(minutes: number): Promise<number> {
-  await ensureJudgingTables();
-  const sql = getSql();
-  const clamped = Math.max(-180, Math.min(180, Math.round(minutes)));
-  await sql`
-    INSERT INTO judging_event_config (key, value, updated_at)
-    VALUES ('schedule', ${JSON.stringify({ scheduleOffsetMinutes: clamped })}::jsonb, now())
-    ON CONFLICT (key) DO UPDATE SET
-      value = EXCLUDED.value,
-      updated_at = now()
-  `;
-  return clamped;
 }
 
 export function getServerNowIso(): string {
