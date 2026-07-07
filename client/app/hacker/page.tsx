@@ -1,9 +1,7 @@
-import { PortalStub } from "@/components/portal-stub";
-
 export default function HackerPage() {
   return (
-    <div className="min-h-screen w-screen bg-white px-4">
-      <p className="text-neutral-color">hi</p>
-    </div>
+    <main className="h-full w-full flex-1 bg-[#E3F3FF] px-4 py-6">
+      <p className="text-neutral-color">hiwww</p>
+    </main>
   );
 }

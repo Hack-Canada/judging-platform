@@ -1,4 +1,4 @@
-import { Navbar } from "./Navbar";
+import { SideBar } from "./SideBar";
 
 export default function HackerLayout({
   children,
@@ -6,9 +6,9 @@ export default function HackerLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <>
-      <Navbar />
-      {children}
-    </>
+    <div className="flex w-screen h-screen">
+      <SideBar />
+      <div className="flex-1">{children}</div>
+    </div>
   );
 }

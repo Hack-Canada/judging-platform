@@ -247,7 +247,7 @@ export default function SubmissionPage() {
                 <span className="mt-1 text-sm text-neutral-500">
                   16:9 ratio recommended
                 </span>
-                <Input
+                <input
                   id="coverImage"
                   name="coverImage"
                   type="file"

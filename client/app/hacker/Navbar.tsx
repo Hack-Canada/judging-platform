@@ -6,6 +6,7 @@ export function Navbar() {
   const right_navbar = [
     { label: "Submission", href: "/hacker/submission" },
     { label: "Projects", href: "/hacker/projects" },
+    { label: "Schedule", href: "/hacker/schedule" },
   ] as const;
 
   return (
