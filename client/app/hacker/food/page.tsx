@@ -10,6 +10,11 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Table,
   TableBody,
   TableCell,
@@ -221,17 +226,17 @@ export default function FoodPage() {
     Record<string, boolean>
   >({});
 
-  function toggleAllergens(key: string) {
+  function setAllergenPopupOpen(key: string, open: boolean) {
     setExpandedAllergens((current) => ({
       ...current,
-      [key]: !current[key],
+      [key]: open,
     }));
   }
 
   return (
     <main className="h-full w-full overflow-auto bg-[#E3F3FF] p-6 text-neutral-950">
       <header className="mb-6">
-        <p className="text-sm font-semibold uppercase text-primary-color">
+        <p className="text-sm font-semibold uppercase text-black">
           Hacker logistics
         </p>
         <h1 className="text-3xl font-bold">Food Menu</h1>
@@ -262,14 +267,14 @@ export default function FoodPage() {
                       {group.label}
                     </h2>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      {group.meals.map((meal) => {
-                        const allergenKey = `${dayMenu.day}-${group.label}-${meal.name}`;
+                      {group.meals.map((meal, mealIndex) => {
+                        const allergenKey = `${dayMenu.day}-${group.label}-${meal.name}-${mealIndex}`;
                         const isExpanded =
                           expandedAllergens[allergenKey] ?? false;
 
                         return (
                           <article
-                            key={meal.name}
+                            key={allergenKey}
                             className="rounded-lg border border-neutral-200 bg-neutral-50 p-4"
                           >
                             <div className="flex items-start justify-between gap-3">
@@ -281,41 +286,62 @@ export default function FoodPage() {
                                   {meal.vendor}
                                 </p>
                               </div>
-                              <Button
-                                type="button"
-                                variant={isExpanded ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => toggleAllergens(allergenKey)}
+                              <Popover
+                                open={isExpanded}
+                                onOpenChange={(open) =>
+                                  setAllergenPopupOpen(allergenKey, open)
+                                }
                               >
-                                <Info className="size-4" aria-hidden="true" />
-                                Allergens
-                              </Button>
-                            </div>
-
-                            {isExpanded ? (
-                              <div className="mt-4 border-t border-neutral-200 pt-3">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Allergen</TableHead>
-                                      <TableHead>Status</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {Object.entries(meal.allergens).map(
-                                      ([allergen, value]) => (
-                                        <TableRow key={allergen}>
-                                          <TableCell>{allergen}</TableCell>
-                                          <TableCell>
-                                            {allergenDisplay(value)}
-                                          </TableCell>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant={isExpanded ? "default" : "outline"}
+                                    size="sm"
+                                  >
+                                    <Info
+                                      className="size-4"
+                                      aria-hidden="true"
+                                    />
+                                    Allergens
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  align="end"
+                                  className="w-80 max-w-[calc(100vw-2rem)] gap-0 overflow-hidden p-0"
+                                >
+                                  <div className="border-b border-neutral-200 px-4 py-3">
+                                    <p className="font-semibold text-neutral-950">
+                                      {meal.name} allergens
+                                    </p>
+                                    <p className="text-xs text-neutral-500">
+                                      {meal.vendor}
+                                    </p>
+                                  </div>
+                                  <div className="max-h-72 overflow-y-auto px-3 pb-3">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Allergen</TableHead>
+                                          <TableHead>Status</TableHead>
                                         </TableRow>
-                                      ),
-                                    )}
-                                  </TableBody>
-                                </Table>
-                              </div>
-                            ) : null}
+                                      </TableHeader>
+                                      <TableBody>
+                                        {Object.entries(meal.allergens).map(
+                                          ([allergen, value]) => (
+                                            <TableRow key={allergen}>
+                                              <TableCell>{allergen}</TableCell>
+                                              <TableCell>
+                                                {allergenDisplay(value)}
+                                              </TableCell>
+                                            </TableRow>
+                                          ),
+                                        )}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
                           </article>
                         );
                       })}
