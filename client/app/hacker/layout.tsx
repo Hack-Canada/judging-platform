@@ -6,9 +6,9 @@ export default function HackerLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="flex w-screen h-screen">
+    <div className="flex h-screen w-screen flex-col overflow-hidden md:flex-row">
       <SideBar />
-      <div className="flex-1">{children}</div>
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div>
     </div>
   );
 }

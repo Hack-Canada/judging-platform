@@ -2,19 +2,22 @@ import Link from "next/link";
 
 const sidebarLinks = [
   { label: "Dashboard", href: "/hacker" },
+  { label: "Schedule", href: "/hacker/schedule" },
+  { label: "Food", href: "/hacker/food" },
+  { label: "Location", href: "/hacker/location" },
   { label: "Submission", href: "/hacker/submission" },
   { label: "Projects", href: "/hacker/projects" },
 ] as const;
 
 export function SideBar() {
   return (
-    <div className="flex h-screen flex-col bg-[#0099CC] p-4 w-64">
-      <div className="border-b border-white/25 pb-6">
+    <aside className="flex w-full shrink-0 flex-col bg-[#0099CC] p-4 md:h-screen md:w-64">
+      <div className="border-b border-white/25 pb-4 md:pb-6">
         <p className="text-lg font-semibold">HackCanada</p>
         <p className="text-sm text-white/80">Hacker Portal</p>
       </div>
 
-      <nav className="mt-6 flex flex-1 flex-col gap-2">
+      <nav className="mt-4 flex flex-row flex-wrap gap-2 md:mt-6 md:flex-1 md:flex-col">
         {sidebarLinks.map((link) => (
           <Link
             key={link.href}
@@ -26,9 +29,9 @@ export function SideBar() {
         ))}
       </nav>
 
-      <div className="border-t border-white/25 pt-4 text-sm text-white/75">
+      <div className="mt-4 hidden border-t border-white/25 pt-4 text-sm text-white/75 md:block">
         Need help?
       </div>
-    </div>
+    </aside>
   );
 }
