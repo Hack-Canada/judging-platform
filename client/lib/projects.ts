@@ -172,6 +172,7 @@ function scoreProjectTable(table: DatabaseTable) {
     return 0;
   }
 
+  if (tableName === "project_submissions_test") score += 250;
   if (tableName === "projects") score += 100;
   if (tableName === "submissions") score += 90;
   if (tableName.includes("project")) score += 60;
@@ -181,9 +182,13 @@ function scoreProjectTable(table: DatabaseTable) {
   if (columns.has("project_name")) score += 50;
   if (columns.has("project_title")) score += 40;
   if (columns.has("devpost_link")) score += 35;
+  if (columns.has("devpost_url")) score += 35;
+  if (columns.has("git_repo")) score += 35;
   if (columns.has("team_name")) score += 25;
   if (columns.has("members")) score += 20;
+  if (columns.has("team_members")) score += 20;
   if (columns.has("tracks")) score += 15;
+  if (columns.has("award_categories")) score += 15;
 
   return score;
 }
@@ -212,9 +217,18 @@ function normalizeProject(row: Record<string, unknown>, index: number): Project 
     project_name: projectName?.value ?? `Project ${index + 1}`,
     team_name: firstString(row, ["team_name", "team", "teamName"])?.value ?? null,
     members: toStringArray(row.members ?? row.member_names ?? row.team_members),
-    tracks: toStringArray(row.tracks ?? row.track ?? row.category),
+    tracks: toStringArray(
+      row.tracks ?? row.track ?? row.category ?? row.award_categories
+    ),
     devpost_link:
-      firstString(row, ["devpost_link", "devpost_url", "demo_url", "url", "link"])?.value ??
+      firstString(row, [
+        "devpost_link",
+        "devpost_url",
+        "demo_url",
+        "live_post_demo",
+        "url",
+        "link",
+      ])?.value ??
       null,
     submitted_at:
       firstString(row, ["submitted_at", "submission_date", "created_at", "updated_at"])?.value ??

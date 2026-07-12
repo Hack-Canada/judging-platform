@@ -9,6 +9,7 @@ import {
   Trophy,
   Youtube,
 } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { getSql } from "@/lib/db";
 
 const linkFields = [
   {
@@ -63,6 +65,109 @@ const categoryOptions = [
   "Social Impact",
   "Beginner",
 ] as const;
+
+function optionalText(formData: FormData, key: string) {
+  const value = formData.get(key);
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function requiredText(formData: FormData, key: string, label: string) {
+  const value = optionalText(formData, key);
+  if (!value) {
+    throw new Error(`${label} is required.`);
+  }
+
+  return value;
+}
+
+async function submitProject(formData: FormData) {
+  "use server";
+
+  const projectName = requiredText(formData, "projectName", "Project name");
+  const elevatorPitch = optionalText(formData, "tagline");
+  const fullDescription = requiredText(
+    formData,
+    "description",
+    "Full description"
+  );
+  const builtWith = requiredText(formData, "builtWith", "Built with");
+  const teamMembers = requiredText(formData, "teamMembers", "Team members");
+  const gitRepo = requiredText(formData, "githubLink", "Git repository");
+  const livePostDemo = optionalText(formData, "demoLink");
+  const devpostUrl = optionalText(formData, "devpostLink");
+  const youtubeDemo = optionalText(formData, "youtubeLink");
+  const awardCategories = formData
+    .getAll("projectCategories")
+    .map((category) => (typeof category === "string" ? category.trim() : ""))
+    .filter(Boolean);
+
+  const sql = getSql();
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS project_submissions_test (
+      id bigserial PRIMARY KEY,
+      project_name text NOT NULL,
+      elevator_pitch text,
+      full_description text NOT NULL,
+      built_with text NOT NULL,
+      team_members text NOT NULL,
+      git_repo text NOT NULL,
+      live_post_demo text,
+      devpost_url text,
+      youtube_demo text,
+      award_categories jsonb NOT NULL DEFAULT '[]'::jsonb,
+      submitted_at timestamptz NOT NULL DEFAULT now()
+    )
+  `;
+
+  await sql`
+    ALTER TABLE project_submissions_test
+      ADD COLUMN IF NOT EXISTS id bigserial,
+      ADD COLUMN IF NOT EXISTS project_name text,
+      ADD COLUMN IF NOT EXISTS elevator_pitch text,
+      ADD COLUMN IF NOT EXISTS full_description text,
+      ADD COLUMN IF NOT EXISTS built_with text,
+      ADD COLUMN IF NOT EXISTS team_members text,
+      ADD COLUMN IF NOT EXISTS git_repo text,
+      ADD COLUMN IF NOT EXISTS live_post_demo text,
+      ADD COLUMN IF NOT EXISTS devpost_url text,
+      ADD COLUMN IF NOT EXISTS youtube_demo text,
+      ADD COLUMN IF NOT EXISTS award_categories jsonb NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS submitted_at timestamptz NOT NULL DEFAULT now()
+  `;
+
+  await sql`
+    INSERT INTO project_submissions_test (
+      project_name,
+      elevator_pitch,
+      full_description,
+      built_with,
+      team_members,
+      git_repo,
+      live_post_demo,
+      devpost_url,
+      youtube_demo,
+      award_categories
+    )
+    VALUES (
+      ${projectName},
+      ${elevatorPitch},
+      ${fullDescription},
+      ${builtWith},
+      ${teamMembers},
+      ${gitRepo},
+      ${livePostDemo},
+      ${devpostUrl},
+      ${youtubeDemo},
+      ${JSON.stringify(awardCategories)}::jsonb
+    )
+  `;
+
+  redirect("/hacker/projects");
+}
 
 function RequiredMark() {
   return <span className="text-primary">*</span>;
@@ -140,7 +245,9 @@ export default function SubmissionPage() {
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
               <div className="rounded-md bg-white/12 px-3 py-2">
                 <p className="font-bold">Required</p>
-                <p className="text-primary-foreground/80">Project, GitHub</p>
+                <p className="text-primary-foreground/80">
+                  Project, team, GitHub
+                </p>
               </div>
               <div className="rounded-md bg-white/12 px-3 py-2">
                 <p className="font-bold">Optional</p>
@@ -154,7 +261,10 @@ export default function SubmissionPage() {
           </div>
         </header>
 
-        <form className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <form
+          action={submitProject}
+          className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]"
+        >
           <div className="flex min-w-0 flex-col gap-6">
             <Card className="gap-0 overflow-hidden rounded-lg border-primary/10 bg-white py-0 shadow-sm">
               <SectionTitle
@@ -203,10 +313,11 @@ export default function SubmissionPage() {
                   />
                 </FormField>
 
-                <FormField id="teamMembers" label="Team Members">
+                <FormField id="teamMembers" label="Team Members" required>
                   <Textarea
                     id="teamMembers"
                     name="teamMembers"
+                    required
                     rows={4}
                     placeholder="List each team member on a new line."
                     className="min-h-28 resize-y bg-white"
