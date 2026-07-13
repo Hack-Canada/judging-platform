@@ -22,7 +22,7 @@ export function ShiftCard({
     <Card
       size="sm"
       className={cn(
-        "cursor-pointer rounded-md transition-colors hover:bg-muted/50",
+        "cursor-pointer rounded-md border border-foreground/15 bg-card shadow-sm transition-colors hover:bg-muted/50",
         current && "ring-primary/40"
       )}
       onClick={() => onClick(shift)}

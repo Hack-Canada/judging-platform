@@ -5,7 +5,7 @@ export default async function EventSchedulePage() {
   const events = await getPublicEvents();
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-muted/40 p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-muted p-4">
       <div>
         <h1 className="text-2xl text-blue-700 font-semibold">Event Schedule</h1>
         <p className="text-sm text-muted-foreground">

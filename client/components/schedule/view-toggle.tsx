@@ -26,8 +26,12 @@ export function ViewToggle({
           key={option.value}
           type="button"
           size="default"
-          variant={view === option.value ? "default" : "ghost"}
-          className="capitalize"
+          variant={view === option.value ? "default" : "outline"}
+          className={
+            view === option.value
+              ? "capitalize"
+              : "capitalize border-transparent text-blue-700 hover:text-blue-700"
+          }
           onClick={() => onChange(option.value)}
         >
           <HugeiconsIcon icon={option.icon} size={16} strokeWidth={2} />

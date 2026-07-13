@@ -20,7 +20,7 @@ export function VolunteerDashboard({ shifts }: { shifts: Shift[] }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <DashboardHeader />
-      <div className="min-h-0 flex-1 overflow-y-auto bg-muted/40 p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-muted p-4">
         <div className="flex justify-end">
           <ViewToggle view={view} onChange={setView} />
         </div>

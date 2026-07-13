@@ -26,7 +26,13 @@ export function EventListItem({
   const isAssigned = assignments.length > 0;
 
   return (
-    <Card size="sm" className={cn("rounded-md", isAssigned && "ring-primary/40")}>
+    <Card
+      size="sm"
+      className={cn(
+        "rounded-md border border-foreground/15 bg-card shadow-sm transition-colors hover:bg-muted/40",
+        isAssigned && "ring-primary/40"
+      )}
+    >
       <CardHeader>
         <div className="flex items-center gap-2">
           <CardTitle>{title}</CardTitle>
