@@ -112,7 +112,7 @@ function DayGrid({
         className="overflow-y-auto rounded-md border bg-card"
         style={{ maxHeight: VISIBLE_HOURS * HOUR_HEIGHT }}
       >
-        <div className="flex">
+        <div className="flex pt-2.5">
           <div className="flex flex-col">
             {ALL_HOURS.map((hour) => (
               <div
@@ -135,7 +135,7 @@ function DayGrid({
             {items.map((item) => (
               <div
                 key={item.id}
-                className="absolute overflow-hidden rounded-md border border-primary/30 bg-primary/10 p-1.5 text-xs text-foreground transition-colors hover:bg-primary/20"
+                className="absolute overflow-y-auto overscroll-contain rounded-md border border-primary/30 bg-primary/10 p-1.5 text-xs text-foreground transition-colors hover:bg-primary/20"
                 style={{
                   top: item.top,
                   height: item.height,
@@ -143,8 +143,8 @@ function DayGrid({
                   width: `calc(${100 / item.columns}% - 8px)`,
                 }}
               >
-                <p className="truncate font-medium">{item.title}</p>
-                <p className="truncate">{formatEventTime(item.startTime, item.endTime)}</p>
+                <p className="wrap-break-word font-medium">{item.title}</p>
+                <p className="wrap-break-word">{formatEventTime(item.startTime, item.endTime)}</p>
               </div>
             ))}
           </div>
