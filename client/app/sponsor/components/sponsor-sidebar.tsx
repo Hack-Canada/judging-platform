@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -15,7 +14,6 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { sponsorNavItems } from "@/app/sponsor/components/nav-items";
-import hackCanadaLogo from "@/app/hackcanada.png";
 
 export function SponsorSidebar() {
   const pathname = usePathname();
@@ -23,10 +21,12 @@ export function SponsorSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <span className="flex items-center gap-2 px-2 py-1 text-lg font-semibold text-blue-700">
-          <Image src={hackCanadaLogo} alt="" width={24} height={24} />
+        <Link
+          href="/"
+          className="flex items-center gap-2 px-2 py-1 text-lg font-semibold text-blue-700"
+        >
           Hack Canada
-        </span>
+        </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

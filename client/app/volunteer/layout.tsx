@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Image from "next/image";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -16,8 +17,10 @@ export default function VolunteerLayout({
       <SidebarInset className="h-svh overflow-hidden">
         <header className="flex shrink-0 items-center gap-2 border-b p-3 md:hidden">
           <MobileNavTrigger />
-          <Image src={hackCanadaLogo} alt="" width={24} height={24} />
-          <span className="text-lg font-semibold text-blue-700">Hack Canada</span>
+          <Link href="/" className="flex items-center gap-2">
+            <Image src={hackCanadaLogo} alt="" width={24} height={24} />
+            <span className="text-lg font-semibold text-blue-700">Hack Canada</span>
+          </Link>
         </header>
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </SidebarInset>

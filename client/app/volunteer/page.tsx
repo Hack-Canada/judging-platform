@@ -1,6 +1,7 @@
 import { VolunteerDashboard } from "@/app/volunteer/components/volunteer-dashboard";
-import { mockShifts } from "@/app/volunteer/data/shifts";
+import { getDemoVolunteerShifts } from "@/db/queries";
 
-export default function VolunteerPage() {
-  return <VolunteerDashboard shifts={mockShifts} />;
+export default async function VolunteerPage() {
+  const shifts = await getDemoVolunteerShifts();
+  return <VolunteerDashboard shifts={shifts} />;
 }
