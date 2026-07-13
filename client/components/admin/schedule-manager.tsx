@@ -1,16 +1,37 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Clock, Plus, Minus, AlertTriangle, RotateCcw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Search, Clock, Plus, Minus, RotateCcw, Loader2, Trash2, CalendarPlus } from "lucide-react";
 import type { ScheduleSlot } from "@/lib/schedule";
-import { DEFAULT_ROOMS } from "@/lib/schedule";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
-// Deterministic 12-hour formatting. Avoids toLocaleTimeString, whose output
-// varies by runtime locale (e.g. "10:00 a.m." on the server vs "10:00 AM" on
-// the client) and caused a hydration mismatch.
+type ProjectOption = { id: string; name: string; track: string };
+
+// Deterministic 12-hour formatting (avoids locale-based hydration mismatch).
 function fmtTime(iso: string) {
   const d = new Date(iso);
   let h = d.getHours();
@@ -20,8 +41,16 @@ function fmtTime(iso: string) {
   return `${h}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
-// Stable per-track accent so the grid reads at a glance. Hash the track name
-// into a fixed palette (works in light + dark).
+// ISO <-> <input type="datetime-local"> value (local time, no seconds/zone).
+function toLocalInput(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromLocalInput(value: string) {
+  return new Date(value).toISOString();
+}
+
 const TRACK_ACCENTS = [
   "bg-blue-500/10 text-blue-700 dark:text-blue-300 ring-blue-500/20",
   "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-emerald-500/20",
@@ -40,21 +69,53 @@ function trackAccent(track: string) {
 
 type Row = { key: string; startAt: string; endAt: string; byRoom: Record<string, ScheduleSlot> };
 
-export function ScheduleManager({ initialSlots }: { initialSlots: ScheduleSlot[] }) {
+type EditState = {
+  id: string;
+  projectName: string;
+  room: string;
+  track: string;
+  localTime: string;
+  durationMinutes: number;
+};
+
+type AddState = {
+  projectId: string;
+  room: string;
+  localTime: string;
+  durationMinutes: number;
+};
+
+export function ScheduleManager({
+  initialSlots,
+  rooms: roomProp,
+  projects,
+}: {
+  initialSlots: ScheduleSlot[];
+  rooms: string[];
+  projects: ProjectOption[];
+}) {
+  const router = useRouter();
   const [slots, setSlots] = useState(initialSlots);
   const [query, setQuery] = useState("");
   const [globalDelay, setGlobalDelay] = useState(0);
-  const [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<EditState | null>(null);
+  const [deleting, setDeleting] = useState<ScheduleSlot | null>(null);
+  const [adding, setAdding] = useState<AddState | null>(null);
 
-  // Rooms present in the data (fall back to the defaults for column order).
   const rooms = useMemo(() => {
     const present = new Set(slots.map((s) => s.room));
-    const ordered = DEFAULT_ROOMS.filter((r) => present.has(r));
-    const extra = [...present].filter((r) => !DEFAULT_ROOMS.includes(r)).sort();
+    const ordered = roomProp.filter((r) => present.has(r));
+    const extra = [...present].filter((r) => !roomProp.includes(r)).sort();
     return [...ordered, ...extra];
-  }, [slots]);
+  }, [slots, roomProp]);
 
-  // Pivot the flat slot list into grid rows keyed by time frame.
+  // All room options for the edit/add dialogs (defaults + any already in use).
+  const roomOptions = useMemo(() => {
+    const set = new Set([...roomProp, ...slots.map((s) => s.room)]);
+    return [...set];
+  }, [roomProp, slots]);
+
   const rowsData = useMemo<Row[]>(() => {
     const map = new Map<string, Row>();
     for (const s of slots) {
@@ -62,12 +123,7 @@ export function ScheduleManager({ initialSlots }: { initialSlots: ScheduleSlot[]
       const key = s.scheduledAt;
       if (!map.has(key)) {
         const end = new Date(start.getTime() + s.durationMinutes * 60_000);
-        map.set(key, {
-          key,
-          startAt: start.toISOString(),
-          endAt: end.toISOString(),
-          byRoom: {},
-        });
+        map.set(key, { key, startAt: start.toISOString(), endAt: end.toISOString(), byRoom: {} });
       }
       map.get(key)!.byRoom[s.room] = s;
     }
@@ -78,58 +134,150 @@ export function ScheduleManager({ initialSlots }: { initialSlots: ScheduleSlot[]
 
   const q = query.trim().toLowerCase();
   const matches = (s: ScheduleSlot | undefined) =>
-    !!s &&
-    !!q &&
-    (s.projectName.toLowerCase().includes(q) || s.track.toLowerCase().includes(q));
+    !!s && !!q && (s.projectName.toLowerCase().includes(q) || s.track.toLowerCase().includes(q));
   const matchCount = q ? slots.filter((s) => matches(s)).length : 0;
 
-  function shiftSlot(id: string, minutes: number) {
-    setSlots((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              scheduledAt: new Date(
-                new Date(s.scheduledAt).getTime() + minutes * 60_000
-              ).toISOString(),
-            }
-          : s
-      )
-    );
-    setDirty(true);
+  async function nudge(slot: ScheduleSlot, minutes: number) {
+    const scheduledAt = new Date(new Date(slot.scheduledAt).getTime() + minutes * 60_000).toISOString();
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/schedule/${slot.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduledAt }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
+      setSlots((prev) => prev.map((s) => (s.id === data.slot.id ? data.slot : s)));
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function applyGlobalDelay() {
+  async function applyGlobalDelay() {
     if (globalDelay === 0) return;
-    setSlots((prev) =>
-      prev.map((s) => ({
-        ...s,
-        scheduledAt: new Date(
-          new Date(s.scheduledAt).getTime() + globalDelay * 60_000
-        ).toISOString(),
-      }))
-    );
-    setDirty(true);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/schedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delayMinutes: globalDelay }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Delay failed");
+      setSlots((prev) =>
+        prev.map((s) => ({
+          ...s,
+          scheduledAt: new Date(new Date(s.scheduledAt).getTime() + globalDelay * 60_000).toISOString(),
+        }))
+      );
+      toast.success(`Delayed all pitches by ${globalDelay} min`);
+      setGlobalDelay(0);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delay failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function reset() {
-    setSlots(initialSlots);
-    setGlobalDelay(0);
-    setDirty(false);
+  async function saveEdit() {
+    if (!editing) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/schedule/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          room: editing.room,
+          track: editing.track,
+          scheduledAt: fromLocalInput(editing.localTime),
+          durationMinutes: editing.durationMinutes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
+      setSlots((prev) => prev.map((s) => (s.id === data.slot.id ? data.slot : s)));
+      setEditing(null);
+      toast.success("Pitch updated");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/schedule/${deleting.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Delete failed");
+      setSlots((prev) => prev.filter((s) => s.id !== deleting.id));
+      toast.success(`Removed “${deleting.projectName}”`);
+      setDeleting(null);
+      setEditing(null);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addSlot() {
+    if (!adding) return;
+    if (!adding.projectId) {
+      toast.error("Pick a project.");
+      return;
+    }
+    const project = projects.find((p) => p.id === adding.projectId);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: adding.projectId,
+          room: adding.room,
+          track: project?.track ?? null,
+          scheduledAt: fromLocalInput(adding.localTime),
+          durationMinutes: adding.durationMinutes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Add failed");
+      setSlots((prev) => [...prev, data.slot]);
+      setAdding(null);
+      toast.success(`Added “${data.slot.projectName}”`);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Add failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openAdd() {
+    const last = slots.reduce(
+      (max, s) => Math.max(max, new Date(s.scheduledAt).getTime()),
+      Date.now()
+    );
+    setAdding({
+      projectId: "",
+      room: roomOptions[0] ?? "Room 101",
+      localTime: toLocalInput(new Date(last + 5 * 60_000).toISOString()),
+      durationMinutes: 5,
+    });
   }
 
   return (
     <div className="space-y-4">
-      {/* Draft banner */}
-      <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
-        <p className="text-muted-foreground">
-          <span className="font-medium text-foreground">Draft schedule.</span>{" "}
-          Generated from submissions — edits are not saved yet. Persisting needs
-          the schedule tables (see <code className="text-xs">db/schedule-schema.sql</code>).
-        </p>
-      </div>
-
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-56">
@@ -143,48 +291,37 @@ export function ScheduleManager({ initialSlots }: { initialSlots: ScheduleSlot[]
         </div>
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card px-3 py-2">
           <Clock className="size-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Delay all pitches</span>
+          <span className="text-sm font-medium">Delay all</span>
           <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-8"
-              onClick={() => setGlobalDelay((d) => Math.max(0, d - 5))}
-            >
+            <Button variant="outline" size="icon" className="size-8" onClick={() => setGlobalDelay((d) => Math.max(0, d - 5))} disabled={busy}>
               <Minus className="size-3.5" />
             </Button>
             <span className="w-16 text-center text-sm tabular-nums">{globalDelay} min</span>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-8"
-              onClick={() => setGlobalDelay((d) => d + 5)}
-            >
+            <Button variant="outline" size="icon" className="size-8" onClick={() => setGlobalDelay((d) => d + 5)} disabled={busy}>
               <Plus className="size-3.5" />
             </Button>
           </div>
-          <Button size="sm" onClick={applyGlobalDelay} disabled={globalDelay === 0}>
+          <Button size="sm" onClick={applyGlobalDelay} disabled={globalDelay === 0 || busy}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
             Apply
           </Button>
-          {dirty && (
-            <Button size="sm" variant="ghost" onClick={reset}>
-              <RotateCcw className="size-3.5" /> Reset
-            </Button>
-          )}
         </div>
+        <Button size="sm" onClick={openAdd} disabled={busy}>
+          <CalendarPlus className="size-4" /> Add pitch
+        </Button>
       </div>
 
       <p className="text-sm text-muted-foreground">
         {rowsData.length} time slots · {rooms.length} rooms · {slots.length} pitches
         {q && (
           <>
-            {" "}
-            · <span className="font-medium text-foreground">{matchCount}</span> match “{query}”
+            {" "}· <span className="font-medium text-foreground">{matchCount}</span> match “{query}”
           </>
         )}
+        <span className="ml-1 text-emerald-600 dark:text-emerald-400">· saved to DB</span>
       </p>
 
-      {/* Grid: rows = time frames, columns = rooms, cells = project + track */}
+      {/* Grid */}
       <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -193,10 +330,7 @@ export function ScheduleManager({ initialSlots }: { initialSlots: ScheduleSlot[]
                 Time
               </th>
               {rooms.map((r) => (
-                <th
-                  key={r}
-                  className="min-w-48 px-3 py-2.5 text-left font-medium text-muted-foreground"
-                >
+                <th key={r} className="min-w-48 px-3 py-2.5 text-left font-medium text-muted-foreground">
                   {r}
                 </th>
               ))}
@@ -207,9 +341,7 @@ export function ScheduleManager({ initialSlots }: { initialSlots: ScheduleSlot[]
               <tr key={row.key} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="sticky left-0 z-10 whitespace-nowrap bg-card px-3 py-2 align-top font-medium tabular-nums">
                   <div>{fmtTime(row.startAt)}</div>
-                  <div className="text-xs font-normal text-muted-foreground">
-                    – {fmtTime(row.endAt)}
-                  </div>
+                  <div className="text-xs font-normal text-muted-foreground">– {fmtTime(row.endAt)}</div>
                 </td>
                 {rooms.map((r) => {
                   const s = row.byRoom[r];
@@ -220,30 +352,37 @@ export function ScheduleManager({ initialSlots }: { initialSlots: ScheduleSlot[]
                       {s ? (
                         <div
                           className={cn(
-                            "group relative rounded-md p-2.5 ring-1 transition",
+                            "group relative cursor-pointer rounded-md p-2.5 ring-1 transition hover:ring-2 hover:ring-foreground/30",
                             trackAccent(s.track),
                             dimmed && "opacity-30",
                             hit && "ring-2 ring-foreground/40"
                           )}
+                          onClick={() =>
+                            setEditing({
+                              id: s.id,
+                              projectName: s.projectName,
+                              room: s.room,
+                              track: s.track,
+                              localTime: toLocalInput(s.scheduledAt),
+                              durationMinutes: s.durationMinutes,
+                            })
+                          }
                         >
-                          <div className="pr-10 font-medium leading-snug text-foreground">
-                            {s.projectName}
-                          </div>
-                          <div className="mt-1 text-xs font-medium opacity-90">
-                            {s.track}
-                          </div>
-                          {/* Per-pitch nudge, appears on hover */}
+                          <div className="pr-10 font-medium leading-snug text-foreground">{s.projectName}</div>
+                          <div className="mt-1 text-xs font-medium opacity-90">{s.track}</div>
                           <div className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
                             <button
-                              onClick={() => shiftSlot(s.id, -5)}
+                              onClick={(e) => { e.stopPropagation(); nudge(s, -5); }}
                               title="5 min earlier"
+                              disabled={busy}
                               className="grid size-5 place-items-center rounded bg-background/80 text-foreground hover:bg-background"
                             >
                               <Minus className="size-3" />
                             </button>
                             <button
-                              onClick={() => shiftSlot(s.id, 5)}
+                              onClick={(e) => { e.stopPropagation(); nudge(s, 5); }}
                               title="5 min later"
+                              disabled={busy}
                               className="grid size-5 place-items-center rounded bg-background/80 text-foreground hover:bg-background"
                             >
                               <Plus className="size-3" />
@@ -263,6 +402,169 @@ export function ScheduleManager({ initialSlots }: { initialSlots: ScheduleSlot[]
           </tbody>
         </table>
       </div>
+
+      {/* Edit dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="truncate">{editing?.projectName}</DialogTitle>
+            <DialogDescription>Edit this pitch — changes save to the schedule.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="grid gap-4 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="edit-room">Room</Label>
+                  <NativeSelect
+                    id="edit-room"
+                    className="w-full"
+                    value={editing.room}
+                    onChange={(e) => setEditing({ ...editing, room: e.target.value })}
+                  >
+                    {roomOptions.map((r) => (
+                      <NativeSelectOption key={r} value={r}>{r}</NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="edit-duration">Duration (min)</Label>
+                  <Input
+                    id="edit-duration"
+                    type="number"
+                    min={1}
+                    value={editing.durationMinutes}
+                    onChange={(e) => setEditing({ ...editing, durationMinutes: Number(e.target.value) || 1 })}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-time">Start time</Label>
+                <Input
+                  id="edit-time"
+                  type="datetime-local"
+                  value={editing.localTime}
+                  onChange={(e) => setEditing({ ...editing, localTime: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-track">Track</Label>
+                <Input
+                  id="edit-track"
+                  value={editing.track}
+                  onChange={(e) => setEditing({ ...editing, track: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="sm:justify-between">
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => editing && setDeleting(slots.find((s) => s.id === editing.id) ?? null)}
+              disabled={busy}
+            >
+              <Trash2 className="size-4" /> Delete
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>Cancel</Button>
+              <Button onClick={saveEdit} disabled={busy}>
+                {busy && <Loader2 className="size-4 animate-spin" />} Save
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add dialog */}
+      <Dialog open={!!adding} onOpenChange={(o) => !o && setAdding(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a pitch</DialogTitle>
+            <DialogDescription>Schedule a project into a room and time.</DialogDescription>
+          </DialogHeader>
+          {adding && (
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="add-project">Project</Label>
+                <NativeSelect
+                  id="add-project"
+                  className="w-full"
+                  value={adding.projectId}
+                  onChange={(e) => setAdding({ ...adding, projectId: e.target.value })}
+                >
+                  <NativeSelectOption value="">Select a project…</NativeSelectOption>
+                  {projects.map((p) => (
+                    <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="add-room">Room</Label>
+                  <NativeSelect
+                    id="add-room"
+                    className="w-full"
+                    value={adding.room}
+                    onChange={(e) => setAdding({ ...adding, room: e.target.value })}
+                  >
+                    {roomOptions.map((r) => (
+                      <NativeSelectOption key={r} value={r}>{r}</NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="add-duration">Duration (min)</Label>
+                  <Input
+                    id="add-duration"
+                    type="number"
+                    min={1}
+                    value={adding.durationMinutes}
+                    onChange={(e) => setAdding({ ...adding, durationMinutes: Number(e.target.value) || 1 })}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="add-time">Start time</Label>
+                <Input
+                  id="add-time"
+                  type="datetime-local"
+                  value={adding.localTime}
+                  onChange={(e) => setAdding({ ...adding, localTime: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdding(null)} disabled={busy}>Cancel</Button>
+            <Button onClick={addSlot} disabled={busy}>
+              {busy && <Loader2 className="size-4 animate-spin" />} Add pitch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm */}
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this pitch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes “{deleting?.projectName}” from the schedule. The project
+              submission itself is not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmDelete(); }}
+              disabled={busy}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {busy && <Loader2 className="size-4 animate-spin" />} Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
