@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarClock, Home } from "lucide-react";
+import { BarChart3, CalendarClock, FileText, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/admin/stats", label: "Stats", icon: BarChart3 },
   { href: "/admin/schedule", label: "Schedule", icon: CalendarClock },
+  { href: "/admin/submissions", label: "Submissions", icon: FileText },
 ] as const;
 
 export function AdminNav() {

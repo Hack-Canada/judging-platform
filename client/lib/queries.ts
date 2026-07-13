@@ -103,3 +103,41 @@ export async function getProjects(): Promise<Project[]> {
   `;
   return rows as Project[];
 }
+
+// Editable fields for a submission. Matches the `projects` table (Linus's
+// schema, db/projects.sql on linus/hacker) — id and submitted_at are not edited.
+export type ProjectUpdate = {
+  project_name: string;
+  devpost_link: string | null;
+  tracks: string[];
+  submitter_name: string | null;
+  submitter_email: string | null;
+  members: string[];
+};
+
+export async function updateProject(
+  id: string,
+  fields: ProjectUpdate
+): Promise<Project | null> {
+  const sql = getSql();
+  const rows = await sql`
+    UPDATE projects SET
+      project_name    = ${fields.project_name},
+      devpost_link    = ${fields.devpost_link},
+      tracks          = ${fields.tracks},
+      submitter_name  = ${fields.submitter_name},
+      submitter_email = ${fields.submitter_email},
+      members         = ${fields.members},
+      updated_at      = now()
+    WHERE id = ${id}
+    RETURNING id, project_name, devpost_link, tracks, submitter_name,
+              submitter_email, members, submitted_at
+  `;
+  return (rows[0] as Project) ?? null;
+}
+
+export async function deleteProject(id: string): Promise<boolean> {
+  const sql = getSql();
+  const rows = await sql`DELETE FROM projects WHERE id = ${id} RETURNING id`;
+  return rows.length > 0;
+}
