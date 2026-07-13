@@ -27,6 +27,20 @@ export type Project = {
   raw: Record<string, JsonValue>;
 };
 
+export type ProjectScheduleSlot = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  room: string;
+  roomLocation: string | null;
+  track: string | null;
+  scheduledAt: string;
+  durationMinutes: number;
+  delayMinutes: number;
+  status: string;
+  project: Project;
+};
+
 export type ProjectsResult = {
   sourceTable: DatabaseTable | null;
   availableTables: DatabaseTable[];
@@ -172,8 +186,8 @@ function scoreProjectTable(table: DatabaseTable) {
     return 0;
   }
 
-  if (tableName === "project_submissions_test") score += 250;
-  if (tableName === "projects") score += 100;
+  if (tableName === "projects") score += 300;
+  if (tableName === "project_submissions_test") score += 25;
   if (tableName === "submissions") score += 90;
   if (tableName.includes("project")) score += 60;
   if (tableName.includes("submission")) score += 50;
@@ -293,4 +307,109 @@ export async function getProjects(): Promise<ProjectsResult> {
     availableTables,
     projects: rows.map((row, index) => normalizeProject(row, index)),
   };
+}
+
+export async function getProjectScheduleSlots(
+  availableTables?: DatabaseTable[]
+): Promise<ProjectScheduleSlot[]> {
+  const sql = getSql();
+  const tables = availableTables ?? (await getDatabaseTables());
+  const scheduleSlotsTable = tables.find(
+    (table) => table.schema === "public" && table.name === "schedule_slots"
+  );
+  const hasRooms = tables.some(
+    (table) => table.schema === "public" && table.name === "rooms"
+  );
+  const hasProjects = tables.some(
+    (table) => table.schema === "public" && table.name === "projects"
+  );
+
+  if (!scheduleSlotsTable || !hasProjects) {
+    return [];
+  }
+
+  const scheduleColumns = new Set(scheduleSlotsTable.columns);
+  const hasRoomId = scheduleColumns.has("room_id");
+  const hasRoomText = scheduleColumns.has("room");
+  const hasDelayMinutes = scheduleColumns.has("delay_minutes");
+  const hasStatus = scheduleColumns.has("status");
+
+  if (!hasRoomText && (!hasRoomId || !hasRooms)) {
+    return [];
+  }
+
+  const rows =
+    hasRoomId && hasRooms
+      ? hasDelayMinutes && hasStatus
+        ? await sql`
+            SELECT
+              projects.*,
+              schedule_slots.id AS schedule_slot_id,
+              schedule_slots.project_id AS schedule_project_id,
+              rooms.name AS schedule_room_name,
+              rooms.location AS schedule_room_location,
+              schedule_slots.track AS schedule_track,
+              schedule_slots.scheduled_at AS schedule_scheduled_at,
+              schedule_slots.duration_minutes AS schedule_duration_minutes,
+              schedule_slots.delay_minutes AS schedule_delay_minutes,
+              schedule_slots.status AS schedule_status
+            FROM schedule_slots
+            INNER JOIN projects ON projects.id = schedule_slots.project_id
+            INNER JOIN rooms ON rooms.id = schedule_slots.room_id
+            ORDER BY schedule_slots.scheduled_at ASC, rooms.name ASC, projects.project_name ASC
+          `
+        : await sql`
+            SELECT
+              projects.*,
+              schedule_slots.id AS schedule_slot_id,
+              schedule_slots.project_id AS schedule_project_id,
+              rooms.name AS schedule_room_name,
+              rooms.location AS schedule_room_location,
+              schedule_slots.track AS schedule_track,
+              schedule_slots.scheduled_at AS schedule_scheduled_at,
+              schedule_slots.duration_minutes AS schedule_duration_minutes,
+              0::int AS schedule_delay_minutes,
+              'pending'::text AS schedule_status
+            FROM schedule_slots
+            INNER JOIN projects ON projects.id = schedule_slots.project_id
+            INNER JOIN rooms ON rooms.id = schedule_slots.room_id
+            ORDER BY schedule_slots.scheduled_at ASC, rooms.name ASC, projects.project_name ASC
+          `
+      : await sql`
+          SELECT
+            projects.*,
+            schedule_slots.id AS schedule_slot_id,
+            schedule_slots.project_id AS schedule_project_id,
+            schedule_slots.room AS schedule_room_name,
+            NULL::text AS schedule_room_location,
+            schedule_slots.track AS schedule_track,
+            schedule_slots.scheduled_at AS schedule_scheduled_at,
+            schedule_slots.duration_minutes AS schedule_duration_minutes,
+            0::int AS schedule_delay_minutes,
+            'pending'::text AS schedule_status
+          FROM schedule_slots
+          INNER JOIN projects ON projects.id = schedule_slots.project_id
+          ORDER BY schedule_slots.scheduled_at ASC, schedule_slots.room ASC, projects.project_name ASC
+        `;
+
+  return rows.map((row, index) => {
+    const project = normalizeProject(row, index);
+    const scheduledAt = toStringValue(row.schedule_scheduled_at);
+    const durationMinutes = Number(row.schedule_duration_minutes ?? 5);
+    const delayMinutes = Number(row.schedule_delay_minutes ?? 0);
+
+    return {
+      id: toStringValue(row.schedule_slot_id) ?? `${project.id}-${index}`,
+      projectId: toStringValue(row.schedule_project_id) ?? project.id,
+      projectName: project.project_name,
+      room: toStringValue(row.schedule_room_name) ?? "Room TBD",
+      roomLocation: toStringValue(row.schedule_room_location),
+      track: toStringValue(row.schedule_track),
+      scheduledAt: scheduledAt ?? new Date().toISOString(),
+      durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : 5,
+      delayMinutes: Number.isFinite(delayMinutes) ? delayMinutes : 0,
+      status: toStringValue(row.schedule_status) ?? "pending",
+      project,
+    };
+  });
 }

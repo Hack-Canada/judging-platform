@@ -17,7 +17,7 @@ import {
   Youtube,
 } from "lucide-react";
 
-import type { Project } from "@/lib/projects";
+import type { Project, ProjectScheduleSlot } from "@/lib/projects";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,14 +30,25 @@ import {
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 type ProjectsHubProps = {
   projects: Project[];
+  scheduleSlots: ProjectScheduleSlot[];
   errorMessage: string | null;
 };
 
 type LinkKind = "github" | "youtube" | "demo" | "devpost";
+type DisplayScheduleSlot = {
+  id: string;
+  time: string;
+  room: string;
+  track: string | null;
+  status: string;
+  durationMinutes: number;
+  project: Project;
+  source: "database" | "generated";
+};
 
 const judgingRooms = [
   "Judging Room A",
@@ -175,7 +186,7 @@ function minutesToTime(totalMinutes: number) {
   return `${hour}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
-function judgingSlot(project: Project, index: number) {
+function generatedJudgingSlot(project: Project, index: number): DisplayScheduleSlot {
   const slotIndex = Math.floor(index / judgingRooms.length);
   const startMinutes = 9 * 60 + slotIndex * 12;
 
@@ -183,7 +194,38 @@ function judgingSlot(project: Project, index: number) {
     id: `${project.id}-${index}`,
     time: minutesToTime(startMinutes),
     room: judgingRooms[index % judgingRooms.length],
+    track: project.tracks[0] ?? null,
+    status: "preview",
+    durationMinutes: 12,
     project,
+    source: "generated",
+  };
+}
+
+function scheduleTime(value: string, delayMinutes: number) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "TBD";
+
+  const delayedDate = new Date(date.getTime() + delayMinutes * 60_000);
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(delayedDate);
+}
+
+function databaseJudgingSlot(slot: ProjectScheduleSlot): DisplayScheduleSlot {
+  return {
+    id: slot.id,
+    time: scheduleTime(slot.scheduledAt, slot.delayMinutes),
+    room: slot.room,
+    track: slot.track,
+    status: slot.status,
+    durationMinutes: slot.durationMinutes,
+    project: slot.project,
+    source: "database",
   };
 }
 
@@ -300,7 +342,14 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
+export function ProjectsHub({
+  projects,
+  scheduleSlots,
+  errorMessage,
+}: ProjectsHubProps) {
+  const [activeView, setActiveView] = useState<"submissions" | "schedule">(
+    "submissions"
+  );
   const [query, setQuery] = useState("");
   const [selectedTrack, setSelectedTrack] = useState("All");
 
@@ -346,7 +395,20 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
   const uniqueTeams = new Set(
     projects.map((project) => project.team_name ?? project.name ?? project.id)
   ).size;
-  const judgingSlots = filteredProjects.map(judgingSlot);
+  const filteredProjectIds = useMemo(
+    () => new Set(filteredProjects.map((project) => project.id)),
+    [filteredProjects]
+  );
+  const hasSavedSchedule = scheduleSlots.length > 0;
+  const judgingSlots = useMemo(() => {
+    if (hasSavedSchedule) {
+      return scheduleSlots
+        .filter((slot) => filteredProjectIds.has(slot.projectId))
+        .map(databaseJudgingSlot);
+    }
+
+    return filteredProjects.map(generatedJudgingSlot);
+  }, [filteredProjectIds, filteredProjects, hasSavedSchedule, scheduleSlots]);
 
   return (
     <main className="h-full w-full overflow-auto overscroll-none bg-white p-4 text-neutral-950 sm:p-6">
@@ -420,18 +482,44 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
           </div>
         ) : null}
 
-        <Tabs defaultValue="submissions" className="gap-4">
+        <section className="grid gap-4">
           <div className="flex flex-col gap-4 rounded-lg border border-primary/10 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-            <TabsList className="grid h-auto w-full grid-cols-2 bg-primary/5 lg:w-fit">
-              <TabsTrigger value="submissions" className="gap-2 px-4 py-2">
+            <div
+              role="tablist"
+              aria-label="Project view"
+              className="grid h-auto w-full grid-cols-2 rounded-lg bg-primary/5 p-[3px] text-muted-foreground lg:w-fit"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeView === "submissions"}
+                onClick={() => setActiveView("submissions")}
+                className={cn(
+                  "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                  activeView === "submissions"
+                    ? "bg-white text-neutral-950 shadow-sm"
+                    : "text-muted-foreground hover:text-neutral-950"
+                )}
+              >
                 <LayoutGrid className="size-4" aria-hidden="true" />
                 Project submissions
-              </TabsTrigger>
-              <TabsTrigger value="schedule" className="gap-2 px-4 py-2">
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeView === "schedule"}
+                onClick={() => setActiveView("schedule")}
+                className={cn(
+                  "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                  activeView === "schedule"
+                    ? "bg-white text-neutral-950 shadow-sm"
+                    : "text-muted-foreground hover:text-neutral-950"
+                )}
+              >
                 <CalendarClock className="size-4" aria-hidden="true" />
                 Judging schedule
-              </TabsTrigger>
-            </TabsList>
+              </button>
+            </div>
 
             <div className="flex min-w-0 flex-1 flex-col gap-3 lg:max-w-xl lg:flex-row">
               <div className="relative min-w-0 flex-1">
@@ -463,21 +551,21 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
             </div>
           </div>
 
-          <TabsContent value="submissions">
-            {projects.length === 0 && !errorMessage ? (
-              <EmptyState message="No projects found." />
-            ) : filteredProjects.length === 0 ? (
-              <EmptyState message="No projects match those filters." />
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {filteredProjects.map((project) => (
-                  <ProjectCard key={project.id} project={project} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="schedule">
+          {activeView === "submissions" ? (
+            <>
+              {projects.length === 0 && !errorMessage ? (
+                <EmptyState message="No projects found." />
+              ) : filteredProjects.length === 0 ? (
+                <EmptyState message="No projects match those filters." />
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredProjects.map((project) => (
+                    <ProjectCard key={project.id} project={project} />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
             <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
               <Card className="gap-0 overflow-hidden rounded-lg border-primary/10 bg-white py-0 shadow-sm">
                 <CardHeader className="border-b border-primary/10 bg-primary/5 p-6">
@@ -490,14 +578,18 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
                         Judging plan
                       </CardTitle>
                       <CardDescription className="mt-1">
-                        Twelve-minute blocks across four rooms.
+                        {hasSavedSchedule
+                          ? "Times are loaded from schedule_slots."
+                          : "Preview times until schedule_slots has saved rows."}
                       </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="grid gap-4 p-6">
                   <div className="rounded-md border border-primary/10 bg-primary/5 p-4">
-                    <p className="text-sm font-bold text-primary">Next block</p>
+                    <p className="text-sm font-bold text-primary">
+                      {hasSavedSchedule ? "Next saved slot" : "Next preview block"}
+                    </p>
                     <p className="mt-1 text-2xl font-black text-neutral-950">
                       {judgingSlots[0]?.time ?? "TBD"}
                     </p>
@@ -511,7 +603,9 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
                         className="size-4 text-primary"
                         aria-hidden="true"
                       />
-                      Projects are grouped into parallel rooms.
+                      {hasSavedSchedule
+                        ? "Schedule rows come from the database."
+                        : "Preview rows are generated from project order."}
                     </div>
                     <div className="flex items-center gap-2">
                       <LinkIcon className="size-4 text-primary" aria-hidden="true" />
@@ -529,7 +623,7 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
                         Hacker judging schedule
                       </CardTitle>
                       <CardDescription className="mt-1">
-                        {filteredProjects.length} projects shown
+                        {judgingSlots.length} slot{judgingSlots.length === 1 ? "" : "s"} shown
                       </CardDescription>
                     </div>
                   </div>
@@ -541,7 +635,7 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
                     </div>
                   ) : (
                     <div className="max-h-[620px] overflow-auto">
-                      {judgingSlots.map(({ id, time, room, project }, index) => {
+                      {judgingSlots.map(({ id, time, room, track, status, durationMinutes, project, source }, index) => {
                         const projectHref =
                           projectLink(project, "devpost") ??
                           projectLink(project, "demo") ??
@@ -558,18 +652,25 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
                                 Slot {index + 1}
                               </p>
                             </div>
-                            <Badge
-                              variant="secondary"
-                              className="w-fit border border-primary/10 bg-primary/5 text-primary"
-                            >
-                              {room}
-                            </Badge>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge
+                                variant="secondary"
+                                className="w-fit border border-primary/10 bg-primary/5 text-primary"
+                              >
+                                {room}
+                              </Badge>
+                              <Badge variant="outline" className="w-fit">
+                                {source === "database"
+                                  ? `${durationMinutes} min · ${status}`
+                                  : "Preview"}
+                              </Badge>
+                            </div>
                             <div className="min-w-0">
                               <p className="truncate font-bold text-neutral-950">
                                 {project.project_name}
                               </p>
                               <p className="truncate text-sm text-muted-foreground">
-                                {teamLabel(project)}
+                                {track ?? project.tracks[0] ?? teamLabel(project)}
                               </p>
                             </div>
                             {projectHref ? (
@@ -596,8 +697,8 @@ export function ProjectsHub({ projects, errorMessage }: ProjectsHubProps) {
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
+        </section>
       </div>
     </main>
   );

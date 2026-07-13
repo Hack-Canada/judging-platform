@@ -107,63 +107,100 @@ async function submitProject(formData: FormData) {
   const sql = getSql();
 
   await sql`
-    CREATE TABLE IF NOT EXISTS project_submissions_test (
-      id bigserial PRIMARY KEY,
+    CREATE EXTENSION IF NOT EXISTS pgcrypto
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS projects (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       project_name text NOT NULL,
+      devpost_link text UNIQUE,
+      tracks text[] NOT NULL DEFAULT ARRAY[]::text[],
+      submitter_name text,
+      submitter_email text,
+      members text[] NOT NULL DEFAULT ARRAY[]::text[],
+      submitted_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
       elevator_pitch text,
-      full_description text NOT NULL,
-      built_with text NOT NULL,
-      team_members text NOT NULL,
-      git_repo text NOT NULL,
+      full_description text,
+      built_with text,
+      git_repo text,
       live_post_demo text,
-      devpost_url text,
-      youtube_demo text,
-      award_categories jsonb NOT NULL DEFAULT '[]'::jsonb,
-      submitted_at timestamptz NOT NULL DEFAULT now()
+      youtube_demo text
     )
   `;
 
   await sql`
-    ALTER TABLE project_submissions_test
-      ADD COLUMN IF NOT EXISTS id bigserial,
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS id uuid DEFAULT gen_random_uuid(),
       ADD COLUMN IF NOT EXISTS project_name text,
+      ADD COLUMN IF NOT EXISTS devpost_link text,
+      ADD COLUMN IF NOT EXISTS tracks text[] NOT NULL DEFAULT ARRAY[]::text[],
+      ADD COLUMN IF NOT EXISTS submitter_name text,
+      ADD COLUMN IF NOT EXISTS submitter_email text,
+      ADD COLUMN IF NOT EXISTS members text[] NOT NULL DEFAULT ARRAY[]::text[],
+      ADD COLUMN IF NOT EXISTS submitted_at timestamptz,
+      ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+      ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now(),
       ADD COLUMN IF NOT EXISTS elevator_pitch text,
       ADD COLUMN IF NOT EXISTS full_description text,
       ADD COLUMN IF NOT EXISTS built_with text,
-      ADD COLUMN IF NOT EXISTS team_members text,
       ADD COLUMN IF NOT EXISTS git_repo text,
       ADD COLUMN IF NOT EXISTS live_post_demo text,
-      ADD COLUMN IF NOT EXISTS devpost_url text,
-      ADD COLUMN IF NOT EXISTS youtube_demo text,
-      ADD COLUMN IF NOT EXISTS award_categories jsonb NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS submitted_at timestamptz NOT NULL DEFAULT now()
+      ADD COLUMN IF NOT EXISTS youtube_demo text
   `;
 
   await sql`
-    INSERT INTO project_submissions_test (
+    CREATE UNIQUE INDEX IF NOT EXISTS projects_devpost_link_unique_idx
+      ON projects (devpost_link)
+  `;
+
+  await sql`
+    INSERT INTO projects (
       project_name,
+      devpost_link,
+      tracks,
+      members,
+      submitted_at,
       elevator_pitch,
       full_description,
       built_with,
-      team_members,
       git_repo,
       live_post_demo,
-      devpost_url,
-      youtube_demo,
-      award_categories
+      youtube_demo
     )
     VALUES (
       ${projectName},
+      ${devpostUrl},
+      ARRAY(
+        SELECT jsonb_array_elements_text(${JSON.stringify(awardCategories)}::jsonb)
+      ),
+      ARRAY(
+        SELECT trim(member)
+        FROM regexp_split_to_table(${teamMembers}, E'[\\n,;]+') AS member
+        WHERE trim(member) <> ''
+      ),
+      now(),
       ${elevatorPitch},
       ${fullDescription},
       ${builtWith},
-      ${teamMembers},
       ${gitRepo},
       ${livePostDemo},
-      ${devpostUrl},
-      ${youtubeDemo},
-      ${JSON.stringify(awardCategories)}::jsonb
+      ${youtubeDemo}
     )
+    ON CONFLICT (devpost_link) DO UPDATE SET
+      project_name = EXCLUDED.project_name,
+      tracks = EXCLUDED.tracks,
+      members = EXCLUDED.members,
+      submitted_at = EXCLUDED.submitted_at,
+      elevator_pitch = EXCLUDED.elevator_pitch,
+      full_description = EXCLUDED.full_description,
+      built_with = EXCLUDED.built_with,
+      git_repo = EXCLUDED.git_repo,
+      live_post_demo = EXCLUDED.live_post_demo,
+      youtube_demo = EXCLUDED.youtube_demo,
+      updated_at = now()
   `;
 
   redirect("/hacker/projects");
