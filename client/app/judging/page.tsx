@@ -1,9 +1,6 @@
 import { JudgingPortal } from "./judging-portal";
-
 import { JudgingErrorScreen } from "@/components/judging/judging-error-screen";
-
 import { getScheduleOffsetMinutes } from "@/lib/judging/db-setup";
-
 import {
   getJudgingDataset,
   parseProjectAllowList,
@@ -16,7 +13,7 @@ type PageProps = {
   searchParams: Promise<{
     stream?: string;
     code?: string;
-    /** Comma-separated project IDs — client-only assignment filter. */
+    /** Comma-separated project IDs - client-only assignment filter. */
     projects?: string;
   }>;
 };
@@ -66,4 +63,3 @@ export default async function JudgingPage({ searchParams }: PageProps) {
     />
   );
 }
-

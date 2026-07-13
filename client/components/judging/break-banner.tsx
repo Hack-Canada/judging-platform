@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { formatSlotTime } from "@/lib/judging/format";
 import type { BreakState } from "@/lib/judging/slots";
 import type { JudgingProject } from "@/lib/judging/types";
@@ -19,7 +20,7 @@ export function BreakBanner({ breakState, nextProject, onGoToNext }: BreakBanner
           {" "}
           until {formatSlotTime(breakState.nextSlot.startTime)}
         </span>
-        <span className="hidden text-[var(--j-faint)] sm:inline">
+        <span className="hidden text-[var(--j-muted)] sm:inline">
           {" "}
           · {breakState.minutesUntil} min
         </span>
@@ -28,9 +29,15 @@ export function BreakBanner({ breakState, nextProject, onGoToNext }: BreakBanner
           · Next: {nextProject.name}
         </span>
       </p>
-      <button type="button" onClick={onGoToNext} className="j-break-banner-btn shrink-0">
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        onClick={onGoToNext}
+        className="shrink-0 text-[var(--j-action)]"
+      >
         Preview
-      </button>
+      </Button>
     </div>
   );
 }

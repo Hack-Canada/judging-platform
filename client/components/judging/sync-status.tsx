@@ -13,7 +13,7 @@ type SyncStatusProps = {
 const LABELS: Record<SyncStatus, string> = {
   synced: "Synced",
   pending: "Sync pending",
-  offline: "Offline — saved on device",
+  offline: "Offline - saved on device",
   syncing: "Syncing…",
 };
 

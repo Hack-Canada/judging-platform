@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { Button } from "@/components/ui/button";
 
 type ActionFeedbackProps = {
   message: string;
@@ -19,25 +21,27 @@ export function ActionFeedback({
     <div className="j-action-feedback" role="status" aria-live="polite">
       <div className="j-action-feedback-inner">
         <div className="min-w-0">
-          <p className="font-medium text-[var(--j-ink)]">{message}</p>
+          <p className="font-medium text-secondary-foreground">{message}</p>
           {detail && (
-            <p className="mt-0.5 truncate text-sm text-[var(--j-muted)]">{detail}</p>
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">{detail}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {actionLabel && onAction && (
-            <button type="button" onClick={onAction} className="j-action-feedback-btn">
+            <Button type="button" variant="link" size="sm" onClick={onAction} className="text-[var(--j-action)]">
               {actionLabel}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={onDismiss}
-            className="j-action-feedback-dismiss"
             aria-label="Dismiss"
+            className="text-muted-foreground"
           >
             ×
-          </button>
+          </Button>
         </div>
       </div>
     </div>

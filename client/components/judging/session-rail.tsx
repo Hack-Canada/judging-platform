@@ -68,7 +68,7 @@ function SessionRailRow({
         <span
           className={cn(
             "j-schedule-name block truncate",
-            isJudged && "text-[var(--j-faint)] line-through"
+            isJudged && "text-muted-foreground/70 line-through"
           )}
         >
           {project.name}
@@ -76,20 +76,20 @@ function SessionRailRow({
         {room ? (
           <span className="j-schedule-room block truncate">{room}</span>
         ) : (
-          <span className="j-schedule-room block text-[var(--j-faint)]">Table pending</span>
+          <span className="j-schedule-room block text-muted-foreground/70">Table pending</span>
         )}
       </span>
       <span className="shrink-0">
         {isJudged ? (
-          <Check className="size-5 text-[var(--j-faint)]" aria-label="Judged" />
+          <Check className="size-5 text-muted-foreground/70" aria-label="Judged" />
         ) : isLive ? (
-          <span className="text-sm font-bold uppercase tracking-wide text-[var(--j-live)]">
+          <span className="text-sm font-bold uppercase tracking-wide text-destructive">
             Now
           </span>
         ) : isSkipped ? (
-          <span className="text-xs font-medium text-[var(--j-muted)]">Skipped</span>
+          <span className="text-xs font-medium text-muted-foreground">Skipped</span>
         ) : slot.status === "upcoming" ? (
-          <span className="text-sm font-medium text-[var(--j-faint)]">Next</span>
+          <span className="text-sm font-medium text-muted-foreground/70">Next</span>
         ) : null}
       </span>
     </button>
@@ -162,7 +162,7 @@ export function SessionRail({
 
   const listContent =
     filteredSlots.length === 0 ? (
-      <p className="mt-5 text-sm text-[var(--j-muted)]">
+      <p className="mt-5 text-sm text-muted-foreground">
         {query.trim()
           ? "No projects match your search."
           : filter === "remaining"
@@ -240,28 +240,28 @@ export function SessionRail({
       {!embedded && (
         <>
           <h2 className="j-schedule-title">Your schedule</h2>
-          <p className="mt-1 text-sm text-[var(--j-muted)]">
+          <p className="mt-1 text-sm text-muted-foreground">
             {remainingCount} remaining · {total} total in this stream
           </p>
         </>
       )}
 
       {scheduleApproximate && (
-        <p className="j-schedule-approx mt-3 text-xs leading-relaxed text-[var(--j-muted)]">
-          Times are approximate for ordering — use project order and search, not the clock.
+        <p className="j-schedule-approx mt-3 text-xs leading-relaxed text-muted-foreground">
+          Times are approximate for ordering - use project order and search, not the clock.
         </p>
       )}
 
       <div className={embedded ? "mt-0" : "relative mt-4"}>
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--j-faint)]"
+          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70"
           aria-hidden
         />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search projects…"
+          placeholder="Search projects..."
           className="j-schedule-search"
           aria-label="Search schedule"
         />
@@ -283,7 +283,7 @@ export function SessionRail({
       {listContent}
 
       {filteredSlots.length > 0 && filteredSlots.length < slots.length && (
-        <p className="mt-3 text-xs text-[var(--j-faint)]">
+        <p className="mt-3 text-xs text-muted-foreground/70">
           Showing {filteredSlots.length} of {slots.length}
         </p>
       )}

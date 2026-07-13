@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+
 type CompletionBannerProps = {
   judgedCount: number;
   skippedCount?: number;
@@ -22,16 +24,16 @@ export function CompletionBanner({
     <section className="j-completion-banner" aria-live="polite">
       <div className="j-completion-banner-inner">
         <div className="min-w-0">
-          <p className="font-semibold text-[var(--j-ink)]">
-            Stream complete — {progressLabel} of {totalCount}
+          <p className="font-semibold text-secondary-foreground">
+            Stream complete - {progressLabel} of {totalCount}
           </p>
-          <p className="mt-0.5 text-sm text-[var(--j-muted)]">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {streamName}. You can still review projects or unmark mistakes below.
           </p>
         </div>
-        <button type="button" onClick={onResetStream} className="j-completion-reset">
+        <Button type="button" variant="link" onClick={onResetStream} className="text-[var(--j-action)]">
           Reset stream
-        </button>
+        </Button>
       </div>
     </section>
   );

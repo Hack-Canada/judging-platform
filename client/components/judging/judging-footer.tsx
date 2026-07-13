@@ -31,9 +31,9 @@ export function JudgingFooter({
         <p className="hidden text-base text-[var(--j-muted)] sm:block">
           {isSkipped
             ? "Marked skipped."
-            : "Marked reviewed — tap Unmark if this was a mistake."}
+            : "Marked reviewed - tap Unmark if this was a mistake."}
         </p>
-        <button type="button" onClick={onUnmark} className="j-cta-secondary w-full sm:w-auto">
+        <button type="button" onClick={onUnmark} className="j-cta j-cta--outline w-full sm:w-auto">
           Unmark
         </button>
       </>
@@ -43,7 +43,7 @@ export function JudgingFooter({
   const hint = activeSlotLive
     ? "Visit the table, then mark reviewed."
     : notScheduled
-      ? "No slot assigned — review details or skip."
+      ? "No slot assigned - review details or skip."
       : "Review details before your slot.";
 
   return (
@@ -51,11 +51,15 @@ export function JudgingFooter({
       <p className="hidden text-base text-[var(--j-muted)] sm:block">{hint}</p>
       <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
         {showGoToLive && (
-          <button type="button" onClick={onGoToLive} className="j-cta-secondary w-full sm:hidden">
+          <button
+            type="button"
+            onClick={onGoToLive}
+            className="j-cta j-cta--outline w-full sm:hidden"
+          >
             Go to live slot
           </button>
         )}
-        <button type="button" onClick={onSkip} className="j-cta-skip w-full sm:w-auto">
+        <button type="button" onClick={onSkip} className="j-cta j-cta--secondary w-full sm:w-auto">
           Skip
         </button>
         <button
@@ -71,10 +75,10 @@ export function JudgingFooter({
 }
 
 export function notesSyncHint(status: SyncStatus | undefined, pendingNotes: number): string {
-  if (status === "offline") return "Offline — notes save on this device until you reconnect.";
+  if (status === "offline") return "Offline - notes save on this device until you reconnect.";
   if (status === "pending" && pendingNotes > 0) {
-    return "Notes waiting to sync — will upload when connection is stable.";
+    return "Waiting to sync - will upload when connection is stable.";
   }
-  if (status === "syncing") return "Syncing notes…";
-  return "Private notes — synced to the server when online.";
+  if (status === "syncing") return "Syncing notes...";
+  return "Synced to the server when online.";
 }

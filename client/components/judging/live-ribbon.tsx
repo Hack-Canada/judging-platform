@@ -27,17 +27,18 @@ export function LiveRibbon({ liveSlot, liveProject, onGoToLive }: LiveRibbonProp
 
   return (
     <div className="j-live-ribbon" role="status">
-      <p className="min-w-0 flex-1 text-sm text-primary-foreground">
+      <p className="min-w-0 flex-1 text-sm text-[var(--j-on-ink)]">
         <span className="font-semibold">Live now:</span>{" "}
         <span className="font-medium">{liveProject.name}</span>
         {remaining.overtime ? (
-          <span className="text-[var(--j-overtime)]"> · overtime {remaining.label}</span>
+          <span style={{ color: "var(--j-overtime)" }}> · overtime {remaining.label}</span>
         ) : (
-          <span className="opacity-70"> · {remaining.label} left</span>
+          <span className="j-hero-muted"> · {remaining.label} left</span>
         )}
-        {room && <span className="hidden opacity-70 sm:inline"> · {room}</span>}
+        {room && <span className="j-hero-muted hidden sm:inline"> · {room}</span>}
+        <span className="sr-only"> Started {formatSlotTime(liveSlot.startTime)}</span>
       </p>
-      <button type="button" onClick={onGoToLive} className="j-live-ribbon-btn shrink-0">
+      <button type="button" onClick={onGoToLive} className="j-cta j-cta--outline shrink-0 !min-h-0 !border-[rgb(245_243_239/0.35)] !px-3 !py-1.5 !text-sm !text-[var(--j-on-ink)]">
         Go there
       </button>
     </div>

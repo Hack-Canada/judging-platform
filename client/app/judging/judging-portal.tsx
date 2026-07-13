@@ -14,7 +14,6 @@ import { ResetStreamConfirm } from "@/components/judging/reset-stream-confirm";
 import { ScheduleDock } from "@/components/judging/schedule-dock";
 import { SessionRail } from "@/components/judging/session-rail";
 import { SkipReasonPicker } from "@/components/judging/skip-reason-picker";
-import { StreamSelector } from "@/components/judging/stream-selector";
 import {
   loadJudgeCode,
   normalizeJudgeCode,
@@ -446,11 +445,11 @@ export function JudgingPortal({
     ) => {
       const skipLabel =
         reason === "absent"
-          ? "Skipped — absent"
+          ? "Skipped - absent"
           : reason === "not_ready"
-            ? "Skipped — not ready"
+            ? "Skipped - not ready"
             : reason === "wrong_track"
-              ? "Skipped — wrong track"
+              ? "Skipped - wrong track"
               : "Skipped";
 
       finishDecision(
@@ -581,25 +580,27 @@ export function JudgingPortal({
 
   if (!activeProject || streamSlots.length === 0) {
     return (
-      <div className="flex min-h-dvh flex-col">
-        <JudgingHeader judgedCount={0} skippedCount={0} totalCount={0} />
-        {!streamLocked && (
-          <StreamSelector
-            streams={streams}
-            activeStreamId={activeStreamId}
-            progressByStream={progressByStream}
-            onSelect={persistAndSwitchStream}
-          />
-        )}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <JudgingHeader
+          judgedCount={0}
+          skippedCount={0}
+          totalCount={0}
+          streamName={activeStream?.shortName ?? activeStream?.name}
+          streams={streams}
+          activeStreamId={activeStreamId}
+          progressByStream={progressByStream}
+          onSelectStream={persistAndSwitchStream}
+          streamLocked={streamLocked}
+        />
         <div className="mx-auto flex max-w-lg flex-1 flex-col justify-center px-6 py-24 text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-[var(--j-ink)]">
+          <h2 className="font-[family-name:var(--j-font-display)] text-3xl font-semibold tracking-tight text-[var(--j-ink)]">
             Nothing scheduled
           </h2>
-          <p className="mt-4 text-lg leading-relaxed text-[var(--j-muted)]">
+          <p className="mt-4 font-[family-name:var(--j-font-body)] text-lg leading-relaxed text-[var(--j-muted)]">
             {streamLocked
               ? "No projects are assigned to this stream yet."
               : streams.length > 1
-                ? "Pick another stream above, or wait until projects are assigned to this block."
+                ? "Pick another stream in the header, or wait until projects are assigned to this block."
                 : "Your judging block will show up here once projects are assigned."}
           </p>
         </div>
@@ -612,7 +613,7 @@ export function JudgingPortal({
     : undefined;
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <JudgingHeader
         judgedCount={judgedCount}
         skippedCount={skippedCount}
@@ -622,16 +623,12 @@ export function JudgingPortal({
         pendingSyncCount={pendingCount}
         pendingSummary={pendingSummary}
         scheduleOffsetLabel={scheduleOffsetLabel}
+        streams={streams}
+        activeStreamId={activeStreamId}
+        progressByStream={progressByStream}
+        onSelectStream={persistAndSwitchStream}
+        streamLocked={streamLocked}
       />
-
-      {!streamLocked && (
-        <StreamSelector
-          streams={streams}
-          activeStreamId={activeStreamId}
-          progressByStream={progressByStream}
-          onSelect={persistAndSwitchStream}
-        />
-      )}
 
       {streamAllDone && activeStream && (
         <CompletionBanner
@@ -644,7 +641,7 @@ export function JudgingPortal({
       )}
 
       {showResetConfirm && activeStream && (
-        <div className="border-b border-[var(--j-border)] bg-[var(--j-white)] px-5 py-3 sm:px-10">
+        <div className="border-b border-[var(--j-border)] bg-[var(--j-white)] px-5 py-3 text-[var(--j-ink)] sm:px-10">
           <ResetStreamConfirm
             streamName={activeStream.name}
             judgedTotal={judgedIds.size}
@@ -684,7 +681,7 @@ export function JudgingPortal({
 
       <div className="j-content">
         <div className="j-content-grid">
-          <div className="min-w-0">
+          <div className="j-main-col min-w-0">
             <ProjectDetails project={activeProject} />
             <JudgeNotesPanel
               project={activeProject}
@@ -695,7 +692,7 @@ export function JudgingPortal({
             />
           </div>
 
-          <aside className="hidden lg:block">
+          <aside className="j-rail-col hidden lg:block">
             <SessionRail
               slots={streamSlots}
               projects={projects}

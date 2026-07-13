@@ -50,7 +50,7 @@ export function ProjectHero({
             />
           ) : null}
 
-          <div className="flex min-w-0 flex-col justify-end gap-4 pb-1">
+          <div className="j-hero-project flex min-w-0 flex-col gap-3">
             <div className="flex flex-wrap items-center gap-3">
               {isLive && (
                 <span className="j-live-pill">
@@ -60,7 +60,7 @@ export function ProjectHero({
               )}
               {isJudged && <span className="j-judged-pill">Judged</span>}
               {slotStatus === "upcoming" && !isJudged && (
-                <span className="text-sm font-semibold uppercase tracking-widest j-hero-subtle">
+                <span className="j-hero-muted text-sm font-semibold uppercase tracking-widest">
                   Up next
                 </span>
               )}
@@ -69,7 +69,16 @@ export function ProjectHero({
             <h1 className="j-hero-title">{project.name}</h1>
             <p className="j-hero-team">{formatTeamLabel(project)}</p>
 
-            {slotStartTime && slotEndTime && !notScheduled && (
+            {notScheduled && !isJudged && (
+              <p className="j-hero-muted text-sm font-medium">Not scheduled</p>
+            )}
+            {multipleSlots && !notScheduled && (
+              <p className="j-hero-faint text-xs">Showing nearest slot</p>
+            )}
+          </div>
+
+          {slotStartTime && slotEndTime && !notScheduled ? (
+            <div className="j-hero-aside">
               <SessionTimer
                 startTime={slotStartTime}
                 endTime={slotEndTime}
@@ -77,17 +86,11 @@ export function ProjectHero({
                 isJudged={isJudged}
                 variant="hero"
               />
-            )}
-            {notScheduled && !isJudged && (
-              <p className="text-sm font-medium j-hero-muted">Not scheduled</p>
-            )}
-            {multipleSlots && !notScheduled && (
-              <p className="text-xs j-hero-faint">Showing nearest slot</p>
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
         {!hasRoom && !isJudged && (
-          <p className="mt-5 text-sm j-hero-subtle">Table not assigned yet</p>
+          <p className="j-hero-muted mt-3 text-sm">Table not assigned yet</p>
         )}
       </div>
     </section>
@@ -113,7 +116,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
             <>
               Built by <span className="font-medium text-[var(--j-ink)]">{formatTeamLabel(project)}</span>
               {project.devpostUrl
-                ? " — open Devpost for the full write-up."
+                ? " - open Devpost for the full write-up."
                 : "."}
             </>
           ) : (
@@ -160,7 +163,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
               href={project.devpostUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-lg font-semibold text-[var(--j-action)] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+              className="inline-flex items-center gap-2 text-lg font-semibold text-[var(--j-action)] underline-offset-4 hover:text-[var(--j-action-hover)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--j-action)]"
             >
               Open Devpost
               <ArrowUpRight className="size-5" aria-hidden />

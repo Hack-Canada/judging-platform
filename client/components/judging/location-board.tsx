@@ -14,12 +14,12 @@ export function LocationBoard({ room, isJudged, judgedEarly }: LocationBoardProp
 
   if (isJudged) {
     return (
-      <div className="j-location-judged">
+      <div>
         <p className="j-location-label">Done</p>
         {tableNumber ? (
           <p className="j-location-judged-table tabular-nums">
             Table {tableNumber}
-            <span className="j-hero-subtle block text-base font-normal">{venue}</span>
+            <span className="j-hero-muted mt-1 block text-base font-normal">{venue}</span>
           </p>
         ) : (
           <p className="j-hero-muted text-lg">{venue}</p>
@@ -40,7 +40,7 @@ export function LocationBoard({ room, isJudged, judgedEarly }: LocationBoardProp
         <p className="j-location-table-num j-location-table-num--venue">{venue}</p>
       )}
       {tableNumber && (
-        <p className="j-hero-soft mt-2 text-lg font-medium">
+        <p className="j-hero-muted mt-2 text-lg font-medium">
           {tableLabel ?? `Table ${tableNumber}`}
         </p>
       )}
@@ -49,7 +49,7 @@ export function LocationBoard({ room, isJudged, judgedEarly }: LocationBoardProp
   );
 }
 
-/** Quiet fallback when room is unknown — never a giant TBD */
+/** Quiet fallback when room is unknown - never a giant TBD */
 export function LocationPending() {
-  return <p className="j-hero-subtle text-sm">Table not assigned yet</p>;
+  return <p className="j-hero-muted text-sm">Table not assigned yet</p>;
 }

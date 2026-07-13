@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 type ResetStreamConfirmProps = {
   streamName: string;
   judgedTotal: number;
@@ -23,12 +25,17 @@ export function ResetStreamConfirm({
         each one.
       </p>
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={onCancel} className="j-cta-secondary flex-1 sm:flex-none">
+        <Button type="button" variant="outline" onClick={onCancel} className="flex-1 sm:flex-none">
           Cancel
-        </button>
-        <button type="button" onClick={onConfirm} className="j-cta-secondary flex-1 sm:flex-none">
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onConfirm}
+          className="flex-1 text-[var(--j-action)] sm:flex-none"
+        >
           Reset stream
-        </button>
+        </Button>
       </div>
     </div>
   );

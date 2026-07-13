@@ -53,22 +53,22 @@ export function ScheduleDock({
             {judgedCount}/{totalCount}
           </span>
           <span className="min-w-0 flex-1 text-left">
-            <span className="block truncate text-sm font-semibold text-[var(--j-ink)]">
+            <span className="block truncate text-sm font-semibold text-secondary-foreground">
               {activeProject?.name ?? "Schedule"}
             </span>
-            <span className="block truncate text-xs text-[var(--j-muted)]">
+            <span className="block truncate text-xs text-muted-foreground">
               {room ?? (activeSlot ? formatSlotTime(activeSlot.startTime) : "Tap for full schedule")}
             </span>
           </span>
-          <ChevronUp className="size-5 shrink-0 text-[var(--j-faint)]" aria-hidden />
+          <ChevronUp className="size-5 shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </DrawerTrigger>
-      <DrawerContent className="j-schedule-drawer border-[var(--j-border)] bg-[var(--j-paper)] px-0 pb-8">
-        <DrawerHeader className="border-b border-[var(--j-border)] px-5 pb-4 text-left">
-          <DrawerTitle className="text-lg font-semibold text-[var(--j-ink)]">
+      <DrawerContent className="j-schedule-drawer border-[var(--j-border)] bg-[var(--j-white)] px-0 pb-8 text-[var(--j-ink)]">
+        <DrawerHeader className="border-b border-border px-5 pb-4 text-left">
+          <DrawerTitle className="text-lg font-semibold text-secondary-foreground">
             Your schedule
           </DrawerTitle>
-          <p className="text-sm text-[var(--j-muted)]">
+          <p className="text-sm text-muted-foreground">
             {judgedCount} judged
             {skippedCount > 0 ? ` · ${skippedCount} skipped` : ""} of {totalCount} in this stream
           </p>

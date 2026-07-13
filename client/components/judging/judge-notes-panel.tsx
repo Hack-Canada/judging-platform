@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useId } from "react";
 import { notesSyncHint } from "@/components/judging/judging-footer";
@@ -23,16 +23,16 @@ export function JudgeNotesPanel({
   const textareaId = useId();
 
   return (
-    <section className="mt-10" aria-labelledby={`${textareaId}-label`}>
+    <section className="j-notes-panel" aria-labelledby={`${textareaId}-label`}>
       <label
         id={`${textareaId}-label`}
         htmlFor={textareaId}
-        className="text-xl font-semibold text-[var(--j-ink)]"
+        className="text-xl font-semibold text-secondary-foreground"
       >
         Notes
       </label>
       <p className="mt-1 text-base text-[var(--j-muted)]">
-        Private notes for {project.name} — {notesSyncHint(syncStatus, pendingNotesCount)}
+        Private notes for {project.name}. {notesSyncHint(syncStatus, pendingNotesCount)}
       </p>
       <textarea
         id={textareaId}

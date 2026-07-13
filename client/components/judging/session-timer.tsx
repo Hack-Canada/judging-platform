@@ -44,7 +44,7 @@ export function SessionTimer({
 
   if (status === "done") {
     return (
-      <p className={`${heroClass} j-hero-subtle`}>Ended {formatSlotTime(endTime)}</p>
+      <p className={`${heroClass} j-hero-muted`}>Ended {formatSlotTime(endTime)}</p>
     );
   }
 
@@ -62,7 +62,7 @@ export function SessionTimer({
     return (
       <div>
         <p className={heroClass}>
-          <span className="text-[var(--j-overtime)]">Overtime {remaining.label}</span>
+          <span style={{ color: "var(--j-overtime)" }}>Overtime {remaining.label}</span>
         </p>
       </div>
     );
@@ -73,7 +73,7 @@ export function SessionTimer({
   return (
     <div>
       <p className={heroClass}>
-        <span className="text-[var(--j-live)]">{remaining.label}</span>
+        <span style={{ color: "var(--j-live)" }}>{remaining.label}</span>
         <span className="j-hero-faint"> left</span>
       </p>
       {variant === "hero" && (
