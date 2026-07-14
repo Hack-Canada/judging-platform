@@ -1,5 +1,7 @@
-import { PortalStub } from "@/components/portal-stub";
+import { SponsorDashboard } from "@/app/sponsor/components/sponsor-dashboard";
+import { getDemoSponsorAssignments } from "@/db/queries";
 
-export default function SponsorPage() {
-  return <PortalStub title="Sponsor" />;
+export default async function SponsorPage() {
+  const events = await getDemoSponsorAssignments();
+  return <SponsorDashboard events={events} />;
 }
