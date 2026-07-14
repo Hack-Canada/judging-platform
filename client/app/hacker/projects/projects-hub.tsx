@@ -43,12 +43,13 @@ type DisplayScheduleSlot = {
   id: string;
   time: string;
   room: string;
-  track: string | null;
   status: string;
   durationMinutes: number;
   project: Project;
   source: "database" | "generated";
 };
+
+const ALL_TEAMS = "All teams";
 
 const judgingRooms = [
   "Judging Room A",
@@ -149,6 +150,12 @@ function teamLabel(project: Project) {
   return project.name ?? "Independent submission";
 }
 
+function teamFilterLabel(project: Project) {
+  if (project.team_name) return project.team_name;
+  if (project.members.length > 0) return project.members.join(", ");
+  return project.name ?? "Independent";
+}
+
 function memberLabel(project: Project) {
   if (project.members.length > 0) return project.members.join(", ");
   return project.name ?? "No team members listed";
@@ -194,7 +201,6 @@ function generatedJudgingSlot(project: Project, index: number): DisplayScheduleS
     id: `${project.id}-${index}`,
     time: minutesToTime(startMinutes),
     room: judgingRooms[index % judgingRooms.length],
-    track: project.tracks[0] ?? null,
     status: "preview",
     durationMinutes: 12,
     project,
@@ -221,7 +227,6 @@ function databaseJudgingSlot(slot: ProjectScheduleSlot): DisplayScheduleSlot {
     id: slot.id,
     time: scheduleTime(slot.scheduledAt, slot.delayMinutes),
     room: slot.room,
-    track: slot.track,
     status: slot.status,
     durationMinutes: slot.durationMinutes,
     project: slot.project,
@@ -293,22 +298,6 @@ function ProjectCard({ project }: { project: Project }) {
         {projectDescription(project)}
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {project.tracks.length > 0 ? (
-          project.tracks.map((track) => (
-            <Badge
-              key={track}
-              variant="secondary"
-              className="border border-primary/10 bg-primary/5 text-primary"
-            >
-              {track}
-            </Badge>
-          ))
-        ) : (
-          <Badge variant="outline">No track selected</Badge>
-        )}
-      </div>
-
       <Separator className="my-4" />
 
       <div className="grid gap-3 text-sm text-muted-foreground">
@@ -351,38 +340,44 @@ export function ProjectsHub({
     "submissions"
   );
   const [query, setQuery] = useState("");
-  const [selectedTrack, setSelectedTrack] = useState("All");
+  const [selectedTeam, setSelectedTeam] = useState(ALL_TEAMS);
 
-  const allTracks = useMemo(() => {
-    const tracks = new Set<string>();
-    projects.forEach((project) => {
-      project.tracks.forEach((track) => tracks.add(track));
-    });
+  const allTeams = useMemo(() => {
+    const teams = new Set<string>();
+    projects.forEach((project) => teams.add(teamFilterLabel(project)));
 
-    return ["All", ...Array.from(tracks).sort()];
+    return [ALL_TEAMS, ...Array.from(teams).sort()];
   }, [projects]);
 
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return projects.filter((project) => {
-      const matchesTrack =
-        selectedTrack === "All" || project.tracks.includes(selectedTrack);
-      const searchableText = [
-        project.project_name,
+      const team = teamFilterLabel(project);
+      const matchesTeam = selectedTeam === ALL_TEAMS || team === selectedTeam;
+      const teamSearchText = [
+        team,
         project.team_name,
         project.name,
         project.members.join(" "),
-        project.tracks.join(" "),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const projectSearchText = [
+        project.project_name,
+        teamSearchText,
         projectDescription(project),
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
+      const searchableText =
+        activeView === "schedule" ? teamSearchText : projectSearchText;
 
-      return matchesTrack && (!normalizedQuery || searchableText.includes(normalizedQuery));
+      return matchesTeam && (!normalizedQuery || searchableText.includes(normalizedQuery));
     });
-  }, [projects, query, selectedTrack]);
+  }, [activeView, projects, query, selectedTeam]);
 
   const readyProjects = projects.filter((project) =>
     Boolean(
@@ -393,7 +388,7 @@ export function ProjectsHub({
   ).length;
   const progressValue = projects.length > 0 ? (readyProjects / projects.length) * 100 : 0;
   const uniqueTeams = new Set(
-    projects.map((project) => project.team_name ?? project.name ?? project.id)
+    projects.map((project) => teamFilterLabel(project))
   ).size;
   const filteredProjectIds = useMemo(
     () => new Set(filteredProjects.map((project) => project.id)),
@@ -530,21 +525,25 @@ export function ProjectsHub({
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search projects, teams, tracks"
+                  placeholder={
+                    activeView === "schedule"
+                      ? "Search teams or members"
+                      : "Search projects or teams"
+                  }
                   className="h-10 bg-white pl-9"
                 />
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 lg:max-w-72">
-                {allTracks.map((track) => (
+              <div className="flex gap-2 overflow-x-auto pb-1 lg:max-w-80">
+                {allTeams.map((team) => (
                   <Button
-                    key={track}
+                    key={team}
                     type="button"
                     size="sm"
-                    variant={selectedTrack === track ? "default" : "outline"}
-                    onClick={() => setSelectedTrack(track)}
-                    className="shrink-0"
+                    variant={selectedTeam === team ? "default" : "outline"}
+                    onClick={() => setSelectedTeam(team)}
+                    className="max-w-48 shrink-0"
                   >
-                    {track}
+                    <span className="truncate">{team}</span>
                   </Button>
                 ))}
               </div>
@@ -605,7 +604,7 @@ export function ProjectsHub({
                       />
                       {hasSavedSchedule
                         ? "Schedule rows come from the database."
-                        : "Preview rows are generated from project order."}
+                        : "Preview rows follow the current team filter."}
                     </div>
                     <div className="flex items-center gap-2">
                       <LinkIcon className="size-4 text-primary" aria-hidden="true" />
@@ -635,7 +634,7 @@ export function ProjectsHub({
                     </div>
                   ) : (
                     <div className="max-h-[620px] overflow-auto">
-                      {judgingSlots.map(({ id, time, room, track, status, durationMinutes, project, source }, index) => {
+                      {judgingSlots.map(({ id, time, room, status, durationMinutes, project, source }, index) => {
                         const projectHref =
                           projectLink(project, "devpost") ??
                           projectLink(project, "demo") ??
@@ -670,7 +669,7 @@ export function ProjectsHub({
                                 {project.project_name}
                               </p>
                               <p className="truncate text-sm text-muted-foreground">
-                                {track ?? project.tracks[0] ?? teamLabel(project)}
+                                {teamFilterLabel(project)}
                               </p>
                             </div>
                             {projectHref ? (
