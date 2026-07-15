@@ -4,14 +4,7 @@
       "Bash(node scripts/import-csv-test-submissions.js:*)",
       "Bash(npm run build)",
       "Bash(npx tsc --noEmit)",
-      "Bash(python3 -c \":*)",
-      "Bash(npm install *)",
-      "Bash(npx shadcn@latest add button --yes)",
-      "Bash(git check-ignore *)",
-      "Bash(git commit -q -m ' *)",
-      "Bash(git push *)",
-      "Bash(gh repo *)",
-      "Bash(gh pr *)"
+      "Bash(python3 -c \":*)"
     ]
   }
 }
