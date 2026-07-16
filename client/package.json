@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:setup": "node scripts/setup-projects-db.js",
-    "db:seed": "node scripts/seed-projects.js",
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "lint": "eslint"
+    "db:seed": "node --env-file=.env.local scripts/seed.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
