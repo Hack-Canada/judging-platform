@@ -4,7 +4,8 @@ import { figtree, fredoka, jetbrainsMono, rubik } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   title: "HackCanada Judging Platform",
-  description: "Hackathon judging platform for organizers, judges, hackers, volunteers, and sponsors.",
+  description:
+    "Hackathon judging platform for organizers, judges, hackers, volunteers, and sponsors.",
 };
 
 export default function RootLayout({
@@ -15,7 +16,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${rubik.variable} ${figtree.variable} ${jetbrainsMono.variable} h-full`}
+      className={`${rubik.variable} ${fredoka.variable} ${figtree.variable} ${jetbrainsMono.variable} h-full`}
       suppressHydrationWarning
     >
       <body
