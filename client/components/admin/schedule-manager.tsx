@@ -321,6 +321,26 @@ export function ScheduleManager({
         <span className="ml-1 text-emerald-600 dark:text-emerald-400">· saved to DB</span>
       </p>
 
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex gap-0.5">
+            <span className="grid size-4 place-items-center rounded bg-background ring-1 ring-border">
+              <Minus className="size-2.5" />
+            </span>
+            <span className="grid size-4 place-items-center rounded bg-background ring-1 ring-border">
+              <Plus className="size-2.5" />
+            </span>
+          </span>
+          Hover a pitch to shift it 5 min earlier / later — saves right away
+        </span>
+        <span>Click a pitch to edit its room, time, track, or duration</span>
+        <span className="inline-flex items-center gap-1.5">
+          <Clock className="size-3.5" />
+          <span className="font-medium">Delay all</span> shifts every pitch at once — takes effect on Apply
+        </span>
+      </div>
+
       {/* Grid */}
       <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full border-collapse text-sm">
