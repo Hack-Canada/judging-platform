@@ -1,5 +1,5 @@
-import { PortalStub } from "@/components/portal-stub";
+import { redirect } from "next/navigation";
 
 export default function AdminPage() {
-  return <PortalStub title="Admin" />;
+  redirect("/admin/stats");
 }
