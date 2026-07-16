@@ -28,7 +28,7 @@ function scheduleStart(projects: Project[]): Date {
 export function deriveSchedule(
   projects: Project[],
   rooms: string[] = DEFAULT_ROOMS,
-  durationMinutes: number = DEFAULT_DURATION_MINUTES
+  durationMinutes: number = DEFAULT_DURATION_MINUTES,
 ): ScheduleSlot[] {
   const start = scheduleStart(projects).getTime();
   return projects.map((p, i) => {
@@ -54,7 +54,9 @@ export function deriveSchedule(
 
 // Seed the table once from the derived draft, so there's a schedule to edit.
 // No-op if slots already exist. Returns the number of rows inserted.
-export async function seedScheduleIfEmpty(projects: Project[]): Promise<number> {
+export async function seedScheduleIfEmpty(
+  projects: Project[],
+): Promise<number> {
   const sql = getSql();
   const existing = await sql`SELECT count(*)::int AS c FROM schedule_slots`;
   if (existing[0].c > 0 || projects.length === 0) return 0;
@@ -102,7 +104,10 @@ export type SlotUpdate = {
   durationMinutes?: number;
 };
 
-export async function updateSlot(id: string, fields: SlotUpdate): Promise<ScheduleSlot | null> {
+export async function updateSlot(
+  id: string,
+  fields: SlotUpdate,
+): Promise<ScheduleSlot | null> {
   const sql = getSql();
   const rows = await sql`
     UPDATE schedule_slots s SET
@@ -129,7 +134,8 @@ export async function updateSlot(id: string, fields: SlotUpdate): Promise<Schedu
 
 export async function deleteSlot(id: string): Promise<boolean> {
   const sql = getSql();
-  const rows = await sql`DELETE FROM schedule_slots WHERE id = ${id} RETURNING id`;
+  const rows =
+    await sql`DELETE FROM schedule_slots WHERE id = ${id} RETURNING id`;
   return rows.length > 0;
 }
 

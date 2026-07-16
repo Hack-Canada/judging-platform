@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { fredoka, rubik } from "@/lib/fonts";
+import { figtree, fredoka, jetbrainsMono, rubik } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   title: "HackCanada Judging Platform",
@@ -13,7 +13,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${rubik.variable} h-full`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${rubik.variable} ${figtree.variable} ${jetbrainsMono.variable} h-full`}
+      suppressHydrationWarning
+    >
       <body
         className={`${fredoka.className} min-h-full flex flex-col bg-primary text-primary-foreground antialiased`}
         suppressHydrationWarning

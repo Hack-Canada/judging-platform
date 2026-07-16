@@ -3,12 +3,24 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Clock, Plus, Minus, RotateCcw, Loader2, Trash2, CalendarPlus } from "lucide-react";
+import {
+  Search,
+  Clock,
+  Plus,
+  Minus,
+  RotateCcw,
+  Loader2,
+  Trash2,
+  CalendarPlus,
+} from "lucide-react";
 import type { ScheduleSlot } from "@/lib/schedule";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import {
   Dialog,
   DialogContent,
@@ -63,11 +75,17 @@ const TRACK_ACCENTS = [
 ];
 function trackAccent(track: string) {
   let h = 0;
-  for (let i = 0; i < track.length; i++) h = (h * 31 + track.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < track.length; i++)
+    h = (h * 31 + track.charCodeAt(i)) >>> 0;
   return TRACK_ACCENTS[h % TRACK_ACCENTS.length];
 }
 
-type Row = { key: string; startAt: string; endAt: string; byRoom: Record<string, ScheduleSlot> };
+type Row = {
+  key: string;
+  startAt: string;
+  endAt: string;
+  byRoom: Record<string, ScheduleSlot>;
+};
 
 type EditState = {
   id: string;
@@ -123,22 +141,32 @@ export function ScheduleManager({
       const key = s.scheduledAt;
       if (!map.has(key)) {
         const end = new Date(start.getTime() + s.durationMinutes * 60_000);
-        map.set(key, { key, startAt: start.toISOString(), endAt: end.toISOString(), byRoom: {} });
+        map.set(key, {
+          key,
+          startAt: start.toISOString(),
+          endAt: end.toISOString(),
+          byRoom: {},
+        });
       }
       map.get(key)!.byRoom[s.room] = s;
     }
     return [...map.values()].sort(
-      (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+      (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
     );
   }, [slots]);
 
   const q = query.trim().toLowerCase();
   const matches = (s: ScheduleSlot | undefined) =>
-    !!s && !!q && (s.projectName.toLowerCase().includes(q) || s.track.toLowerCase().includes(q));
+    !!s &&
+    !!q &&
+    (s.projectName.toLowerCase().includes(q) ||
+      s.track.toLowerCase().includes(q));
   const matchCount = q ? slots.filter((s) => matches(s)).length : 0;
 
   async function nudge(slot: ScheduleSlot, minutes: number) {
-    const scheduledAt = new Date(new Date(slot.scheduledAt).getTime() + minutes * 60_000).toISOString();
+    const scheduledAt = new Date(
+      new Date(slot.scheduledAt).getTime() + minutes * 60_000,
+    ).toISOString();
     setBusy(true);
     try {
       const res = await fetch(`/api/admin/schedule/${slot.id}`, {
@@ -148,7 +176,9 @@ export function ScheduleManager({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
-      setSlots((prev) => prev.map((s) => (s.id === data.slot.id ? data.slot : s)));
+      setSlots((prev) =>
+        prev.map((s) => (s.id === data.slot.id ? data.slot : s)),
+      );
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Update failed");
@@ -171,8 +201,10 @@ export function ScheduleManager({
       setSlots((prev) =>
         prev.map((s) => ({
           ...s,
-          scheduledAt: new Date(new Date(s.scheduledAt).getTime() + globalDelay * 60_000).toISOString(),
-        }))
+          scheduledAt: new Date(
+            new Date(s.scheduledAt).getTime() + globalDelay * 60_000,
+          ).toISOString(),
+        })),
       );
       toast.success(`Delayed all pitches by ${globalDelay} min`);
       setGlobalDelay(0);
@@ -200,7 +232,9 @@ export function ScheduleManager({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
-      setSlots((prev) => prev.map((s) => (s.id === data.slot.id ? data.slot : s)));
+      setSlots((prev) =>
+        prev.map((s) => (s.id === data.slot.id ? data.slot : s)),
+      );
       setEditing(null);
       toast.success("Pitch updated");
       router.refresh();
@@ -215,7 +249,9 @@ export function ScheduleManager({
     if (!deleting) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/admin/schedule/${deleting.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/schedule/${deleting.id}`, {
+        method: "DELETE",
+      });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Delete failed");
       setSlots((prev) => prev.filter((s) => s.id !== deleting.id));
@@ -266,7 +302,7 @@ export function ScheduleManager({
   function openAdd() {
     const last = slots.reduce(
       (max, s) => Math.max(max, new Date(s.scheduledAt).getTime()),
-      Date.now()
+      Date.now(),
     );
     setAdding({
       projectId: "",
@@ -293,16 +329,38 @@ export function ScheduleManager({
           <Clock className="size-4 text-muted-foreground" />
           <span className="text-sm font-medium">Delay all</span>
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="size-8" onClick={() => setGlobalDelay((d) => Math.max(0, d - 5))} disabled={busy}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8"
+              onClick={() => setGlobalDelay((d) => Math.max(0, d - 5))}
+              disabled={busy}
+            >
               <Minus className="size-3.5" />
             </Button>
-            <span className="w-16 text-center text-sm tabular-nums">{globalDelay} min</span>
-            <Button variant="outline" size="icon" className="size-8" onClick={() => setGlobalDelay((d) => d + 5)} disabled={busy}>
+            <span className="w-16 text-center text-sm tabular-nums">
+              {globalDelay} min
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8"
+              onClick={() => setGlobalDelay((d) => d + 5)}
+              disabled={busy}
+            >
               <Plus className="size-3.5" />
             </Button>
           </div>
-          <Button size="sm" onClick={applyGlobalDelay} disabled={globalDelay === 0 || busy}>
-            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+          <Button
+            size="sm"
+            onClick={applyGlobalDelay}
+            disabled={globalDelay === 0 || busy}
+          >
+            {busy ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <RotateCcw className="size-3.5" />
+            )}
             Apply
           </Button>
         </div>
@@ -312,13 +370,20 @@ export function ScheduleManager({
       </div>
 
       <p className="text-sm text-muted-foreground">
-        {rowsData.length} time slots · {rooms.length} rooms · {slots.length} pitches
+        {rowsData.length} time slots · {rooms.length} rooms · {slots.length}{" "}
+        pitches
         {q && (
           <>
-            {" "}· <span className="font-medium text-foreground">{matchCount}</span> match “{query}”
+            {" "}
+            · <span className="font-medium text-foreground">
+              {matchCount}
+            </span>{" "}
+            match “{query}”
           </>
         )}
-        <span className="ml-1 text-emerald-600 dark:text-emerald-400">· saved to DB</span>
+        <span className="ml-1 text-emerald-600 dark:text-emerald-400">
+          · saved to DB
+        </span>
       </p>
 
       {/* Legend */}
@@ -337,7 +402,8 @@ export function ScheduleManager({
         <span>Click a pitch to edit its room, time, track, or duration</span>
         <span className="inline-flex items-center gap-1.5">
           <Clock className="size-3.5" />
-          <span className="font-medium">Delay all</span> shifts every pitch at once — takes effect on Apply
+          <span className="font-medium">Delay all</span> shifts every pitch at
+          once — takes effect on Apply
         </span>
       </div>
 
@@ -350,7 +416,10 @@ export function ScheduleManager({
                 Time
               </th>
               {rooms.map((r) => (
-                <th key={r} className="min-w-48 px-3 py-2.5 text-left font-medium text-muted-foreground">
+                <th
+                  key={r}
+                  className="min-w-48 px-3 py-2.5 text-left font-medium text-muted-foreground"
+                >
                   {r}
                 </th>
               ))}
@@ -358,10 +427,15 @@ export function ScheduleManager({
           </thead>
           <tbody>
             {rowsData.map((row) => (
-              <tr key={row.key} className="border-b last:border-0 hover:bg-muted/20">
+              <tr
+                key={row.key}
+                className="border-b last:border-0 hover:bg-muted/20"
+              >
                 <td className="sticky left-0 z-10 whitespace-nowrap bg-card px-3 py-2 align-top font-medium tabular-nums">
                   <div>{fmtTime(row.startAt)}</div>
-                  <div className="text-xs font-normal text-muted-foreground">– {fmtTime(row.endAt)}</div>
+                  <div className="text-xs font-normal text-muted-foreground">
+                    – {fmtTime(row.endAt)}
+                  </div>
                 </td>
                 {rooms.map((r) => {
                   const s = row.byRoom[r];
@@ -375,7 +449,7 @@ export function ScheduleManager({
                             "group relative cursor-pointer rounded-md p-2.5 ring-1 transition hover:ring-2 hover:ring-foreground/30",
                             trackAccent(s.track),
                             dimmed && "opacity-30",
-                            hit && "ring-2 ring-foreground/40"
+                            hit && "ring-2 ring-foreground/40",
                           )}
                           onClick={() =>
                             setEditing({
@@ -388,11 +462,18 @@ export function ScheduleManager({
                             })
                           }
                         >
-                          <div className="pr-10 font-medium leading-snug text-foreground">{s.projectName}</div>
-                          <div className="mt-1 text-xs font-medium opacity-90">{s.track}</div>
+                          <div className="pr-10 font-medium leading-snug text-foreground">
+                            {s.projectName}
+                          </div>
+                          <div className="mt-1 text-xs font-medium opacity-90">
+                            {s.track}
+                          </div>
                           <div className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
                             <button
-                              onClick={(e) => { e.stopPropagation(); nudge(s, -5); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                nudge(s, -5);
+                              }}
                               title="5 min earlier"
                               disabled={busy}
                               className="grid size-5 place-items-center rounded bg-background/80 text-foreground hover:bg-background"
@@ -400,7 +481,10 @@ export function ScheduleManager({
                               <Minus className="size-3" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); nudge(s, 5); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                nudge(s, 5);
+                              }}
                               title="5 min later"
                               disabled={busy}
                               className="grid size-5 place-items-center rounded bg-background/80 text-foreground hover:bg-background"
@@ -427,8 +511,12 @@ export function ScheduleManager({
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="truncate">{editing?.projectName}</DialogTitle>
-            <DialogDescription>Edit this pitch — changes save to the schedule.</DialogDescription>
+            <DialogTitle className="truncate">
+              {editing?.projectName}
+            </DialogTitle>
+            <DialogDescription>
+              Edit this pitch — changes save to the schedule.
+            </DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="grid gap-4 py-2">
@@ -439,10 +527,14 @@ export function ScheduleManager({
                     id="edit-room"
                     className="w-full"
                     value={editing.room}
-                    onChange={(e) => setEditing({ ...editing, room: e.target.value })}
+                    onChange={(e) =>
+                      setEditing({ ...editing, room: e.target.value })
+                    }
                   >
                     {roomOptions.map((r) => (
-                      <NativeSelectOption key={r} value={r}>{r}</NativeSelectOption>
+                      <NativeSelectOption key={r} value={r}>
+                        {r}
+                      </NativeSelectOption>
                     ))}
                   </NativeSelect>
                 </div>
@@ -453,7 +545,12 @@ export function ScheduleManager({
                     type="number"
                     min={1}
                     value={editing.durationMinutes}
-                    onChange={(e) => setEditing({ ...editing, durationMinutes: Number(e.target.value) || 1 })}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        durationMinutes: Number(e.target.value) || 1,
+                      })
+                    }
                   />
                 </div>
               </div>
@@ -463,7 +560,9 @@ export function ScheduleManager({
                   id="edit-time"
                   type="datetime-local"
                   value={editing.localTime}
-                  onChange={(e) => setEditing({ ...editing, localTime: e.target.value })}
+                  onChange={(e) =>
+                    setEditing({ ...editing, localTime: e.target.value })
+                  }
                 />
               </div>
               <div className="grid gap-1.5">
@@ -471,7 +570,9 @@ export function ScheduleManager({
                 <Input
                   id="edit-track"
                   value={editing.track}
-                  onChange={(e) => setEditing({ ...editing, track: e.target.value })}
+                  onChange={(e) =>
+                    setEditing({ ...editing, track: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -480,13 +581,22 @@ export function ScheduleManager({
             <Button
               variant="outline"
               className="text-destructive hover:text-destructive"
-              onClick={() => editing && setDeleting(slots.find((s) => s.id === editing.id) ?? null)}
+              onClick={() =>
+                editing &&
+                setDeleting(slots.find((s) => s.id === editing.id) ?? null)
+              }
               disabled={busy}
             >
               <Trash2 className="size-4" /> Delete
             </Button>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>Cancel</Button>
+              <Button
+                variant="outline"
+                onClick={() => setEditing(null)}
+                disabled={busy}
+              >
+                Cancel
+              </Button>
               <Button onClick={saveEdit} disabled={busy}>
                 {busy && <Loader2 className="size-4 animate-spin" />} Save
               </Button>
@@ -500,7 +610,9 @@ export function ScheduleManager({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add a pitch</DialogTitle>
-            <DialogDescription>Schedule a project into a room and time.</DialogDescription>
+            <DialogDescription>
+              Schedule a project into a room and time.
+            </DialogDescription>
           </DialogHeader>
           {adding && (
             <div className="grid gap-4 py-2">
@@ -510,11 +622,17 @@ export function ScheduleManager({
                   id="add-project"
                   className="w-full"
                   value={adding.projectId}
-                  onChange={(e) => setAdding({ ...adding, projectId: e.target.value })}
+                  onChange={(e) =>
+                    setAdding({ ...adding, projectId: e.target.value })
+                  }
                 >
-                  <NativeSelectOption value="">Select a project…</NativeSelectOption>
+                  <NativeSelectOption value="">
+                    Select a project…
+                  </NativeSelectOption>
                   {projects.map((p) => (
-                    <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>
+                    <NativeSelectOption key={p.id} value={p.id}>
+                      {p.name}
+                    </NativeSelectOption>
                   ))}
                 </NativeSelect>
               </div>
@@ -525,10 +643,14 @@ export function ScheduleManager({
                     id="add-room"
                     className="w-full"
                     value={adding.room}
-                    onChange={(e) => setAdding({ ...adding, room: e.target.value })}
+                    onChange={(e) =>
+                      setAdding({ ...adding, room: e.target.value })
+                    }
                   >
                     {roomOptions.map((r) => (
-                      <NativeSelectOption key={r} value={r}>{r}</NativeSelectOption>
+                      <NativeSelectOption key={r} value={r}>
+                        {r}
+                      </NativeSelectOption>
                     ))}
                   </NativeSelect>
                 </div>
@@ -539,7 +661,12 @@ export function ScheduleManager({
                     type="number"
                     min={1}
                     value={adding.durationMinutes}
-                    onChange={(e) => setAdding({ ...adding, durationMinutes: Number(e.target.value) || 1 })}
+                    onChange={(e) =>
+                      setAdding({
+                        ...adding,
+                        durationMinutes: Number(e.target.value) || 1,
+                      })
+                    }
                   />
                 </div>
               </div>
@@ -549,13 +676,21 @@ export function ScheduleManager({
                   id="add-time"
                   type="datetime-local"
                   value={adding.localTime}
-                  onChange={(e) => setAdding({ ...adding, localTime: e.target.value })}
+                  onChange={(e) =>
+                    setAdding({ ...adding, localTime: e.target.value })
+                  }
                 />
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAdding(null)} disabled={busy}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={() => setAdding(null)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
             <Button onClick={addSlot} disabled={busy}>
               {busy && <Loader2 className="size-4 animate-spin" />} Add pitch
             </Button>
@@ -564,19 +699,25 @@ export function ScheduleManager({
       </Dialog>
 
       {/* Delete confirm */}
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+      <AlertDialog
+        open={!!deleting}
+        onOpenChange={(o) => !o && setDeleting(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this pitch?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes “{deleting?.projectName}” from the schedule. The project
-              submission itself is not affected.
+              This removes “{deleting?.projectName}” from the schedule. The
+              project submission itself is not affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); confirmDelete(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDelete();
+              }}
               disabled={busy}
               className="bg-destructive text-white hover:bg-destructive/90"
             >

@@ -117,7 +117,7 @@ export type ProjectUpdate = {
 
 export async function updateProject(
   id: string,
-  fields: ProjectUpdate
+  fields: ProjectUpdate,
 ): Promise<Project | null> {
   const sql = getSql();
   const rows = await sql`

@@ -30,7 +30,9 @@ loadEnvLocal();
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  throw new Error("DATABASE_URL is not set. Add it to client/.env.local first.");
+  throw new Error(
+    "DATABASE_URL is not set. Add it to client/.env.local first.",
+  );
 }
 
 export default defineConfig({
