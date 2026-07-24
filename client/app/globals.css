@@ -1,17 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@plugin "daisyui" {
+  themes: false;
+  logs: false;
+}
 
 @custom-variant dark (&:is(.dark *));
-
-@theme {
-  --color-neutral-color: #6b7280;
-  --color-tertiary-color: #1a1a1b;
-  --color-secondary-color: #f8f9fa;
-  --color-primary-color: #e60000;
-
-  --color-background-color: #e6e6e6;
-}
 
 @theme inline {
   --color-background: var(--background);
@@ -56,6 +51,36 @@
 }
 
 :root {
+  /* Brand */
+  --brand-primary: #4da3ff;
+  --brand-secondary: #0f2a43;
+  --brand-accent: #00d0c0;
+
+  /* Text */
+  --text-dark: #0a0f1a;
+  --text-body: #0f2a43;
+  --text-secondary: #5a7184;
+  --text-tertiary: #9aa9bc;
+  --text-light: #ffffff;
+  --text-primary: #2b8af0;
+  --text-success: #2e9e6b;
+  --text-danger: #d24b57;
+  --text-warning: #d98a2b;
+
+  /* Background */
+  --bg-primary-light: #dcebfb;
+  --bg-success-light: #ddf3e7;
+  --bg-danger-light: #fbe1e3;
+  --bg-warning-light: #fbefd8;
+  --bg-primary: #4da3ff;
+  --bg-success: #3ddc97;
+  --bg-danger: #e4646f;
+  --bg-warning: #f2b24c;
+  --bg-white: #ffffff;
+  --bg-light: #f5f9ff;
+  --bg-gray: #eaf0f7;
+  --bg-gray-dark: #cdd8e5;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.147 0.004 49.25);
   --card: oklch(1 0 0);
@@ -130,5 +155,29 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@keyframes hacker-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.hacker-card-enter {
+  animation: hacker-card-enter 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hacker-card-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }
