@@ -1,8 +1,17 @@
 import { getDemoSponsorSchedule } from "@/db/queries";
 import { ScheduleViewSwitcher } from "@/components/schedule/schedule-view-switcher";
 
+export const dynamic = "force-dynamic";
+
 export default async function SchedulePage() {
-  const events = await getDemoSponsorSchedule();
+  let events: Awaited<ReturnType<typeof getDemoSponsorSchedule>> = [];
+  let errorMessage: string | null = null;
+
+  try {
+    events = await getDemoSponsorSchedule();
+  } catch (error) {
+    errorMessage = error instanceof Error ? error.message : String(error);
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-muted p-4">
@@ -12,6 +21,11 @@ export default async function SchedulePage() {
           Events relevant to sponsors. Your own sessions are highlighted.
         </p>
       </div>
+      {errorMessage && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+          {errorMessage}
+        </div>
+      )}
       <ScheduleViewSwitcher
         items={events.map((event) => ({
           id: event.id,

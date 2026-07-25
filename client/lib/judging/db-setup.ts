@@ -54,7 +54,9 @@ async function migrateJudgmentsRound(sql: NeonQueryFunction<false, false>) {
       ALTER TABLE judgments ADD PRIMARY KEY (judge_id, stream_id, project_id, round)
     `;
   }
+}
 
+async function migrateSyncLogRound(sql: NeonQueryFunction<false, false>) {
   const logCols = await sql`
     SELECT column_name
     FROM information_schema.columns
@@ -115,6 +117,18 @@ export async function ensureJudgingTables() {
       client_timestamp TIMESTAMPTZ NOT NULL,
       received_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
+  `;
+
+  await migrateSyncLogRound(sql);
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS judgments_judge_stream_round_idx
+      ON judgments (judge_id, stream_id, round)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS judging_sync_log_received_at_idx
+      ON judging_sync_log (received_at)
   `;
 
   ensured = true;
