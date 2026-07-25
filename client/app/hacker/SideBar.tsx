@@ -185,8 +185,7 @@ export function SideBar() {
               href="/hacker"
               className="[font-family:var(--font-fredoka)] text-[1.65rem] font-semibold tracking-[-0.03em] text-[var(--brand-secondary)]"
             >
-              Hack
-              <span className="text-[var(--text-primary)]">Canada</span>
+              HackCanada
             </Link>
             <BrandStripe className="mt-5 max-w-[112px]" />
           </div>

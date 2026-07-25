@@ -60,14 +60,22 @@ const columns: ScheduleColumn[] = [
 ];
 
 const colorMap: Record<EventType, string> = {
-  main: "border-violet-300 bg-violet-200 text-violet-950",
-  sponsor: "border-pink-300 bg-pink-100 text-pink-950",
-  workshop: "border-yellow-300 bg-yellow-100 text-yellow-950",
-  activity: "border-green-300 bg-green-100 text-green-950",
-  food: "border-blue-300 bg-blue-100 text-blue-950",
-  booth: "border-fuchsia-200 bg-fuchsia-100 text-fuchsia-950",
-  judging: "border-orange-300 bg-orange-100 text-orange-950",
-  other: "border-purple-300 bg-purple-200 text-purple-950",
+  main:
+    "border-[color:var(--brand-primary)]/40 bg-[var(--bg-primary-light)] text-[var(--brand-secondary)]",
+  sponsor:
+    "border-[color:var(--brand-accent)]/40 bg-[#def7f4] text-[var(--brand-secondary)]",
+  workshop:
+    "border-[color:var(--brand-primary)]/25 bg-[#eef6ff] text-[var(--brand-secondary)]",
+  activity:
+    "border-[color:var(--bg-success)]/35 bg-[var(--bg-success-light)] text-[var(--text-body)]",
+  food:
+    "border-[color:var(--bg-warning)]/40 bg-[var(--bg-warning-light)] text-[var(--text-body)]",
+  booth:
+    "border-[color:var(--brand-accent)]/35 bg-[#e7faf8] text-[var(--text-body)]",
+  judging:
+    "border-[color:var(--bg-danger)]/35 bg-[var(--bg-danger-light)] text-[var(--text-body)]",
+  other:
+    "border-[var(--bg-gray-dark)] bg-[var(--bg-gray)] text-[var(--text-body)]",
 };
 
 const schedule: DaySchedule[] = [
@@ -319,7 +327,7 @@ function EventBlock({
 }) {
   return (
     <article
-      className={`absolute inset-x-0 top-0 z-20 flex select-text flex-col justify-center rounded-lg border-2 p-2 shadow-sm transition-shadow hover:shadow-md ${colorMap[type]}`}
+      className={`absolute inset-x-0 top-0 z-20 flex select-text flex-col justify-center rounded-xl border-2 p-2 shadow-[0_4px_10px_rgba(15,42,67,0.06)] transition-shadow hover:shadow-[0_7px_16px_rgba(15,42,67,0.1)] ${colorMap[type]}`}
       style={{ height: `${getEventHeight(day, rowIndex, eventKey)}px` }}
     >
       <h3 className="[font-family:var(--font-figtree)] text-[11px] font-semibold leading-tight">
@@ -339,7 +347,7 @@ function DayScheduleView({ day }: { day: DaySchedule }) {
 
   return (
     <section className="w-full pb-5">
-      <h2 className="sticky left-0 mb-3 mt-1 [font-family:var(--font-figtree)] text-2xl font-bold text-[#3f3850]">
+      <h2 className="sticky left-0 mb-3 mt-1 [font-family:var(--font-figtree)] text-2xl font-bold text-[var(--brand-secondary)]">
         {day.day}, {day.date}
       </h2>
 
@@ -347,13 +355,13 @@ function DayScheduleView({ day }: { day: DaySchedule }) {
         {fullDay.rows.map((row, rowIndex) => (
           <div key={`${fullDay.day}-${row.time}`}>
             <div
-              className="grid gap-2 border-t border-neutral-200 pt-1"
+              className="grid gap-2 border-t border-[var(--bg-gray)] pt-1"
               style={{
                 minHeight: `${rowHeight}px`,
                 gridTemplateColumns: "70px repeat(9, minmax(96px, 1fr))",
               }}
             >
-              <div className="pt-2 [font-family:var(--font-figtree)] text-xs font-medium text-[#776780]">
+              <div className="pt-2 [font-family:var(--font-figtree)] text-xs font-medium text-[var(--text-secondary)]">
                 {row.time}
               </div>
 
@@ -410,31 +418,31 @@ function formatMinutesAsTime(totalMinutes: number) {
 
 export default function SchedulePage() {
   return (
-    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#f7f3ea] p-4 text-[#3f3850] sm:p-6">
+    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--bg-light)] p-4 text-[var(--text-body)] sm:p-6">
       <header className="mb-4">
-        <p className="[font-family:var(--font-jetbrains-mono)] text-xs font-semibold uppercase text-[#776780]">
+        <p className="[font-family:var(--font-jetbrains-mono)] text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)]">
           Live event
         </p>
-        <h1 className="[font-family:var(--font-figtree)] text-3xl font-black">
+        <h1 className="[font-family:var(--font-figtree)] text-3xl font-black text-[var(--brand-secondary)]">
           Schedule
         </h1>
-        <p className="mt-2 max-w-2xl [font-family:var(--font-figtree)] text-sm text-[#776780]">
+        <p className="mt-2 max-w-2xl [font-family:var(--font-figtree)] text-sm text-[var(--text-secondary)]">
           Events connect across time slots and tracks when they continue, matching the compact live schedule style.
         </p>
       </header>
 
-      <section className="min-h-0 flex-1 overflow-auto rounded-lg border border-white/70 bg-white/45 p-3 shadow-[0_8px_16px_rgba(0,0,0,0.05)] backdrop-blur sm:p-6">
+      <section className="min-h-0 flex-1 overflow-auto rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] p-3 shadow-[0_10px_24px_rgba(15,42,67,0.06)] sm:p-6">
         <div className="min-w-[1000px]">
-          <div className="sticky top-0 z-40 mb-4 border-b-2 border-neutral-200 bg-white/75 py-3 backdrop-blur">
+          <div className="sticky top-0 z-40 mb-4 border-b-2 border-[var(--bg-gray)] bg-white/95 py-3 backdrop-blur">
             <div
               className="grid items-center gap-2"
               style={{ gridTemplateColumns: "70px repeat(9, minmax(96px, 1fr))" }}
             >
-              <div className="[font-family:var(--font-jetbrains-mono)] text-[10px] font-semibold text-[#776780]" />
+              <div className="[font-family:var(--font-jetbrains-mono)] text-[10px] font-semibold text-[var(--text-secondary)]" />
               {columns.map((column) => (
                 <div
                   key={column.key}
-                  className="whitespace-pre-line text-center [font-family:var(--font-jetbrains-mono)] text-[10px] font-semibold leading-tight text-[#776780]"
+                  className="whitespace-pre-line text-center [font-family:var(--font-jetbrains-mono)] text-[10px] font-semibold leading-tight text-[var(--text-secondary)]"
                 >
                   {column.label}
                 </div>
