@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@plugin "daisyui" {
+@plugin "../node_modules/daisyui" {
   themes: false;
   logs: false;
 }
