@@ -60,16 +60,14 @@ const columns: ScheduleColumn[] = [
 ];
 
 const colorMap: Record<EventType, string> = {
-  main:
-    "border-[color:var(--brand-primary)]/40 bg-[var(--bg-primary-light)] text-[var(--brand-secondary)]",
+  main: "border-[color:var(--brand-primary)]/40 bg-[var(--bg-primary-light)] text-[var(--brand-secondary)]",
   sponsor:
     "border-[color:var(--brand-accent)]/40 bg-[#def7f4] text-[var(--brand-secondary)]",
   workshop:
     "border-[color:var(--brand-primary)]/25 bg-[#eef6ff] text-[var(--brand-secondary)]",
   activity:
     "border-[color:var(--bg-success)]/35 bg-[var(--bg-success-light)] text-[var(--text-body)]",
-  food:
-    "border-[color:var(--bg-warning)]/40 bg-[var(--bg-warning-light)] text-[var(--text-body)]",
+  food: "border-[color:var(--bg-warning)]/40 bg-[var(--bg-warning-light)] text-[var(--text-body)]",
   booth:
     "border-[color:var(--brand-accent)]/35 bg-[#e7faf8] text-[var(--text-body)]",
   judging:
@@ -81,7 +79,7 @@ const colorMap: Record<EventType, string> = {
 const schedule: DaySchedule[] = [
   {
     day: "Friday",
-    date: "November 21st",
+    date: "December 21st",
     rows: [
       {
         time: "5:00 PM",
@@ -135,14 +133,17 @@ const schedule: DaySchedule[] = [
         time: "10:00 PM",
         events: {
           sponsorWorkshop: { title: "Build with APIs", location: "Room 208" },
-          otherWorkshop: { title: "Project planning sprint", location: "Room 204" },
+          otherWorkshop: {
+            title: "Project planning sprint",
+            location: "Room 204",
+          },
         },
       },
     ],
   },
   {
     day: "Saturday",
-    date: "November 22nd",
+    date: "December 22nd",
     rows: [
       {
         time: "9:00 AM",
@@ -161,23 +162,38 @@ const schedule: DaySchedule[] = [
         time: "10:00 AM",
         events: {
           main: { title: "Hacking continues", location: "Hacker Space" },
-          sponsorWorkshop: { title: "AI product workshop", location: "Room 208" },
-          otherWorkshop: { title: "Design systems crash course", location: "Room 206" },
+          sponsorWorkshop: {
+            title: "AI product workshop",
+            location: "Room 208",
+          },
+          otherWorkshop: {
+            title: "Design systems crash course",
+            location: "Room 206",
+          },
         },
       },
       {
         time: "10:30 AM",
         events: {
           main: { title: "Hacking continues", location: "Hacker Space" },
-          sponsorWorkshop: { title: "AI product workshop", location: "Room 208" },
-          otherWorkshop: { title: "Design systems crash course", location: "Room 206" },
+          sponsorWorkshop: {
+            title: "AI product workshop",
+            location: "Room 208",
+          },
+          otherWorkshop: {
+            title: "Design systems crash course",
+            location: "Room 206",
+          },
         },
       },
       {
         time: "12:00 PM",
         events: {
           food: { title: "Lunch", location: "Dining Hall" },
-          sponsorBooth: { title: "Sponsor booth challenge", location: "Atrium" },
+          sponsorBooth: {
+            title: "Sponsor booth challenge",
+            location: "Atrium",
+          },
         },
       },
       {
@@ -185,7 +201,10 @@ const schedule: DaySchedule[] = [
         events: {
           activities1: { title: "Mini games", location: "Atrium" },
           activities2: { title: "Mini games", location: "Atrium" },
-          sponsorBooth: { title: "Sponsor booth challenge", location: "Atrium" },
+          sponsorBooth: {
+            title: "Sponsor booth challenge",
+            location: "Atrium",
+          },
         },
       },
       {
@@ -205,7 +224,7 @@ const schedule: DaySchedule[] = [
   },
   {
     day: "Sunday",
-    date: "November 23rd",
+    date: "December 23rd",
     rows: [
       {
         time: "9:00 AM",
@@ -246,13 +265,19 @@ const schedule: DaySchedule[] = [
 
 const fullTimelineRows = generateTimelineRows();
 
-function isSameEvent(a: ScheduleEvent | undefined, b: ScheduleEvent | undefined) {
+function isSameEvent(
+  a: ScheduleEvent | undefined,
+  b: ScheduleEvent | undefined,
+) {
   return Boolean(a && b && a.title === b.title && a.location === b.location);
 }
 
 function shouldSkipEvent(day: DaySchedule, rowIndex: number, key: EventKey) {
   if (rowIndex === 0) return false;
-  return isSameEvent(day.rows[rowIndex]?.events[key], day.rows[rowIndex - 1]?.events[key]);
+  return isSameEvent(
+    day.rows[rowIndex]?.events[key],
+    day.rows[rowIndex - 1]?.events[key],
+  );
 }
 
 function getEventHeight(day: DaySchedule, rowIndex: number, key: EventKey) {
@@ -365,23 +390,26 @@ function DayScheduleView({ day }: { day: DaySchedule }) {
                 {row.time}
               </div>
 
-              {getMergedColumns(fullDay, rowIndex).map((column, columnIndex) => (
-                <div
-                  key={`${row.time}-${column.key}-${columnIndex}`}
-                  className="relative"
-                  style={{ gridColumn: `span ${column.span}` }}
-                >
-                  {column.event && !shouldSkipEvent(fullDay, rowIndex, column.key) ? (
-                    <EventBlock
-                      day={fullDay}
-                      event={column.event}
-                      rowIndex={rowIndex}
-                      eventKey={column.key}
-                      type={column.type}
-                    />
-                  ) : null}
-                </div>
-              ))}
+              {getMergedColumns(fullDay, rowIndex).map(
+                (column, columnIndex) => (
+                  <div
+                    key={`${row.time}-${column.key}-${columnIndex}`}
+                    className="relative"
+                    style={{ gridColumn: `span ${column.span}` }}
+                  >
+                    {column.event &&
+                    !shouldSkipEvent(fullDay, rowIndex, column.key) ? (
+                      <EventBlock
+                        day={fullDay}
+                        event={column.event}
+                        rowIndex={rowIndex}
+                        eventKey={column.key}
+                        type={column.type}
+                      />
+                    ) : null}
+                  </div>
+                ),
+              )}
             </div>
           </div>
         ))}
@@ -419,7 +447,10 @@ function formatMinutesAsTime(totalMinutes: number) {
 export default function SchedulePage() {
   return (
     <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--bg-light)] p-4 text-[var(--text-body)] sm:p-6">
-      <header className="mb-4">
+      <header
+        className="hacker-card-enter mb-4"
+        style={{ animationDelay: "40ms" }}
+      >
         <p className="[font-family:var(--font-jetbrains-mono)] text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)]">
           Live event
         </p>
@@ -427,16 +458,22 @@ export default function SchedulePage() {
           Schedule
         </h1>
         <p className="mt-2 max-w-2xl [font-family:var(--font-figtree)] text-sm text-[var(--text-secondary)]">
-          Events connect across time slots and tracks when they continue, matching the compact live schedule style.
+          Events connect across time slots and tracks when they continue,
+          matching the compact live schedule style.
         </p>
       </header>
 
-      <section className="min-h-0 flex-1 overflow-auto rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] p-3 shadow-[0_10px_24px_rgba(15,42,67,0.06)] sm:p-6">
+      <section
+        className="hacker-card-enter min-h-0 flex-1 overflow-auto rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] p-3 shadow-[0_10px_24px_rgba(15,42,67,0.06)] sm:p-6"
+        style={{ animationDelay: "120ms" }}
+      >
         <div className="min-w-[1000px]">
           <div className="sticky top-0 z-40 mb-4 border-b-2 border-[var(--bg-gray)] bg-white/95 py-3 backdrop-blur">
             <div
               className="grid items-center gap-2"
-              style={{ gridTemplateColumns: "70px repeat(9, minmax(96px, 1fr))" }}
+              style={{
+                gridTemplateColumns: "70px repeat(9, minmax(96px, 1fr))",
+              }}
             >
               <div className="[font-family:var(--font-jetbrains-mono)] text-[10px] font-semibold text-[var(--text-secondary)]" />
               {columns.map((column) => (
