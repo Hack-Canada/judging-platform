@@ -47,9 +47,11 @@ export function useJudgingSync(onOffsetChange?: (minutes: number) => void) {
   }, [onOffsetChange]);
 
   useEffect(() => {
-    refreshPending();
-    void syncNow();
-    void refreshOffset();
+    queueMicrotask(() => {
+      refreshPending();
+      void syncNow();
+      void refreshOffset();
+    });
 
     function goOnline() {
       setOnline(true);

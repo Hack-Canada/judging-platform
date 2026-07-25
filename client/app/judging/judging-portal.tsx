@@ -115,7 +115,14 @@ export function JudgingPortal({
   const [now, setNow] = useState(() => Date.now());
   const [clientServerDeltaMs, setClientServerDeltaMs] = useState(0);
   const [hydrated, setHydrated] = useState(false);
-  const [judgeCode, setJudgeCode] = useState<string | null>(null);
+  const [judgeCode] = useState<string | null>(() => {
+    const fromUrl = normalizeJudgeCode(initialJudgeCode);
+    if (fromUrl) {
+      saveJudgeCode(fromUrl);
+      return fromUrl;
+    }
+    return loadJudgeCode();
+  });
   const [scheduleOffsetMinutes, setScheduleOffsetMinutes] = useState(
     () => initialScheduleOffset || loadLocalScheduleOffset()
   );
@@ -136,16 +143,6 @@ export function JudgingPortal({
 
   const judgeId = resolveJudgeId(judgeCode);
   const adjustedNow = now + clientServerDeltaMs;
-
-  useEffect(() => {
-    const fromUrl = normalizeJudgeCode(initialJudgeCode);
-    if (fromUrl) {
-      saveJudgeCode(fromUrl);
-      setJudgeCode(fromUrl);
-    } else {
-      setJudgeCode(loadJudgeCode());
-    }
-  }, [initialJudgeCode]);
 
   useEffect(() => {
     void fetchJudgingConfig().then(({ scheduleOffsetMinutes: minutes, serverNow }) => {
@@ -211,18 +208,17 @@ export function JudgingPortal({
   }, []);
 
   useEffect(() => {
-    if (!activeStreamId && streams[0]) {
-      setActiveStreamId(streams[0].id);
-      return;
-    }
-    applyStorage(activeStreamId, {
-      setJudgedIds,
-      setSkippedIds,
-      setSkipReasons,
-      setNotes,
-      setEarlyMarkedIds,
+    if (!activeStreamId) return;
+    queueMicrotask(() => {
+      applyStorage(activeStreamId, {
+        setJudgedIds,
+        setSkippedIds,
+        setSkipReasons,
+        setNotes,
+        setEarlyMarkedIds,
+      });
+      setHydrated(true);
     });
-    setHydrated(true);
   }, [activeStreamId, streams]);
 
   useEffect(() => {
@@ -250,11 +246,13 @@ export function JudgingPortal({
       streamSlots[0]?.projectId ??
       "";
     const preferred = live?.projectId ?? firstUnjudged;
-    setActiveProjectId((prev) => {
-      const stillInStream = streamSlots.some((s) => s.projectId === prev);
-      return stillInStream && prev ? prev : preferred;
+    queueMicrotask(() => {
+      setActiveProjectId((prev) => {
+        const stillInStream = streamSlots.some((s) => s.projectId === prev);
+        return stillInStream && prev ? prev : preferred;
+      });
     });
-  }, [hydrated, streamSlots, activeStreamId]);
+  }, [hydrated, streamSlots, activeStreamId, judgedIds]);
 
   useEffect(() => {
     if (!hydrated || !activeStreamId) return;

@@ -10,6 +10,7 @@ import {
 import { TrackChart, TimelineChart, TeamSizeChart } from "@/components/admin/charts";
 
 export const metadata = { title: "Admin · Stats" };
+export const dynamic = "force-dynamic";
 
 function StatCard({
   label,
@@ -37,12 +38,40 @@ function StatCard({
 }
 
 export default async function StatsPage() {
-  const [stats, tracks, teamSizes, timeline] = await Promise.all([
-    getSubmissionStats(),
-    getTrackCounts(),
-    getTeamSizeDistribution(),
-    getSubmissionTimeline(),
-  ]);
+  let data: Awaited<
+    ReturnType<typeof Promise.all<[
+      ReturnType<typeof getSubmissionStats>,
+      ReturnType<typeof getTrackCounts>,
+      ReturnType<typeof getTeamSizeDistribution>,
+      ReturnType<typeof getSubmissionTimeline>,
+    ]>>
+  >;
+
+  try {
+    data = await Promise.all([
+      getSubmissionStats(),
+      getTrackCounts(),
+      getTeamSizeDistribution(),
+      getSubmissionTimeline(),
+    ]);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Submission stats</h2>
+          <p className="text-sm text-muted-foreground">
+            Live from the submissions database.
+          </p>
+        </div>
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+          {errorMessage}
+        </div>
+      </div>
+    );
+  }
+
+  const [stats, tracks, teamSizes, timeline] = data;
 
   const devpostPct =
     stats.totalProjects > 0

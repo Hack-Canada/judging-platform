@@ -2,9 +2,17 @@ import { getProjects } from "@/lib/queries";
 import { SubmissionsManager } from "@/components/admin/submissions-manager";
 
 export const metadata = { title: "Admin · Submissions" };
+export const dynamic = "force-dynamic";
 
 export default async function SubmissionsPage() {
-  const projects = await getProjects();
+  let projects: Awaited<ReturnType<typeof getProjects>> = [];
+  let errorMessage: string | null = null;
+
+  try {
+    projects = await getProjects();
+  } catch (error) {
+    errorMessage = error instanceof Error ? error.message : String(error);
+  }
 
   return (
     <div className="space-y-6">
@@ -15,7 +23,13 @@ export default async function SubmissionsPage() {
           write straight to the database.
         </p>
       </div>
-      <SubmissionsManager initialProjects={projects} />
+      {errorMessage ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+          {errorMessage}
+        </div>
+      ) : (
+        <SubmissionsManager initialProjects={projects} />
+      )}
     </div>
   );
 }
