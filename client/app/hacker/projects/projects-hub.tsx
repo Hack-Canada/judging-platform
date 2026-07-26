@@ -1,36 +1,39 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
 import {
   CalendarClock,
-  CheckCircle2,
-  Clock3,
-  ExternalLink,
-  Github,
-  LayoutGrid,
-  LinkIcon,
+  ChevronDown,
+  ChevronUp,
+  FolderKanban,
+  MapPin,
   Search,
   Send,
-  Trophy,
+  TableProperties,
   Users,
-  Youtube,
 } from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
 import type { Project, ProjectScheduleSlot } from "@/lib/projects";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+
+import { ProjectDetailsDialog } from "./ProjectDetailsDialog";
+import { ProjectTable } from "./ProjectTable";
+import {
+  databaseJudgingSlot,
+  projectDescription,
+  teamFilterLabel,
+  type DisplayScheduleSlot,
+  type ProjectTableRow,
+} from "./project-display";
 
 type ProjectsHubProps = {
   projects: Project[];
@@ -38,297 +41,127 @@ type ProjectsHubProps = {
   errorMessage: string | null;
 };
 
-type LinkKind = "github" | "youtube" | "demo" | "devpost";
-type DisplayScheduleSlot = {
+type ActiveView = "projects" | "rooms";
+
+type RoomGroup = {
   id: string;
-  time: string;
   room: string;
-  status: string;
-  durationMinutes: number;
-  project: Project;
-  source: "database" | "generated";
+  location: string | null;
+  rows: ProjectTableRow[];
 };
 
 const ALL_TEAMS = "All teams";
+const INITIAL_PROJECT_COUNT = 10;
 
-const judgingRooms = [
-  "Judging Room A",
-  "Judging Room B",
-  "Expo Table 1",
-  "Expo Table 2",
-] as const;
-
-const linkKeys: Record<LinkKind, string[]> = {
-  github: [
-    "github",
-    "github_link",
-    "github_url",
-    "git_repo",
-    "git_repository",
-    "repo",
-    "repo_url",
-    "repository",
-    "repository_url",
-    "source_code",
-    "source_code_url",
-  ],
-  youtube: [
-    "youtube",
-    "youtube_link",
-    "youtube_url",
-    "video",
-    "video_link",
-    "video_url",
-    "demo_video",
-    "demo_video_url",
-  ],
-  demo: [
-    "demo",
-    "demo_link",
-    "demo_url",
-    "live_demo",
-    "live_demo_url",
-    "live_post_demo",
-    "project_url",
-    "website",
-  ],
-  devpost: ["devpost", "devpost_link", "devpost_url"],
-};
-
-function jsonText(value: Project["raw"][string]) {
-  if (typeof value === "string") return value.trim() || null;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) {
-    const values = value
-      .map((item) => (typeof item === "string" ? item.trim() : null))
-      .filter(Boolean);
-    return values.length > 0 ? values.join(", ") : null;
-  }
-
-  return null;
-}
-
-function rawValue(project: Project, keys: string[]) {
-  for (const key of keys) {
-    const value = jsonText(project.raw[key]);
-    if (value) return value;
-  }
-
-  return null;
-}
-
-function asUrl(value: string | null) {
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
-  return `https://${value}`;
-}
-
-function projectLink(project: Project, kind: LinkKind) {
-  if (kind === "devpost" && project.devpost_link) {
-    return asUrl(project.devpost_link);
-  }
-
-  return asUrl(rawValue(project, linkKeys[kind]));
-}
-
-function projectDescription(project: Project) {
-  return (
-    rawValue(project, [
-      "description",
-      "full_description",
-      "project_description",
-      "summary",
-      "tagline",
-      "elevator_pitch",
-    ]) ?? "No project description has been added yet."
-  );
-}
-
-function teamLabel(project: Project) {
-  if (project.team_name) return project.team_name;
-  if (project.members.length > 0) return `${project.members.length} members`;
-  return project.name ?? "Independent submission";
-}
-
-function teamFilterLabel(project: Project) {
-  if (project.team_name) return project.team_name;
-  if (project.members.length > 0) return project.members.join(", ");
-  return project.name ?? "Independent";
-}
-
-function memberLabel(project: Project) {
-  if (project.members.length > 0) return project.members.join(", ");
-  return project.name ?? "No team members listed";
-}
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
-
-function submittedLabel(value: string | null) {
-  if (!value) return "Submission time unavailable";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Submitted";
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function minutesToTime(totalMinutes: number) {
-  const hours24 = Math.floor(totalMinutes / 60) % 24;
-  const minutes = totalMinutes % 60;
-  const suffix = hours24 >= 12 ? "PM" : "AM";
-  const hour = hours24 % 12 || 12;
-
-  return `${hour}:${String(minutes).padStart(2, "0")} ${suffix}`;
-}
-
-function generatedJudgingSlot(project: Project, index: number): DisplayScheduleSlot {
-  const slotIndex = Math.floor(index / judgingRooms.length);
-  const startMinutes = 9 * 60 + slotIndex * 12;
-
-  return {
-    id: `${project.id}-${index}`,
-    time: minutesToTime(startMinutes),
-    room: judgingRooms[index % judgingRooms.length],
-    status: "preview",
-    durationMinutes: 12,
-    project,
-    source: "generated",
-  };
-}
-
-function scheduleTime(value: string, delayMinutes: number) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "TBD";
-
-  const delayedDate = new Date(date.getTime() + delayMinutes * 60_000);
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: "UTC",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(delayedDate);
-}
-
-function databaseJudgingSlot(slot: ProjectScheduleSlot): DisplayScheduleSlot {
-  return {
-    id: slot.id,
-    time: scheduleTime(slot.scheduledAt, slot.delayMinutes),
-    room: slot.room,
-    status: slot.status,
-    durationMinutes: slot.durationMinutes,
-    project: slot.project,
-    source: "database",
-  };
-}
-
-function ProjectLinkButton({
-  href,
-  icon: Icon,
-  label,
+function EmptyState({
+  title,
+  description,
 }: {
-  href: string | null;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
+  title: string;
+  description: string;
 }) {
-  if (!href) {
-    return (
-      <Button size="sm" variant="outline" disabled>
-        <Icon className="size-4" aria-hidden="true" />
-        {label}
-      </Button>
-    );
-  }
-
   return (
-    <Button size="sm" variant="outline" asChild>
-      <a href={href} target="_blank" rel="noreferrer">
-        <Icon className="size-4" aria-hidden="true" />
-        {label}
-      </a>
-    </Button>
-  );
-}
-
-function ProjectCard({ project }: { project: Project }) {
-  const githubUrl = projectLink(project, "github");
-  const youtubeUrl = projectLink(project, "youtube");
-  const demoUrl = projectLink(project, "demo");
-  const devpostUrl = projectLink(project, "devpost");
-  const isReady = Boolean(githubUrl || devpostUrl || demoUrl);
-
-  return (
-    <article className="rounded-lg border border-primary/10 bg-white p-4 shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/[0.02]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-black text-primary">
-            {initials(project.project_name) || "P"}
-          </div>
-          <div className="min-w-0">
-            <h3 className="truncate text-lg font-black text-neutral-950">
-              {project.project_name}
-            </h3>
-            <p className="mt-1 truncate text-sm text-muted-foreground">
-              {teamLabel(project)}
-            </p>
-          </div>
-        </div>
-
-        <Badge
-          variant={isReady ? "default" : "secondary"}
-          className={isReady ? "" : "text-muted-foreground"}
-        >
-          {isReady ? "Ready" : "Needs link"}
-        </Badge>
-      </div>
-
-      <p className="mt-4 line-clamp-2 min-h-10 text-sm leading-5 text-neutral-600">
-        {projectDescription(project)}
-      </p>
-
-      <Separator className="my-4" />
-
-      <div className="grid gap-3 text-sm text-muted-foreground">
-        <div className="flex min-w-0 items-center gap-2">
-          <Users className="size-4 shrink-0 text-primary" aria-hidden="true" />
-          <span className="truncate">{memberLabel(project)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Clock3 className="size-4 shrink-0 text-primary" aria-hidden="true" />
-          <span>{submittedLabel(project.submitted_at ?? project.created_at)}</span>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <ProjectLinkButton href={githubUrl} icon={Github} label="GitHub" />
-        <ProjectLinkButton href={devpostUrl ?? demoUrl} icon={ExternalLink} label="View" />
-        <ProjectLinkButton href={youtubeUrl} icon={Youtube} label="Video" />
-      </div>
-    </article>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-primary/20 bg-primary/5 p-8 text-center">
-      <p className="text-lg font-black text-neutral-950">{message}</p>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Submitted projects will appear here once the database has entries.
+    <div className="rounded-[1.75rem] border border-dashed border-[color:var(--bg-gray-dark)] bg-[var(--bg-white)] px-6 py-12 text-center">
+      <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-[var(--bg-primary-light)] text-[var(--text-primary)]">
+        <FolderKanban aria-hidden="true" className="size-5" />
+      </span>
+      <h2 className="mt-4 [font-family:var(--font-fredoka)] text-xl font-semibold text-[var(--brand-secondary)]">
+        {title}
+      </h2>
+      <p className="mx-auto mt-2 max-w-md [font-family:var(--font-figtree)] text-sm leading-6 text-[var(--text-secondary)]">
+        {description}
       </p>
     </div>
   );
+}
+
+function SummaryItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-full border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-light)] px-3 py-2">
+      <span className="[font-family:var(--font-fredoka)] text-base font-semibold text-[var(--brand-secondary)]">
+        {value}
+      </span>
+      <span className="[font-family:var(--font-figtree)] text-xs font-medium text-[var(--text-secondary)]">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ProjectListToggle({
+  expanded,
+  label,
+  onToggle,
+  total,
+  embedded = false,
+}: {
+  expanded: boolean;
+  label: string;
+  onToggle: () => void;
+  total: number;
+  embedded?: boolean;
+}) {
+  const visibleCount = expanded
+    ? total
+    : Math.min(INITIAL_PROJECT_COUNT, total);
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center justify-between gap-3 sm:flex-row",
+        embedded
+          ? "border-t border-[var(--bg-gray)] bg-[var(--bg-light)] px-5 py-4 sm:px-6"
+          : "px-1 pt-3",
+      )}
+    >
+      <p className="[font-family:var(--font-figtree)] text-xs font-medium text-[var(--text-secondary)]">
+        Showing {visibleCount} of {total} projects
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onToggle}
+        aria-label={`${expanded ? "Show fewer" : "Show all"} ${label}`}
+        className="h-9 rounded-full border-[color:var(--bg-gray-dark)] bg-[var(--bg-white)] px-4 [font-family:var(--font-figtree)] text-xs font-bold text-[var(--brand-secondary)] shadow-none hover:border-[var(--brand-primary)] hover:bg-[var(--bg-primary-light)] hover:text-[var(--text-primary)]"
+      >
+        {expanded ? (
+          <ChevronUp aria-hidden="true" className="size-3.5" />
+        ) : (
+          <ChevronDown aria-hidden="true" className="size-3.5" />
+        )}
+        {expanded ? "Show fewer" : "Show all"}
+      </Button>
+    </div>
+  );
+}
+
+function projectMatchesQuery(
+  project: Project,
+  query: string,
+  slot?: DisplayScheduleSlot | null,
+) {
+  if (!query) return true;
+
+  return [
+    project.project_name,
+    project.team_name,
+    project.name,
+    project.members.join(" "),
+    projectDescription(project),
+    slot?.room,
+    slot?.roomLocation,
+    slot?.track,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
 }
 
 export function ProjectsHub({
@@ -336,369 +169,458 @@ export function ProjectsHub({
   scheduleSlots,
   errorMessage,
 }: ProjectsHubProps) {
-  const [activeView, setActiveView] = useState<"submissions" | "schedule">(
-    "submissions"
-  );
+  const [activeView, setActiveView] = useState<ActiveView>("projects");
   const [query, setQuery] = useState("");
   const [selectedTeam, setSelectedTeam] = useState(ALL_TEAMS);
+  const [selectedRow, setSelectedRow] = useState<ProjectTableRow | null>(null);
+  const [showAllProjects, setShowAllProjects] = useState(false);
+  const [expandedRoomProjects, setExpandedRoomProjects] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  function resetProjectLimits() {
+    setShowAllProjects(false);
+    setExpandedRoomProjects(new Set());
+  }
+
+  function toggleRoomProjects(roomId: string) {
+    setExpandedRoomProjects((current) => {
+      const next = new Set(current);
+      if (next.has(roomId)) {
+        next.delete(roomId);
+      } else {
+        next.add(roomId);
+      }
+      return next;
+    });
+  }
 
   const allTeams = useMemo(() => {
     const teams = new Set<string>();
     projects.forEach((project) => teams.add(teamFilterLabel(project)));
-
     return [ALL_TEAMS, ...Array.from(teams).sort()];
   }, [projects]);
 
-  const filteredProjects = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return projects.filter((project) => {
-      const team = teamFilterLabel(project);
-      const matchesTeam = selectedTeam === ALL_TEAMS || team === selectedTeam;
-      const teamSearchText = [
-        team,
-        project.team_name,
-        project.name,
-        project.members.join(" "),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      const projectSearchText = [
-        project.project_name,
-        teamSearchText,
-        projectDescription(project),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      const searchableText =
-        activeView === "schedule" ? teamSearchText : projectSearchText;
-
-      return matchesTeam && (!normalizedQuery || searchableText.includes(normalizedQuery));
-    });
-  }, [activeView, projects, query, selectedTeam]);
-
-  const readyProjects = projects.filter((project) =>
-    Boolean(
-      projectLink(project, "github") ||
-        projectLink(project, "devpost") ||
-        projectLink(project, "demo")
-    )
-  ).length;
-  const progressValue = projects.length > 0 ? (readyProjects / projects.length) * 100 : 0;
-  const uniqueTeams = new Set(
-    projects.map((project) => teamFilterLabel(project))
-  ).size;
-  const filteredProjectIds = useMemo(
-    () => new Set(filteredProjects.map((project) => project.id)),
-    [filteredProjects]
+  const displaySlots = useMemo(
+    () => scheduleSlots.map(databaseJudgingSlot),
+    [scheduleSlots],
   );
-  const hasSavedSchedule = scheduleSlots.length > 0;
-  const judgingSlots = useMemo(() => {
-    if (hasSavedSchedule) {
-      return scheduleSlots
-        .filter((slot) => filteredProjectIds.has(slot.projectId))
-        .map(databaseJudgingSlot);
+
+  const firstSlotByProject = useMemo(() => {
+    const slots = new Map<string, DisplayScheduleSlot>();
+    for (const slot of displaySlots) {
+      if (!slots.has(slot.project.id)) {
+        slots.set(slot.project.id, slot);
+      }
+    }
+    return slots;
+  }, [displaySlots]);
+
+  const scheduledProjectIds = useMemo(
+    () => new Set(displaySlots.map((slot) => slot.project.id)),
+    [displaySlots],
+  );
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const filteredProjects = useMemo(
+    () =>
+      projects.filter((project) => {
+        const matchesTeam =
+          selectedTeam === ALL_TEAMS ||
+          teamFilterLabel(project) === selectedTeam;
+        const slot = firstSlotByProject.get(project.id);
+        return (
+          matchesTeam &&
+          projectMatchesQuery(project, normalizedQuery, slot)
+        );
+      }),
+    [firstSlotByProject, normalizedQuery, projects, selectedTeam],
+  );
+
+  const projectRows = useMemo<ProjectTableRow[]>(
+    () =>
+      filteredProjects.map((project) => ({
+        id: `project-${project.id}`,
+        project,
+        slot: firstSlotByProject.get(project.id) ?? null,
+      })),
+    [filteredProjects, firstSlotByProject],
+  );
+
+  const roomGroups = useMemo<RoomGroup[]>(() => {
+    const groups = new Map<string, RoomGroup>();
+
+    for (const slot of displaySlots) {
+      const matchesTeam =
+        selectedTeam === ALL_TEAMS ||
+        teamFilterLabel(slot.project) === selectedTeam;
+      if (
+        !matchesTeam ||
+        !projectMatchesQuery(slot.project, normalizedQuery, slot)
+      ) {
+        continue;
+      }
+
+      const groupId = `room-${slot.room}`;
+      const existing = groups.get(groupId);
+      const row: ProjectTableRow = {
+        id: `slot-${slot.id}`,
+        project: slot.project,
+        slot,
+      };
+
+      if (existing) {
+        existing.rows.push(row);
+      } else {
+        groups.set(groupId, {
+          id: groupId,
+          room: slot.room,
+          location: slot.roomLocation,
+          rows: [row],
+        });
+      }
     }
 
-    return filteredProjects.map(generatedJudgingSlot);
-  }, [filteredProjectIds, filteredProjects, hasSavedSchedule, scheduleSlots]);
+    const unassignedRows = projects
+      .filter((project) => {
+        const matchesTeam =
+          selectedTeam === ALL_TEAMS ||
+          teamFilterLabel(project) === selectedTeam;
+        return (
+          !scheduledProjectIds.has(project.id) &&
+          matchesTeam &&
+          projectMatchesQuery(project, normalizedQuery)
+        );
+      })
+      .map<ProjectTableRow>((project) => ({
+        id: `unassigned-${project.id}`,
+        project,
+        slot: null,
+      }));
+
+    const sortedGroups = Array.from(groups.values()).sort((a, b) =>
+      a.room.localeCompare(b.room),
+    );
+
+    if (unassignedRows.length > 0) {
+      sortedGroups.push({
+        id: "room-unassigned",
+        room: "Not assigned",
+        location: null,
+        rows: unassignedRows,
+      });
+    }
+
+    return sortedGroups;
+  }, [
+    displaySlots,
+    normalizedQuery,
+    projects,
+    scheduledProjectIds,
+    selectedTeam,
+  ]);
+
+  const uniqueTeams = useMemo(
+    () => new Set(projects.map((project) => teamFilterLabel(project))).size,
+    [projects],
+  );
 
   return (
-    <main className="h-full w-full overflow-auto overscroll-none bg-white p-4 text-neutral-950 sm:p-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="rounded-lg bg-primary px-5 py-6 text-primary-foreground shadow-sm sm:px-7">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-end">
-            <div>
-              <Badge
-                variant="secondary"
-                className="mb-4 bg-white/15 text-primary-foreground"
-              >
-                Project hub
-              </Badge>
-              <h1 className="text-3xl font-black sm:text-4xl">
-                Hacker Projects
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm text-primary-foreground/85 sm:text-base">
-                Browse submitted projects, open demo links, and check the judging
-                schedule from one place.
-              </p>
-            </div>
+    <>
+      <main className="h-full w-full overflow-y-auto overscroll-none bg-[var(--bg-light)] text-[var(--text-body)]">
+        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-4 pb-12 pt-5 sm:gap-6 sm:px-6 sm:py-7 xl:px-8 xl:py-8">
+          <header
+            className="hacker-card-enter relative overflow-hidden rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] p-5 sm:p-7"
+            style={{ animationDelay: "40ms" }}
+          >
+            <div
+              aria-hidden="true"
+              className="absolute -right-10 -top-14 size-40 rounded-full border-[22px] border-[color:var(--bg-primary-light)]/70"
+            />
 
-            <div className="rounded-md bg-white/12 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold">Your submission</p>
-                  <p className="text-sm text-primary-foreground/80">
-                    Submit or edit before judging starts.
-                  </p>
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-2xl">
+                <p className="[font-family:var(--font-jetbrains-mono)] text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)]">
+                  Project hub
+                </p>
+                <h1 className="mt-2 [font-family:var(--font-fredoka)] text-3xl font-semibold tracking-[-0.035em] text-[var(--brand-secondary)] sm:text-4xl">
+                  Hacker projects
+                </h1>
+                <p className="mt-2 [font-family:var(--font-figtree)] text-sm leading-6 text-[var(--text-secondary)] sm:text-base">
+                  Explore what hackers built and find every judging room,
+                  presentation time, and project link in one place.
+                </p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <SummaryItem label="projects" value={projects.length} />
+                  <SummaryItem label="teams" value={uniqueTeams} />
+                  <SummaryItem
+                    label="scheduled"
+                    value={scheduledProjectIds.size}
+                  />
                 </div>
-                <Button asChild variant="secondary" className="font-bold">
-                  <Link href="/hacker/submission">
-                    <Send className="size-4" aria-hidden="true" />
-                    Open
-                  </Link>
-                </Button>
               </div>
+
+              <Button
+                asChild
+                className="h-11 w-fit rounded-full bg-[var(--brand-secondary)] px-5 [font-family:var(--font-figtree)] text-sm font-bold text-white shadow-none transition-transform hover:-translate-y-0.5 hover:bg-[var(--brand-secondary)]"
+              >
+                <Link href="/hacker/submission">
+                  <Send aria-hidden="true" className="size-4" />
+                  Submit your project
+                </Link>
+              </Button>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <Card className="rounded-lg border-primary/10 bg-white shadow-sm">
-            <CardHeader className="pb-2">
-              <CardDescription>Total projects</CardDescription>
-              <CardTitle className="text-3xl font-black">{projects.length}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card className="rounded-lg border-primary/10 bg-white shadow-sm">
-            <CardHeader className="pb-2">
-              <CardDescription>Teams represented</CardDescription>
-              <CardTitle className="text-3xl font-black">{uniqueTeams}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card className="rounded-lg border-primary/10 bg-white shadow-sm">
-            <CardHeader className="pb-2">
-              <CardDescription>Ready for judges</CardDescription>
-              <CardTitle className="text-3xl font-black">
-                {readyProjects}/{projects.length}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Progress value={progressValue} />
-            </CardContent>
-          </Card>
-        </section>
+          {errorMessage ? (
+            <div className="rounded-2xl border border-[color:var(--bg-danger)]/25 bg-[var(--bg-danger-light)] p-4 [font-family:var(--font-figtree)] text-sm text-[var(--text-danger)]">
+              {errorMessage}
+            </div>
+          ) : null}
 
-        {errorMessage ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-            {errorMessage}
-          </div>
-        ) : null}
-
-        <section className="grid gap-4">
-          <div className="flex flex-col gap-4 rounded-lg border border-primary/10 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+          <section
+            className="hacker-card-enter flex flex-col gap-4 rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] p-4 shadow-[0_10px_24px_rgba(15,42,67,0.06)] lg:flex-row lg:items-center lg:justify-between"
+            style={{ animationDelay: "120ms" }}
+            aria-label="Project table controls"
+          >
             <div
               role="tablist"
               aria-label="Project view"
-              className="grid h-auto w-full grid-cols-2 rounded-lg bg-primary/5 p-[3px] text-muted-foreground lg:w-fit"
+              className="grid w-full grid-cols-2 rounded-2xl bg-[var(--bg-gray)] p-1 lg:w-fit"
             >
               <button
                 type="button"
                 role="tab"
-                aria-selected={activeView === "submissions"}
-                onClick={() => setActiveView("submissions")}
+                aria-selected={activeView === "projects"}
+                onClick={() => setActiveView("projects")}
                 className={cn(
-                  "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
-                  activeView === "submissions"
-                    ? "bg-white text-neutral-950 shadow-sm"
-                    : "text-muted-foreground hover:text-neutral-950"
+                  "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 [font-family:var(--font-figtree)] text-sm font-bold transition-colors",
+                  activeView === "projects"
+                    ? "bg-white text-[var(--brand-secondary)] shadow-[0_4px_12px_rgba(15,42,67,0.08)]"
+                    : "text-[var(--text-secondary)] hover:text-[var(--brand-secondary)]",
                 )}
               >
-                <LayoutGrid className="size-4" aria-hidden="true" />
-                Project submissions
+                <TableProperties aria-hidden="true" className="size-4" />
+                All projects
               </button>
               <button
                 type="button"
                 role="tab"
-                aria-selected={activeView === "schedule"}
-                onClick={() => setActiveView("schedule")}
+                aria-selected={activeView === "rooms"}
+                onClick={() => setActiveView("rooms")}
                 className={cn(
-                  "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
-                  activeView === "schedule"
-                    ? "bg-white text-neutral-950 shadow-sm"
-                    : "text-muted-foreground hover:text-neutral-950"
+                  "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 [font-family:var(--font-figtree)] text-sm font-bold transition-colors",
+                  activeView === "rooms"
+                    ? "bg-white text-[var(--brand-secondary)] shadow-[0_4px_12px_rgba(15,42,67,0.08)]"
+                    : "text-[var(--text-secondary)] hover:text-[var(--brand-secondary)]",
                 )}
               >
-                <CalendarClock className="size-4" aria-hidden="true" />
-                Judging schedule
+                <MapPin aria-hidden="true" className="size-4" />
+                Judging areas
               </button>
             </div>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-3 lg:max-w-xl lg:flex-row">
+            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row lg:max-w-2xl lg:justify-end">
               <div className="relative min-w-0 flex-1">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-primary"
                   aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-primary)]"
                 />
                 <Input
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={
-                    activeView === "schedule"
-                      ? "Search teams or members"
-                      : "Search projects or teams"
-                  }
-                  className="h-10 bg-white pl-9"
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    resetProjectLimits();
+                  }}
+                  placeholder="Search projects, people, or rooms"
+                  className="h-11 rounded-xl border-[color:var(--bg-gray-dark)] bg-[var(--bg-light)] pl-10 [font-family:var(--font-figtree)] text-[var(--text-body)] shadow-none placeholder:text-[var(--text-tertiary)] focus-visible:border-[var(--brand-primary)] focus-visible:ring-[color:var(--brand-primary)]/20"
                 />
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 lg:max-w-80">
-                {allTeams.map((team) => (
-                  <Button
-                    key={team}
-                    type="button"
-                    size="sm"
-                    variant={selectedTeam === team ? "default" : "outline"}
-                    onClick={() => setSelectedTeam(team)}
-                    className="max-w-48 shrink-0"
-                  >
-                    <span className="truncate">{team}</span>
-                  </Button>
-                ))}
+
+              <div className="relative sm:w-56">
+                <Users
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-[var(--brand-accent)]"
+                />
+                <select
+                  value={selectedTeam}
+                  onChange={(event) => {
+                    setSelectedTeam(event.target.value);
+                    resetProjectLimits();
+                  }}
+                  aria-label="Filter by team"
+                  className="h-11 w-full appearance-none rounded-xl border border-[color:var(--bg-gray-dark)] bg-[var(--bg-light)] pl-10 pr-8 [font-family:var(--font-figtree)] text-sm font-semibold text-[var(--brand-secondary)] outline-none transition-shadow focus:border-[var(--brand-primary)] focus:ring-3 focus:ring-[color:var(--brand-primary)]/20"
+                >
+                  {allTeams.map((team) => (
+                    <option key={team} value={team}>
+                      {team}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-secondary)]"
+                >
+                  ▾
+                </span>
               </div>
             </div>
-          </div>
+          </section>
 
-          {activeView === "submissions" ? (
-            <>
-              {projects.length === 0 && !errorMessage ? (
-                <EmptyState message="No projects found." />
-              ) : filteredProjects.length === 0 ? (
-                <EmptyState message="No projects match those filters." />
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {filteredProjects.map((project) => (
-                    <ProjectCard key={project.id} project={project} />
-                  ))}
+          <section
+            className="hacker-card-enter"
+            style={{ animationDelay: "190ms" }}
+            aria-live="polite"
+          >
+            {activeView === "projects" ? (
+              projectRows.length > 0 ? (
+                <div>
+                  <ProjectTable
+                    rows={
+                      showAllProjects
+                        ? projectRows
+                        : projectRows.slice(0, INITIAL_PROJECT_COUNT)
+                    }
+                    onOpenProject={setSelectedRow}
+                  />
+                  {projectRows.length > INITIAL_PROJECT_COUNT ? (
+                    <ProjectListToggle
+                      expanded={showAllProjects}
+                      label="projects"
+                      onToggle={() =>
+                        setShowAllProjects((current) => !current)
+                      }
+                      total={projectRows.length}
+                    />
+                  ) : null}
                 </div>
-              )}
-            </>
-          ) : (
-            <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-              <Card className="gap-0 overflow-hidden rounded-lg border-primary/10 bg-white py-0 shadow-sm">
-                <CardHeader className="border-b border-primary/10 bg-primary/5 p-6">
-                  <div className="flex items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                      <Trophy className="size-5" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-xl font-black">
-                        Judging plan
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        {hasSavedSchedule
-                          ? "Times are loaded from schedule_slots."
-                          : "Preview times until schedule_slots has saved rows."}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="grid gap-4 p-6">
-                  <div className="rounded-md border border-primary/10 bg-primary/5 p-4">
-                    <p className="text-sm font-bold text-primary">
-                      {hasSavedSchedule ? "Next saved slot" : "Next preview block"}
-                    </p>
-                    <p className="mt-1 text-2xl font-black text-neutral-950">
-                      {judgingSlots[0]?.time ?? "TBD"}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {judgingSlots[0]?.room ?? "Waiting for submissions"}
+              ) : (
+                <EmptyState
+                  title={
+                    projects.length === 0
+                      ? "No projects yet"
+                      : "No projects match these filters"
+                  }
+                  description={
+                    projects.length === 0
+                      ? "Submitted projects will appear here as soon as hackers send them in."
+                      : "Try another search term or switch the team filter back to All teams."
+                  }
+                />
+              )
+            ) : roomGroups.length > 0 ? (
+              <div>
+                <div className="mb-4 flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="[font-family:var(--font-fredoka)] text-2xl font-semibold text-[var(--brand-secondary)]">
+                      Judging areas
+                    </h2>
+                    <p className="mt-1 [font-family:var(--font-figtree)] text-sm text-[var(--text-secondary)]">
+                      Open a room to see its assigned presentations.
                     </p>
                   </div>
-                  <div className="grid gap-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2
-                        className="size-4 text-primary"
-                        aria-hidden="true"
-                      />
-                      {hasSavedSchedule
-                        ? "Schedule rows come from the database."
-                        : "Preview rows follow the current team filter."}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <LinkIcon className="size-4 text-primary" aria-hidden="true" />
-                      Project links stay available from each row.
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  <p className="[font-family:var(--font-jetbrains-mono)] text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">
+                    {displaySlots.length > 0
+                      ? "Live database assignments"
+                      : "Waiting for room assignments"}
+                  </p>
+                </div>
 
-              <Card className="gap-0 overflow-hidden rounded-lg border-primary/10 bg-white py-0 shadow-sm">
-                <CardHeader className="border-b border-primary/10 p-6">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <CardTitle className="text-xl font-black">
-                        Hacker judging schedule
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        {judgingSlots.length} slot{judgingSlots.length === 1 ? "" : "s"} shown
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {judgingSlots.length === 0 ? (
-                    <div className="p-6">
-                      <EmptyState message="No schedule rows to show." />
-                    </div>
-                  ) : (
-                    <div className="max-h-[620px] overflow-auto">
-                      {judgingSlots.map(({ id, time, room, status, durationMinutes, project, source }, index) => {
-                        const projectHref =
-                          projectLink(project, "devpost") ??
-                          projectLink(project, "demo") ??
-                          projectLink(project, "github");
+                <Accordion
+                  type="multiple"
+                  defaultValue={roomGroups[0] ? [roomGroups[0].id] : []}
+                  className="gap-3"
+                >
+                  {roomGroups.map((group) => {
+                    const showAllRoomProjects = expandedRoomProjects.has(
+                      group.id,
+                    );
 
-                        return (
-                          <div
-                            key={id}
-                            className="grid gap-3 border-b border-primary/10 p-4 last:border-b-0 sm:grid-cols-[110px_140px_minmax(0,1fr)_auto] sm:items-center"
-                          >
-                            <div>
-                              <p className="font-black text-neutral-950">{time}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Slot {index + 1}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <Badge
-                                variant="secondary"
-                                className="w-fit border border-primary/10 bg-primary/5 text-primary"
-                              >
-                                {room}
-                              </Badge>
-                              <Badge variant="outline" className="w-fit">
-                                {source === "database"
-                                  ? `${durationMinutes} min · ${status}`
-                                  : "Preview"}
-                              </Badge>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate font-bold text-neutral-950">
-                                {project.project_name}
-                              </p>
-                              <p className="truncate text-sm text-muted-foreground">
-                                {teamFilterLabel(project)}
-                              </p>
-                            </div>
-                            {projectHref ? (
-                              <Button size="sm" variant="outline" asChild>
-                                <a href={projectHref} target="_blank" rel="noreferrer">
-                                  <ExternalLink
-                                    className="size-4"
-                                    aria-hidden="true"
-                                  />
-                                  View
-                                </a>
-                              </Button>
-                            ) : (
-                              <Button size="sm" variant="outline" disabled>
-                                <ExternalLink className="size-4" aria-hidden="true" />
-                                View
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
+                    return (
+                      <AccordionItem
+                        key={group.id}
+                        value={group.id}
+                        className="overflow-hidden rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] shadow-[0_10px_24px_rgba(15,42,67,0.06)]"
+                      >
+                        <AccordionTrigger className="items-center gap-3 px-5 py-5 hover:no-underline sm:px-6">
+                          <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                            <span className="flex min-w-0 items-center gap-3">
+                              <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--bg-primary-light)] text-[var(--text-primary)]">
+                                <MapPin
+                                  aria-hidden="true"
+                                  className="size-4"
+                                />
+                              </span>
+                              <span className="min-w-0 text-left">
+                                <span className="block [font-family:var(--font-fredoka)] text-lg font-semibold text-[var(--brand-secondary)]">
+                                  {group.room}
+                                </span>
+                                <span className="mt-0.5 block truncate [font-family:var(--font-figtree)] text-xs text-[var(--text-secondary)]">
+                                  {group.location ??
+                                    (group.room === "Not assigned"
+                                      ? "Projects waiting for a judging room"
+                                      : "Location not provided")}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="shrink-0 rounded-full bg-[var(--bg-gray)] px-2.5 py-1 [font-family:var(--font-jetbrains-mono)] text-[10px] font-semibold text-[var(--text-secondary)]">
+                              {group.rows.length}{" "}
+                              {group.rows.length === 1
+                                ? "project"
+                                : "projects"}
+                            </span>
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="border-t border-[var(--bg-gray)] p-0 [&_a]:no-underline">
+                          <ProjectTable
+                            rows={
+                              showAllRoomProjects
+                                ? group.rows
+                                : group.rows.slice(0, INITIAL_PROJECT_COUNT)
+                            }
+                            onOpenProject={setSelectedRow}
+                            embedded
+                          />
+                          {group.rows.length > INITIAL_PROJECT_COUNT ? (
+                            <ProjectListToggle
+                              expanded={showAllRoomProjects}
+                              label={`projects in ${group.room}`}
+                              onToggle={() => toggleRoomProjects(group.id)}
+                              total={group.rows.length}
+                              embedded
+                            />
+                          ) : null}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              </div>
+            ) : (
+              <EmptyState
+                title="No judging areas match"
+                description="Try another search term or team filter to see room assignments."
+              />
+            )}
+          </section>
+
+          <div className="flex items-center justify-center gap-2 [font-family:var(--font-figtree)] text-xs text-[var(--text-secondary)]">
+            <CalendarClock
+              aria-hidden="true"
+              className="size-4 text-[var(--brand-accent)]"
+            />
+            Presentation times include any organizer-applied delay.
+          </div>
+        </div>
+      </main>
+
+      <ProjectDetailsDialog
+        selectedRow={selectedRow}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRow(null);
+        }}
+      />
+    </>
   );
 }
