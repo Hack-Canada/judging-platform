@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import type { ReactNode } from "react";
+import { AppHeader, AppHeaderBack } from "@/components/design-system";
+import { BoardingProgress } from "@/components/judging/boarding-progress";
 import { StreamSelector } from "@/components/judging/stream-selector";
 import { SyncStatusBadge } from "@/components/judging/sync-status";
 import { EVENT_NAME } from "@/lib/judging/constants";
@@ -18,7 +18,6 @@ type JudgingHeaderProps = {
   pendingSyncCount?: number;
   pendingSummary?: PendingSummary;
   scheduleOffsetLabel?: string | null;
-  /** When set and not locked, show stream dropdown in the breadcrumb row. */
   streams?: JudgingStream[];
   activeStreamId?: string;
   progressByStream?: Record<
@@ -45,8 +44,6 @@ export function JudgingHeader({
   streamLocked = false,
 }: JudgingHeaderProps) {
   const completedCount = judgedCount + skippedCount;
-  const progressPct =
-    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const showStreamSelect =
     !streamLocked &&
@@ -58,10 +55,10 @@ export function JudgingHeader({
 
   const context = (
     <span className="inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-1">
-      <span className="text-[var(--j-muted)]">{EVENT_NAME}</span>
+      <span className="text-[var(--hc-muted)]">{EVENT_NAME}</span>
       {showStreamSelect ? (
         <>
-          <span className="text-[var(--j-faint)]" aria-hidden>
+          <span className="text-[var(--hc-faint)]" aria-hidden>
             ·
           </span>
           <StreamSelector
@@ -72,9 +69,9 @@ export function JudgingHeader({
           />
         </>
       ) : streamName ? (
-        <span className="text-[var(--j-faint)]"> · {streamName}</span>
+        <span className="text-[var(--hc-faint)]"> · {streamName}</span>
       ) : null}
-      <span className="text-[var(--j-faint)]"> · live</span>
+      <span className="hidden text-[var(--hc-faint)] sm:inline"> · live</span>
     </span>
   );
 
@@ -85,9 +82,9 @@ export function JudgingHeader({
           {judgedCount}
           <span className="j-header-count-total">/{totalCount}</span>
         </p>
-        <p className="mt-0.5 text-xs font-medium text-[var(--j-muted)]">judged</p>
+        <p className="mt-0.5 text-xs font-medium text-[var(--hc-muted)]">judged</p>
         {skippedCount > 0 && (
-          <p className="mt-0.5 text-xs text-[var(--j-faint)]">{skippedCount} skipped</p>
+          <p className="mt-0.5 text-xs text-[var(--hc-faint)]">{skippedCount} skipped</p>
         )}
       </div>
       {syncStatus ? (
@@ -103,68 +100,23 @@ export function JudgingHeader({
 
   return (
     <div>
-      <JudgingAppHeader
-        leading={
-          <Link href="/" className="j-header-back">
-            ← Portals
-          </Link>
-        }
+      <AppHeader
+        className="j-judging-header"
+        leading={<AppHeaderBack />}
         portalName="Judge desk"
         context={context}
         status={status}
         middle={
           totalCount > 0 ? (
-            <div
-              className="j-header-mid-progress"
-              role="progressbar"
-              aria-valuenow={progressPct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`${judgedCount} judged, ${skippedCount} skipped, ${totalCount} total`}
-            >
-              <div
-                className="j-header-mid-progress-fill"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
+            <BoardingProgress
+              completed={completedCount}
+              total={totalCount}
+              judged={judgedCount}
+              skipped={skippedCount}
+            />
           ) : null
         }
       />
     </div>
-  );
-}
-
-/** Judging-only chrome — not shared across portals. */
-function JudgingAppHeader({
-  portalName,
-  context,
-  leading,
-  middle,
-  status,
-}: {
-  portalName: string;
-  context?: ReactNode;
-  leading?: ReactNode;
-  middle?: ReactNode;
-  status?: ReactNode;
-}) {
-  return (
-    <header className="j-app-header">
-      <div className="j-app-header-inner">
-        <div className="j-app-header-left">
-          {leading ? <div className="j-app-header-leading">{leading}</div> : null}
-          <div className="min-w-0">
-            {context ? <div className="j-app-header-context">{context}</div> : null}
-            <p className="j-app-header-title">{portalName}</p>
-          </div>
-        </div>
-        {middle != null ? (
-          <div className="j-app-header-middle">{middle}</div>
-        ) : (
-          <div className="j-app-header-middle" aria-hidden />
-        )}
-        {status ? <div className="j-app-header-status">{status}</div> : null}
-      </div>
-    </header>
   );
 }

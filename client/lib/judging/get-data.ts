@@ -11,7 +11,6 @@ type ProjectRow = {
   project_name: string;
   tracks: string[] | null;
   members: string[] | null;
-  devpost_link: string | null;
   submitter_name: string | null;
 };
 
@@ -23,7 +22,6 @@ function mapProject(row: ProjectRow): JudgingProject {
     tracks: row.tracks ?? [],
     members: row.members ?? [],
     description: null,
-    devpostUrl: row.devpost_link,
     room: null,
   };
 }
@@ -58,7 +56,7 @@ export async function getJudgingDataset(options?: {
   try {
     const sql = getSql();
     rows = (await sql`
-      SELECT id, project_name, tracks, members, devpost_link, submitter_name
+      SELECT id, project_name, tracks, members, submitter_name
       FROM projects
       ORDER BY project_name
     `) as ProjectRow[];

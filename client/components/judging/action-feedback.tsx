@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Button } from "@/components/ui/button";
+import { Button, Card } from "@/components/design-system";
 
 type ActionFeedbackProps = {
   message: string;
@@ -19,31 +19,35 @@ export function ActionFeedback({
 }: ActionFeedbackProps) {
   return (
     <div className="j-action-feedback" role="status" aria-live="polite">
-      <div className="j-action-feedback-inner">
+      <Card className="j-action-feedback-inner pointer-events-auto mx-auto max-w-md p-3 shadow-[var(--hc-shadow)] sm:p-4">
         <div className="min-w-0">
-          <p className="font-medium text-secondary-foreground">{message}</p>
+          <p className="font-medium text-[var(--hc-ink)]">{message}</p>
           {detail && (
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">{detail}</p>
+            <p className="mt-0.5 truncate text-sm text-[var(--hc-muted)]">{detail}</p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
           {actionLabel && onAction && (
-            <Button type="button" variant="link" size="sm" onClick={onAction} className="text-[var(--j-action)]">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onAction}
+              className="min-h-10 px-3 text-sm"
+            >
               {actionLabel}
             </Button>
           )}
           <Button
             type="button"
-            variant="ghost"
-            size="icon-sm"
+            variant="outline"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="text-muted-foreground"
+            className="min-h-10 min-w-10 px-0 text-lg leading-none text-[var(--hc-muted)]"
           >
             ×
           </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

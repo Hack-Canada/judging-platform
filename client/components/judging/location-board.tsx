@@ -1,6 +1,7 @@
 "use client";
 
 import { parseLocation } from "@/lib/judging/format";
+import { FlipBoardNumber } from "./flip-board-number";
 
 type LocationBoardProps = {
   room: string;
@@ -30,18 +31,21 @@ export function LocationBoard({ room, isJudged, judgedEarly }: LocationBoardProp
   }
 
   return (
-    <div>
+    <div className="j-location-board">
       <p className="j-location-label">Go here now</p>
       {tableNumber ? (
-        <p className="j-location-table-num tabular-nums" aria-label={`Table ${tableNumber}`}>
-          {tableNumber}
-        </p>
+        <FlipBoardNumber
+          value={tableNumber}
+          className="j-location-table-num"
+          aria-label={`Table ${tableNumber}`}
+        />
       ) : (
         <p className="j-location-table-num j-location-table-num--venue">{venue}</p>
       )}
       {tableNumber && (
-        <p className="j-hero-muted mt-2 text-lg font-medium">
+        <p className="j-location-table-caption j-hero-muted mt-2 text-lg font-medium">
           {tableLabel ?? `Table ${tableNumber}`}
+          {venue ? <span className="j-location-venue-inline"> · {venue}</span> : null}
         </p>
       )}
       {tableNumber && <p className="j-location-venue">{venue}</p>}

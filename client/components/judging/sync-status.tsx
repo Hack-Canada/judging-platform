@@ -14,7 +14,7 @@ const LABELS: Record<SyncStatus, string> = {
   synced: "Synced",
   pending: "Sync pending",
   offline: "Offline - saved on device",
-  syncing: "Syncing…",
+  syncing: "Syncing...",
 };
 
 function pendingTooltip(count: number, summary?: PendingSummary): string {
@@ -38,9 +38,14 @@ export function SyncStatusBadge({
   scheduleOffsetLabel,
 }: SyncStatusProps) {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
       {scheduleOffsetLabel && (
-        <span className="j-sync-badge j-sync-badge--offset">{scheduleOffsetLabel}</span>
+        <span
+          className="j-sync-badge j-sync-badge--offset"
+          title="Organizer schedule delay. Slot times are shifted on this desk."
+        >
+          Running {scheduleOffsetLabel}
+        </span>
       )}
       <span
         className={`j-sync-badge j-sync-badge--${status}`}
