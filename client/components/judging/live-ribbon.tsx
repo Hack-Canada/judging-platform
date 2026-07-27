@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/design-system";
 import {
   formatSlotTime,
   getTimeRemaining,
@@ -27,20 +28,28 @@ export function LiveRibbon({ liveSlot, liveProject, onGoToLive }: LiveRibbonProp
 
   return (
     <div className="j-live-ribbon" role="status">
-      <p className="min-w-0 flex-1 text-sm text-[var(--j-on-ink)]">
-        <span className="font-semibold">Live now:</span>{" "}
-        <span className="font-medium">{liveProject.name}</span>
+      <span className="j-live-ribbon-beacon" aria-hidden>
+        <span className="j-live-ribbon-beacon-dot" />
+        Now
+      </span>
+      <p className="min-w-0 flex-1 text-sm text-[var(--hc-on-ink)]">
+        <span className="font-semibold">{liveProject.name}</span>
         {remaining.overtime ? (
-          <span style={{ color: "var(--j-overtime)" }}> · overtime {remaining.label}</span>
+          <span className="j-timer-overtime"> · overtime {remaining.label}</span>
         ) : (
           <span className="j-hero-muted"> · {remaining.label} left</span>
         )}
         {room && <span className="j-hero-muted hidden sm:inline"> · {room}</span>}
         <span className="sr-only"> Started {formatSlotTime(liveSlot.startTime)}</span>
       </p>
-      <button type="button" onClick={onGoToLive} className="j-cta j-cta--outline shrink-0 !min-h-0 !border-[rgb(245_243_239/0.35)] !px-3 !py-1.5 !text-sm !text-[var(--j-on-ink)]">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onGoToLive}
+        className="j-live-ribbon-go min-h-9 shrink-0 border-[rgb(255_255_255/0.35)] bg-transparent px-3 text-sm text-[var(--hc-on-ink)] hover:border-[rgb(255_255_255/0.5)] hover:bg-[rgb(255_255_255/0.1)]"
+      >
         Go there
-      </button>
+      </Button>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FolderGit2, Users, UsersRound, Tags } from "lucide-react";
+import { FolderGit2, Users, LinkIcon, UsersRound, Tags } from "lucide-react";
 import {
   getSubmissionStats,
   getTrackCounts,
@@ -8,7 +8,6 @@ import {
   getSubmissionTimeline,
 } from "@/lib/queries";
 import { TrackChart, TimelineChart, TeamSizeChart } from "@/components/admin/charts";
-import { AdminPageHeading } from "@/components/admin/page-heading";
 
 export const metadata = { title: "Admin · Stats" };
 
@@ -45,14 +44,21 @@ export default async function StatsPage() {
     getSubmissionTimeline(),
   ]);
 
+  const devpostPct =
+    stats.totalProjects > 0
+      ? Math.round((stats.withDevpost / stats.totalProjects) * 100)
+      : 0;
+
   return (
     <div className="space-y-6">
-      <AdminPageHeading
-        title="Submission stats"
-        description="Live from the submissions database."
-      />
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight">Submission stats</h2>
+        <p className="text-sm text-muted-foreground">
+          Live from the submissions database.
+        </p>
+      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Projects" value={stats.totalProjects} icon={FolderGit2} />
         <StatCard label="Hackers" value={stats.totalHackers} hint="across all teams" icon={Users} />
         <StatCard
@@ -62,6 +68,12 @@ export default async function StatsPage() {
           icon={UsersRound}
         />
         <StatCard label="Tracks" value={stats.distinctTracks} hint="distinct tracks entered" icon={Tags} />
+        <StatCard
+          label="Devpost links"
+          value={`${devpostPct}%`}
+          hint={`${stats.withDevpost} of ${stats.totalProjects} projects`}
+          icon={LinkIcon}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

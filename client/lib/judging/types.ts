@@ -5,7 +5,6 @@ export type JudgingProject = {
   tracks: string[];
   members: string[];
   description: string | null;
-  devpostUrl: string | null;
   room: string | null;
 };
 
@@ -40,6 +39,8 @@ export type JudgingStorage = {
   skipReasons: Record<string, SkipReason>;
   notes: JudgeNotes;
   earlyMarkedIds: string[];
+  winnerIds: string[];
+  ratings: Record<string, number>;
 };
 
-export type ScheduleFilter = "remaining" | "all" | "judged" | "skipped";
+export type ScheduleFilter = "remaining" | "all" | "judged" | "skipped" | "picks";

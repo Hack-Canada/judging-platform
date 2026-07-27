@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/design-system";
 import type { SkipReason } from "@/lib/judging/types";
 import { cn } from "@/lib/utils";
 
@@ -27,10 +27,10 @@ export function SkipReasonPicker({
 }: SkipReasonPickerProps) {
   return (
     <div className="j-skip-picker" role="group" aria-label="Skip reason">
-      <p className="text-sm font-medium text-[var(--j-ink)]">
+      <p className="font-[family-name:var(--hc-font-body)] text-sm font-medium text-[var(--hc-ink)]">
         Skip <span className="font-semibold">{projectName}</span>?
       </p>
-      <p className="mt-1 text-xs text-[var(--j-muted)]">Optional reason:</p>
+      <p className="mt-1 text-xs text-[var(--hc-muted)]">Optional reason:</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {REASONS.map(({ id, label }) => (
           <button
@@ -43,16 +43,11 @@ export function SkipReasonPicker({
           </button>
         ))}
       </div>
-      <div className="mt-3 flex gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} className="flex-1 sm:flex-none">
+      <div className="mt-3 flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto">
           Cancel
         </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={onConfirm}
-          className="flex-1 text-[var(--j-action)] sm:flex-none"
-        >
+        <Button type="button" variant="primary" onClick={onConfirm} className="w-full sm:w-auto">
           Confirm skip
         </Button>
       </div>

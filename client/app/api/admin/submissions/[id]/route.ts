@@ -40,6 +40,7 @@ export async function PATCH(
 
     const fields: ProjectUpdate = {
       project_name: projectName,
+      devpost_link: toNullableString(body.devpost_link),
       tracks: toArray(body.tracks),
       submitter_name: toNullableString(body.submitter_name),
       submitter_email: toNullableString(body.submitter_email),

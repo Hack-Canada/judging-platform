@@ -40,7 +40,7 @@ DATABASE_URL=postgresql://...
 JUDGING_SCHEDULE_OFFSET_MINUTES=0   # Optional; shifts displayed slot times
 ```
 
-Schedule offset can also live in `judging_event_config` key `schedule` (read-only from the app).
+Schedule offset also lives in `judging_event_config` key `schedule`. Organizers set it from **Admin → Schedule → Judges running behind**. Judges poll `/api/judging-config` about every 10s so the delay appears without a refresh.
 
 ## API
 
@@ -49,6 +49,7 @@ Schedule offset can also live in `judging_event_config` key `schedule` (read-onl
 | `/api/judgments` | GET | Hydrate judge state for stream + round |
 | `/api/judgments` | POST | Upsert marks / notes |
 | `/api/judging-config` | GET | Schedule offset + server clock |
+| `/api/judging-config` | PATCH | Organizer sets schedule offset (`scheduleOffsetMinutes` or `addMinutes`) |
 
 ## Key files
 

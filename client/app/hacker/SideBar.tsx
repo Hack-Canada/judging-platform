@@ -102,8 +102,8 @@ function BrandStripe({ className = "" }: { className?: string }) {
       className={`flex h-1 overflow-hidden rounded-full ${className}`}
     >
       <span className="flex-[2] bg-[var(--brand-primary)]" />
-      {/* <span className="flex-1 bg-[var(--brand-accent)]" />
-      <span className="flex-1 bg-[var(--bg-warning)]" /> */}
+      <span className="flex-1 bg-[var(--brand-accent)]" />
+      <span className="flex-1 bg-[var(--bg-warning)]" />
     </div>
   );
 }
@@ -214,6 +214,9 @@ export function SideBar() {
                 aria-hidden="true"
                 className="size-2 rounded-full bg-[var(--brand-accent)]"
               />
+              <p className="opacity-[0.65] [font-family:var(--font-jetbrains-mono)] text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                Hack · Build · Share
+              </p>
             </div>
           </div>
         </div>

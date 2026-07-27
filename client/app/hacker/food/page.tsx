@@ -234,18 +234,15 @@ export default function FoodPage() {
   }
 
   return (
-    <main className="h-full w-full overflow-auto bg-[var(--bg-light)] p-4 [font-family:var(--font-figtree)] text-[var(--text-body)] sm:p-6">
-      <header
-        className="hacker-card-enter mb-6"
-        style={{ animationDelay: "40ms" }}
-      >
-        <p className="[font-family:var(--font-jetbrains-mono)] text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-primary)]">
+    <main className="h-full w-full overflow-auto bg-[#E3F3FF] p-6 [font-family:var(--font-figtree)] text-neutral-950">
+      <header className="mb-6">
+        <p className="[font-family:var(--font-jetbrains-mono)] text-xs font-semibold uppercase tracking-[0.12em] text-black">
           Hacker logistics
         </p>
-        <h1 className="[font-family:var(--font-fredoka)] text-3xl font-semibold tracking-[-0.02em] text-[var(--brand-secondary)]">
+        <h1 className="[font-family:var(--font-fredoka)] text-3xl font-semibold tracking-[-0.02em]">
           Food Menu
         </h1>
-        <p className="mt-2 max-w-2xl text-[var(--text-secondary)]">
+        <p className="mt-2 max-w-2xl text-neutral-600">
           Check meal options and allergen notes before each food window.
         </p>
       </header>
@@ -255,21 +252,20 @@ export default function FoodPage() {
         defaultValue={["Friday", "Saturday"]}
         className="max-w-4xl gap-3"
       >
-        {menus.map((dayMenu, index) => (
+        {menus.map((dayMenu) => (
           <AccordionItem
             key={dayMenu.day}
             value={dayMenu.day}
-            className="hacker-card-enter rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] px-5 shadow-[0_10px_24px_rgba(15,42,67,0.06)]"
-            style={{ animationDelay: `${120 + index * 70}ms` }}
+            className="rounded-lg border border-neutral-200 bg-white px-5 shadow-sm"
           >
-            <AccordionTrigger className="[font-family:var(--font-fredoka)] text-xl font-semibold tracking-[-0.01em] text-[var(--brand-secondary)] hover:text-[var(--text-primary)] hover:no-underline">
+            <AccordionTrigger className="[font-family:var(--font-fredoka)] text-xl font-semibold tracking-[-0.01em] hover:no-underline">
               {dayMenu.day}
             </AccordionTrigger>
             <AccordionContent className="pb-5">
               <div className="flex flex-col gap-6">
                 {dayMenu.groups.map((group) => (
                   <section key={`${dayMenu.day}-${group.label}`}>
-                    <h2 className="mb-3 [font-family:var(--font-jetbrains-mono)] text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+                    <h2 className="mb-3 [font-family:var(--font-jetbrains-mono)] text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
                       {group.label}
                     </h2>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -281,14 +277,14 @@ export default function FoodPage() {
                         return (
                           <article
                             key={allergenKey}
-                            className="rounded-2xl border border-[color:var(--bg-gray-dark)]/70 bg-[var(--bg-light)] p-4"
+                            className="rounded-lg border border-neutral-200 bg-neutral-50 p-4"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <h3 className="font-semibold text-[var(--brand-secondary)]">
+                                <h3 className="font-semibold text-neutral-950">
                                   {meal.name}
                                 </h3>
-                                <p className="text-sm text-[var(--text-secondary)]">
+                                <p className="text-sm text-neutral-500">
                                   {meal.vendor}
                                 </p>
                               </div>
@@ -303,11 +299,7 @@ export default function FoodPage() {
                                     type="button"
                                     variant={isExpanded ? "default" : "outline"}
                                     size="sm"
-                                    className={`rounded-full [font-family:var(--font-figtree)] font-semibold shadow-none ${
-                                      isExpanded
-                                        ? "bg-[var(--brand-secondary)] text-white hover:bg-[var(--brand-secondary)]"
-                                        : "border-[color:var(--bg-gray-dark)] bg-white text-[var(--brand-secondary)] hover:bg-[var(--bg-primary-light)] hover:text-[var(--brand-secondary)]"
-                                    }`}
+                                    className="[font-family:var(--font-figtree)]"
                                   >
                                     <Info
                                       className="size-4"
@@ -318,13 +310,13 @@ export default function FoodPage() {
                                 </PopoverTrigger>
                                 <PopoverContent
                                   align="end"
-                                  className="w-80 max-w-[calc(100vw-2rem)] gap-0 overflow-hidden rounded-2xl border-[color:var(--bg-gray-dark)] bg-[var(--bg-white)] p-0 [font-family:var(--font-figtree)] text-[var(--text-body)] shadow-[0_16px_36px_rgba(15,42,67,0.12)]"
+                                  className="w-80 max-w-[calc(100vw-2rem)] gap-0 overflow-hidden p-0 [font-family:var(--font-figtree)]"
                                 >
-                                  <div className="border-b border-[var(--bg-gray)] px-4 py-3">
-                                    <p className="font-semibold text-[var(--brand-secondary)]">
+                                  <div className="border-b border-neutral-200 px-4 py-3">
+                                    <p className="font-semibold text-neutral-950">
                                       {meal.name} allergens
                                     </p>
-                                    <p className="text-xs text-[var(--text-secondary)]">
+                                    <p className="text-xs text-neutral-500">
                                       {meal.vendor}
                                     </p>
                                   </div>

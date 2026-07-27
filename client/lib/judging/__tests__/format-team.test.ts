@@ -9,7 +9,6 @@ const base: JudgingProject = {
   tracks: [],
   members: [],
   description: null,
-  devpostUrl: null,
   room: null,
 };
 

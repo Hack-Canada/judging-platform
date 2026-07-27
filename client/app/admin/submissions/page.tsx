@@ -1,6 +1,5 @@
 import { getProjects } from "@/lib/queries";
 import { SubmissionsManager } from "@/components/admin/submissions-manager";
-import { AdminPageHeading } from "@/components/admin/page-heading";
 
 export const metadata = { title: "Admin · Submissions" };
 
@@ -9,10 +8,13 @@ export default async function SubmissionsPage() {
 
   return (
     <div className="space-y-6">
-      <AdminPageHeading
-        title="Hacker submissions"
-        description="Every project submitted. Edit details or remove a submission — changes write straight to the database."
-      />
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight">Hacker submissions</h2>
+        <p className="text-sm text-muted-foreground">
+          Every project submitted. Edit details or remove a submission — changes
+          write straight to the database.
+        </p>
+      </div>
       <SubmissionsManager initialProjects={projects} />
     </div>
   );

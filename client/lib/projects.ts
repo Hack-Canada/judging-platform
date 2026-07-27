@@ -21,7 +21,6 @@ export type Project = {
   team_name: string | null;
   members: string[];
   tracks: string[];
-  devpost_link: string | null;
   submitted_at: string | null;
   created_at: string | null;
   raw: Record<string, JsonValue>;
@@ -195,8 +194,6 @@ function scoreProjectTable(table: DatabaseTable) {
 
   if (columns.has("project_name")) score += 50;
   if (columns.has("project_title")) score += 40;
-  if (columns.has("devpost_link")) score += 35;
-  if (columns.has("devpost_url")) score += 35;
   if (columns.has("git_repo")) score += 35;
   if (columns.has("team_name")) score += 25;
   if (columns.has("members")) score += 20;
@@ -234,16 +231,6 @@ function normalizeProject(row: Record<string, unknown>, index: number): Project 
     tracks: toStringArray(
       row.tracks ?? row.track ?? row.category ?? row.award_categories
     ),
-    devpost_link:
-      firstString(row, [
-        "devpost_link",
-        "devpost_url",
-        "demo_url",
-        "live_post_demo",
-        "url",
-        "link",
-      ])?.value ??
-      null,
     submitted_at:
       firstString(row, ["submitted_at", "submission_date", "created_at", "updated_at"])?.value ??
       null,
