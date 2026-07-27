@@ -1,13 +1,12 @@
 import { getSql } from "@/lib/db";
 
 // Data access for the Admin portal. All queries read the `projects` table,
-// which holds the raw Devpost submissions (see db/schedule-schema.sql for the
+// which holds the raw submissions (see db/schedule-schema.sql for the
 // proposed scheduling tables that don't exist yet).
 
 export type Project = {
   id: string;
   project_name: string;
-  devpost_link: string | null;
   tracks: string[];
   submitter_name: string | null;
   submitter_email: string | null;
@@ -18,7 +17,6 @@ export type Project = {
 export type SubmissionStats = {
   totalProjects: number;
   totalHackers: number;
-  withDevpost: number;
   avgTeamSize: number;
   distinctTracks: number;
 };
@@ -31,7 +29,6 @@ export async function getSubmissionStats(): Promise<SubmissionStats> {
     SELECT
       count(*)::int AS total_projects,
       coalesce(sum(cardinality(members)), 0)::int AS total_hackers,
-      count(devpost_link)::int AS with_devpost,
       coalesce(avg(cardinality(members)), 0)::float AS avg_team_size,
       (SELECT count(DISTINCT t)::int FROM projects, unnest(tracks) AS t) AS distinct_tracks
     FROM projects
@@ -40,7 +37,6 @@ export async function getSubmissionStats(): Promise<SubmissionStats> {
   return {
     totalProjects: r.total_projects,
     totalHackers: r.total_hackers,
-    withDevpost: r.with_devpost,
     avgTeamSize: Math.round(r.avg_team_size * 10) / 10,
     distinctTracks: r.distinct_tracks,
   };
@@ -96,7 +92,7 @@ export async function getSubmissionTimeline(): Promise<SubmissionBucket[]> {
 export async function getProjects(): Promise<Project[]> {
   const sql = getSql();
   const rows = await sql`
-    SELECT id, project_name, devpost_link, tracks, submitter_name,
+    SELECT id, project_name, tracks, submitter_name,
            submitter_email, members, submitted_at
     FROM projects
     ORDER BY submitted_at ASC NULLS LAST, project_name ASC
@@ -108,7 +104,6 @@ export async function getProjects(): Promise<Project[]> {
 // schema, db/projects.sql on linus/hacker) — id and submitted_at are not edited.
 export type ProjectUpdate = {
   project_name: string;
-  devpost_link: string | null;
   tracks: string[];
   submitter_name: string | null;
   submitter_email: string | null;
@@ -123,14 +118,13 @@ export async function updateProject(
   const rows = await sql`
     UPDATE projects SET
       project_name    = ${fields.project_name},
-      devpost_link    = ${fields.devpost_link},
       tracks          = ${fields.tracks},
       submitter_name  = ${fields.submitter_name},
       submitter_email = ${fields.submitter_email},
       members         = ${fields.members},
       updated_at      = now()
     WHERE id = ${id}
-    RETURNING id, project_name, devpost_link, tracks, submitter_name,
+    RETURNING id, project_name, tracks, submitter_name,
               submitter_email, members, submitted_at
   `;
   return (rows[0] as Project) ?? null;
