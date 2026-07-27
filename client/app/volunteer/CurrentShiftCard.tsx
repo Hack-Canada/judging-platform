@@ -1,5 +1,5 @@
-import type { Shift } from "@/app/volunteer/data/shifts";
-import { ShiftCard } from "@/app/volunteer/components/shift-card";
+import type { Shift } from "@/app/volunteer/types";
+import { ShiftCard } from "@/app/volunteer/ShiftCard";
 
 export function CurrentShiftCard({
   shift,
@@ -10,13 +10,13 @@ export function CurrentShiftCard({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <h2 className="text-sm font-medium text-blue-700">
+      <h2 className="[font-family:var(--font-jetbrains-mono)] text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
         Current Shift
       </h2>
       {shift ? (
         <ShiftCard shift={shift} current onClick={onSelect} />
       ) : (
-        <p className="text-sm text-muted-foreground">
+        <p className="[font-family:var(--font-figtree)] text-sm text-[var(--text-secondary)]">
           You have no active shift right now.
         </p>
       )}

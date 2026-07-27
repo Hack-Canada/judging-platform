@@ -16,11 +16,19 @@ export function ScheduleViewSwitcher({ items }: { items: CalendarItem[] }) {
       </div>
       {view === "list" ? (
         items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No events yet.</p>
+          <p className="[font-family:var(--font-figtree)] text-sm text-[var(--text-secondary)]">
+            No events yet.
+          </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {items.map((item) => (
-              <EventListItem key={item.id} {...item} />
+            {items.map((item, index) => (
+              <div
+                key={item.id}
+                className="hacker-card-enter"
+                style={{ animationDelay: `${Math.min(index, 6) * 60}ms` }}
+              >
+                <EventListItem {...item} />
+              </div>
             ))}
           </div>
         )

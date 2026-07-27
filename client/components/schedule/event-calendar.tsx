@@ -106,10 +106,12 @@ function DayGrid({
 
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold text-blue-700">{dayHeadingFormatter.format(date)}</h3>
+      <h3 className="[font-family:var(--font-fredoka)] text-sm font-semibold tracking-[-0.01em] text-[var(--brand-secondary)]">
+        {dayHeadingFormatter.format(date)}
+      </h3>
       <div
         ref={scrollRef}
-        className="overflow-y-auto rounded-md border bg-card"
+        className="overflow-y-auto rounded-2xl border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] shadow-[0_10px_24px_rgba(15,42,67,0.06)]"
         style={{ maxHeight: VISIBLE_HOURS * HOUR_HEIGHT }}
       >
         <div className="flex pt-2.5">
@@ -118,24 +120,27 @@ function DayGrid({
               <div
                 key={hour}
                 style={{ height: HOUR_HEIGHT }}
-                className="w-14 shrink-0 -translate-y-2.5 pr-2 text-right text-xs text-foreground"
+                className="w-14 shrink-0 -translate-y-2.5 pr-2 text-right [font-family:var(--font-jetbrains-mono)] text-[10px] text-[var(--text-tertiary)]"
               >
                 {hourLabelFormatter.format(new Date(2000, 0, 1, hour))}
               </div>
             ))}
           </div>
-          <div className="relative flex-1 border-l" style={{ height: 24 * HOUR_HEIGHT }}>
+          <div
+            className="relative flex-1 border-l border-[color:var(--bg-gray-dark)]/65"
+            style={{ height: 24 * HOUR_HEIGHT }}
+          >
             {ALL_HOURS.map((hour) => (
               <div
                 key={hour}
-                className="absolute inset-x-0 border-t"
+                className="absolute inset-x-0 border-t border-[color:var(--bg-gray-dark)]/40"
                 style={{ top: hour * HOUR_HEIGHT }}
               />
             ))}
             {items.map((item) => (
               <div
                 key={item.id}
-                className="absolute overflow-y-auto overscroll-contain rounded-md border border-primary/30 bg-primary/10 p-1.5 text-xs text-foreground transition-colors hover:bg-primary/20"
+                className="absolute overflow-y-auto overscroll-contain rounded-xl border border-[var(--brand-primary)]/40 bg-[var(--bg-primary-light)] p-1.5 [font-family:var(--font-figtree)] text-xs text-[var(--brand-secondary)] transition-colors hover:bg-[var(--brand-primary)]/25"
                 style={{
                   top: item.top,
                   height: item.height,
@@ -143,7 +148,7 @@ function DayGrid({
                   width: `calc(${100 / item.columns}% - 8px)`,
                 }}
               >
-                <p className="wrap-break-word font-medium">{item.title}</p>
+                <p className="wrap-break-word font-semibold">{item.title}</p>
                 <p className="wrap-break-word">{formatEventTime(item.startTime, item.endTime)}</p>
               </div>
             ))}
@@ -177,7 +182,11 @@ export function EventCalendar({ items }: { items: CalendarItem[] }) {
   }, [items]);
 
   if (days.length === 0) {
-    return <p className="text-sm text-muted-foreground">No events yet.</p>;
+    return (
+      <p className="[font-family:var(--font-figtree)] text-sm text-[var(--text-secondary)]">
+        No events yet.
+      </p>
+    );
   }
 
   return (

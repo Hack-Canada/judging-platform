@@ -1,26 +1,20 @@
 import { getDemoVolunteerShifts } from "@/db/queries";
-import { ScheduleViewSwitcher } from "@/components/schedule/schedule-view-switcher";
+import { LiveShiftSchedule } from "@/app/volunteer/shift-schedule/live-shift-schedule";
 
 export default async function ShiftSchedulePage() {
   const shifts = await getDemoVolunteerShifts();
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-muted p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto bg-[var(--bg-gray)] px-4 py-5 sm:gap-6 sm:px-6 sm:py-7">
       <div>
-        <h1 className="text-2xl text-blue-700 font-semibold">Shift Schedule</h1>
-        <p className="text-sm text-muted-foreground">All of your assigned shifts.</p>
+        <h1 className="[font-family:var(--font-fredoka)] text-2xl font-semibold tracking-[-0.02em] text-[var(--brand-secondary)]">
+          Shift Schedule
+        </h1>
+        <p className="mt-1 [font-family:var(--font-figtree)] text-sm text-[var(--text-secondary)]">
+          All of your assigned shifts.
+        </p>
       </div>
-      <ScheduleViewSwitcher
-        items={shifts.map((shift) => ({
-          id: shift.id,
-          title: shift.title,
-          location: shift.location,
-          startTime: shift.startTime,
-          endTime: shift.endTime,
-          description: shift.description,
-          assignments: [{ name: shift.teamLead || "You", role: shift.role }],
-        }))}
-      />
+      <LiveShiftSchedule initialShifts={shifts} />
     </div>
   );
 }

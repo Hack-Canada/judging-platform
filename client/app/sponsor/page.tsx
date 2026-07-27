@@ -1,7 +1,7 @@
-import { SponsorDashboard } from "@/app/sponsor/components/sponsor-dashboard";
-import { getDemoSponsorAssignments } from "@/db/queries";
+import { SponsorDashboard } from "@/app/sponsor/SponsorDashboard";
+import { getDemoSponsorSchedule } from "@/db/queries";
 
 export default async function SponsorPage() {
-  const events = await getDemoSponsorAssignments();
+  const events = await getDemoSponsorSchedule();
   return <SponsorDashboard events={events} />;
 }
