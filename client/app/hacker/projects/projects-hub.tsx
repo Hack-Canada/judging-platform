@@ -124,10 +124,6 @@ function asUrl(value: string | null) {
 }
 
 function projectLink(project: Project, kind: LinkKind) {
-  if (kind === "devpost" && project.devpost_link) {
-    return asUrl(project.devpost_link);
-  }
-
   return asUrl(rawValue(project, linkKeys[kind]));
 }
 
