@@ -155,7 +155,8 @@ export function submittedLabel(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Submitted";
 
-  return new Intl.DateTimeFormat(undefined, {
+  // Fixed locale: server and client must format identically to avoid hydration mismatch.
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -168,7 +169,7 @@ export function scheduleTime(value: string, delayMinutes: number) {
   if (Number.isNaN(date.getTime())) return "TBD";
 
   const delayedDate = new Date(date.getTime() + delayMinutes * 60_000);
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
     month: "short",
     day: "numeric",

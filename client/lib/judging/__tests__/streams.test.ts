@@ -10,7 +10,6 @@ const sample: JudgingProject[] = [
     tracks: ["AI", "Health"],
     members: [],
     description: null,
-    devpostUrl: null,
     room: null,
   },
   {
@@ -20,7 +19,6 @@ const sample: JudgingProject[] = [
     tracks: ["Web"],
     members: [],
     description: null,
-    devpostUrl: null,
     room: null,
   },
 ];

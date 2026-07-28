@@ -59,7 +59,7 @@ const frequentlyAskedQuestions = [
   {
     question: "What needs to be in my project submission?",
     answer:
-      "Include your project name, team members, a short description, and the links you have ready—such as GitHub, Devpost, a demo, or a video.",
+      "Include your project name, team members, a short description, and the links you have ready, such as GitHub, a demo, or a video.",
   },
   {
     question: "Where will schedule changes be posted?",
@@ -110,14 +110,14 @@ export default function HackerPage() {
               <div className="mt-7 flex flex-wrap gap-3 [font-family:var(--font-figtree)]">
                 <Link
                   href="/hacker/schedule"
-                  className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[var(--brand-secondary)] px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-secondary)]"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[var(--brand-secondary)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(15,42,67,0.16)] transition-[transform,box-shadow] hover:-translate-y-1 hover:shadow-[0_14px_26px_rgba(15,42,67,0.22)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-secondary)]"
                 >
                   View schedule
                   <ArrowUpRight className="size-4" aria-hidden="true" />
                 </Link>
                 <Link
                   href="/hacker/submission"
-                  className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[color:var(--brand-secondary)]/16 bg-white/65 px-5 py-2.5 text-sm font-semibold text-[var(--brand-secondary)] transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[color:var(--brand-secondary)]/16 bg-white/65 px-5 py-2.5 text-sm font-semibold text-[var(--brand-secondary)] shadow-[0_4px_12px_rgba(15,42,67,0.06)] transition-[transform,box-shadow,background-color] hover:-translate-y-1 hover:bg-white hover:shadow-[0_10px_20px_rgba(15,42,67,0.12)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)]"
                 >
                   Submit project
                 </Link>
@@ -144,7 +144,7 @@ export default function HackerPage() {
                   src={beaverPortrait}
                   alt="HackCanada beaver mascot"
                   priority
-                  className="relative z-10 h-auto max-h-[330px] w-auto max-w-[88%] object-contain drop-shadow-[0_22px_24px_rgba(15,42,67,0.16)]"
+                  className="beaver-float relative z-10 h-auto max-h-[330px] w-auto max-w-[88%] object-contain drop-shadow-[0_22px_24px_rgba(15,42,67,0.16)]"
                   sizes="(max-width: 1024px) 60vw, 380px"
                 />
               </div>

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionFeedback } from "@/components/judging/action-feedback";
 import { BreakBanner } from "@/components/judging/break-banner";
 import { CompletionBanner } from "@/components/judging/completion-banner";
+import { DelayControl } from "@/components/judging/delay-control";
+import { DeskQueue } from "@/components/judging/desk-queue";
 import { JudgeNotesPanel } from "@/components/judging/judge-notes-panel";
 import { JudgingFooter } from "@/components/judging/judging-footer";
 import { JudgingHeader } from "@/components/judging/judging-header";
@@ -11,9 +13,11 @@ import { LiveRibbon } from "@/components/judging/live-ribbon";
 import { LoadingShell } from "@/components/judging/loading-shell";
 import { ProjectDetails, ProjectHero } from "@/components/judging/project-spotlight";
 import { ResetStreamConfirm } from "@/components/judging/reset-stream-confirm";
+import { ReviewStamp } from "@/components/judging/review-stamp";
 import { ScheduleDock } from "@/components/judging/schedule-dock";
 import { SessionRail } from "@/components/judging/session-rail";
 import { SkipReasonPicker } from "@/components/judging/skip-reason-picker";
+import { WinnerBurst } from "@/components/judging/winner-burst";
 import {
   loadJudgeCode,
   normalizeJudgeCode,
@@ -26,6 +30,8 @@ import {
   fetchJudgingConfig,
   fetchJudgmentsFromServer,
   syncNotesNow,
+  syncRatingNow,
+  syncWinnerNow,
   type JudgmentAction,
 } from "@/lib/judging/offline-queue";
 import {
@@ -92,6 +98,8 @@ function applyStorage(
     setSkipReasons: (v: Record<string, SkipReason>) => void;
     setNotes: (v: JudgeNotes) => void;
     setEarlyMarkedIds: (v: Set<string>) => void;
+    setWinnerIds: (v: Set<string>) => void;
+    setRatings: (v: Record<string, number>) => void;
   }
 ) {
   const stored = loadJudgingStorage(streamId, JUDGING_ROUND);
@@ -100,6 +108,8 @@ function applyStorage(
   setters.setSkipReasons(stored.skipReasons);
   setters.setNotes(stored.notes);
   setters.setEarlyMarkedIds(new Set(stored.earlyMarkedIds));
+  setters.setWinnerIds(new Set(stored.winnerIds));
+  setters.setRatings(stored.ratings);
 }
 
 export function JudgingPortal({
@@ -127,11 +137,15 @@ export function JudgingPortal({
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
   const [skipReasons, setSkipReasons] = useState<Record<string, SkipReason>>({});
   const [earlyMarkedIds, setEarlyMarkedIds] = useState<Set<string>>(new Set());
+  const [winnerIds, setWinnerIds] = useState<Set<string>>(new Set());
+  const [ratings, setRatings] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState<JudgeNotes>({});
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [skipPickerProjectId, setSkipPickerProjectId] = useState<string | null>(null);
   const [pendingSkipReason, setPendingSkipReason] = useState<SkipReason | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [reviewStampTrigger, setReviewStampTrigger] = useState(0);
+  const [winnerBurstTrigger, setWinnerBurstTrigger] = useState(0);
   const notesDebounceRef = useRef<number | null>(null);
 
   const judgeId = resolveJudgeId(judgeCode);
@@ -221,6 +235,8 @@ export function JudgingPortal({
       setSkipReasons,
       setNotes,
       setEarlyMarkedIds,
+      setWinnerIds,
+      setRatings,
     });
     setHydrated(true);
   }, [activeStreamId, streams]);
@@ -239,6 +255,8 @@ export function JudgingPortal({
       setSkippedIds(new Set(merged.skippedIds));
       setSkipReasons(merged.skipReasons);
       setNotes(merged.notes);
+      setWinnerIds(new Set(merged.winnerIds));
+      setRatings(merged.ratings);
     });
   }, [hydrated, activeStreamId, judgeId]);
 
@@ -266,10 +284,22 @@ export function JudgingPortal({
         skipReasons,
         notes,
         earlyMarkedIds: [...earlyMarkedIds],
+        winnerIds: [...winnerIds],
+        ratings,
       },
       JUDGING_ROUND
     );
-  }, [hydrated, activeStreamId, judgedIds, skippedIds, skipReasons, notes, earlyMarkedIds]);
+  }, [
+    hydrated,
+    activeStreamId,
+    judgedIds,
+    skippedIds,
+    skipReasons,
+    notes,
+    earlyMarkedIds,
+    winnerIds,
+    ratings,
+  ]);
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? projects[0];
   const projectSlots = useMemo(
@@ -340,6 +370,8 @@ export function JudgingPortal({
           skipReasons,
           notes,
           earlyMarkedIds: [...earlyMarkedIds],
+          winnerIds: [...winnerIds],
+          ratings,
         },
         JUDGING_ROUND
       );
@@ -350,11 +382,13 @@ export function JudgingPortal({
         setSkipReasons,
         setNotes,
         setEarlyMarkedIds,
+        setWinnerIds,
+        setRatings,
       });
       setSkipPickerProjectId(null);
       scrollToTop();
     },
-    [activeStreamId, judgedIds, skippedIds, skipReasons, notes, earlyMarkedIds]
+    [activeStreamId, judgedIds, skippedIds, skipReasons, notes, earlyMarkedIds, winnerIds, ratings]
   );
 
   const unmarkJudging = useCallback((projectId: string) => {
@@ -443,6 +477,10 @@ export function JudgingPortal({
       mode: "reviewed" | "skipped",
       reason: SkipReason | null = null
     ) => {
+      if (mode === "reviewed") {
+        setReviewStampTrigger((n) => n + 1);
+      }
+
       const skipLabel =
         reason === "absent"
           ? "Skipped - absent"
@@ -460,6 +498,80 @@ export function JudgingPortal({
       );
     },
     [finishDecision]
+  );
+
+  const toggleWinner = useCallback(
+    (projectId: string) => {
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) return;
+
+      const nextPicked = !winnerIds.has(projectId);
+      setWinnerIds((prev) => {
+        const next = new Set(prev);
+        if (nextPicked) next.add(projectId);
+        else next.delete(projectId);
+        return next;
+      });
+
+      void syncWinnerNow({
+        judgeId,
+        streamId: activeStreamId,
+        projectId,
+        round: JUDGING_ROUND,
+        winner: nextPicked,
+      });
+      refreshPending();
+
+      if (nextPicked) {
+        setWinnerBurstTrigger((n) => n + 1);
+        // Winner pick implies you've reviewed this project.
+        if (!judgedIds.has(projectId)) {
+          setReviewStampTrigger((n) => n + 1);
+          finishDecision(projectId, "Winner pick · marked reviewed", "reviewed");
+          return;
+        }
+        setFeedback({
+          message: "Added to your winner picks",
+          detail: project.name,
+        });
+        return;
+      }
+
+      setFeedback({
+        message: "Removed from winner picks",
+        detail: project.name,
+      });
+    },
+    [
+      projects,
+      winnerIds,
+      judgedIds,
+      judgeId,
+      activeStreamId,
+      refreshPending,
+      finishDecision,
+    ]
+  );
+
+  const rateProject = useCallback(
+    (projectId: string, rating: number | null) => {
+      setRatings((prev) => {
+        const next = { ...prev };
+        if (rating === null) delete next[projectId];
+        else next[projectId] = rating;
+        return next;
+      });
+
+      void syncRatingNow({
+        judgeId,
+        streamId: activeStreamId,
+        projectId,
+        round: JUDGING_ROUND,
+        rating,
+      });
+      refreshPending();
+    },
+    [judgeId, activeStreamId, refreshPending]
   );
 
   const unmarkWithToast = useCallback(
@@ -488,6 +600,8 @@ export function JudgingPortal({
     setSkippedIds(new Set());
     setSkipReasons({});
     setEarlyMarkedIds(new Set());
+    setWinnerIds(new Set());
+    setRatings({});
     clearJudgingStorage(activeStreamId, JUDGING_ROUND);
     setShowResetConfirm(false);
 
@@ -513,58 +627,18 @@ export function JudgingPortal({
     }, 400);
   }
 
-  function selectProject(id: string) {
-    setActiveProjectId(id);
+  const selectProject = useCallback((id: string) => {
+    setActiveProjectId((prev) => (prev === id ? prev : id));
     setSkipPickerProjectId(null);
     scrollToTop();
-  }
+  }, []);
 
   function startSkipFlow(projectId: string) {
     setSkipPickerProjectId(projectId);
     setPendingSkipReason(null);
   }
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (skipPickerProjectId) return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
-
-      if (e.key === "j" && !isJudged && activeProject) {
-        e.preventDefault();
-        completeJudging(activeProject.id, "reviewed");
-      }
-      if (e.key === "s" && !isJudged && activeProject) {
-        e.preventDefault();
-        startSkipFlow(activeProject.id);
-      }
-      if (e.key === "u" && isJudged && activeProject) {
-        e.preventDefault();
-        unmarkWithToast(activeProject.id);
-      }
-      if (e.key === "g" && liveSlot) {
-        e.preventDefault();
-        selectProject(liveSlot.projectId);
-      }
-      if (e.key === "ArrowRight" && activeProject) {
-        const { next } = getAdjacentProjectIds(streamSlots, activeProject.id);
-        if (next) {
-          e.preventDefault();
-          selectProject(next);
-        }
-      }
-      if (e.key === "ArrowLeft" && activeProject) {
-        const { prev } = getAdjacentProjectIds(streamSlots, activeProject.id);
-        if (prev) {
-          e.preventDefault();
-          selectProject(prev);
-        }
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
+  const keyHandlerRef = useRef({
     skipPickerProjectId,
     activeProject,
     isJudged,
@@ -572,7 +646,80 @@ export function JudgingPortal({
     streamSlots,
     completeJudging,
     unmarkWithToast,
-  ]);
+    toggleWinner,
+    selectProject,
+    startSkipFlow,
+  });
+
+  keyHandlerRef.current = {
+    skipPickerProjectId,
+    activeProject,
+    isJudged,
+    liveSlot,
+    streamSlots,
+    completeJudging,
+    unmarkWithToast,
+    toggleWinner,
+    selectProject,
+    startSkipFlow,
+  };
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.repeat) return;
+      const ctx = keyHandlerRef.current;
+      if (ctx.skipPickerProjectId) return;
+
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+      if (target?.isContentEditable) return;
+
+      if (e.key === "j" && !ctx.isJudged && ctx.activeProject) {
+        e.preventDefault();
+        ctx.completeJudging(ctx.activeProject.id, "reviewed");
+      }
+      if (e.key === "s" && !ctx.isJudged && ctx.activeProject) {
+        e.preventDefault();
+        ctx.startSkipFlow(ctx.activeProject.id);
+      }
+      if (e.key === "u" && ctx.isJudged && ctx.activeProject) {
+        e.preventDefault();
+        ctx.unmarkWithToast(ctx.activeProject.id);
+      }
+      if (e.key === "w" && ctx.activeProject) {
+        e.preventDefault();
+        ctx.toggleWinner(ctx.activeProject.id);
+      }
+      if (e.key === "g" && ctx.liveSlot) {
+        e.preventDefault();
+        ctx.selectProject(ctx.liveSlot.projectId);
+      }
+      if (e.key === "ArrowRight" && ctx.activeProject) {
+        const { next } = getAdjacentProjectIds(
+          ctx.streamSlots,
+          ctx.activeProject.id
+        );
+        if (next) {
+          e.preventDefault();
+          ctx.selectProject(next);
+        }
+      }
+      if (e.key === "ArrowLeft" && ctx.activeProject) {
+        const { prev } = getAdjacentProjectIds(
+          ctx.streamSlots,
+          ctx.activeProject.id
+        );
+        if (prev) {
+          e.preventDefault();
+          ctx.selectProject(prev);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   if (!hydrated) {
     return <LoadingShell />;
@@ -614,6 +761,8 @@ export function JudgingPortal({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <ReviewStamp trigger={reviewStampTrigger} />
+      <WinnerBurst trigger={winnerBurstTrigger} />
       <JudgingHeader
         judgedCount={judgedCount}
         skippedCount={skippedCount}
@@ -630,6 +779,22 @@ export function JudgingPortal({
         streamLocked={streamLocked}
       />
 
+      {scheduleOffsetLabel ? (
+        <div className="j-delay-banner" role="status" aria-live="polite">
+          <span className="j-delay-banner-icon" aria-hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+          </span>
+          <span className="j-delay-banner-label">Schedule delay</span>
+          <span className="j-delay-banner-value">Running {scheduleOffsetLabel}</span>
+          <span className="j-delay-banner-hint">
+            Every judge desk updates within ~10s
+          </span>
+        </div>
+      ) : null}
+
       {streamAllDone && activeStream && (
         <CompletionBanner
           judgedCount={judgedCount}
@@ -641,7 +806,7 @@ export function JudgingPortal({
       )}
 
       {showResetConfirm && activeStream && (
-        <div className="border-b border-[var(--j-border)] bg-[var(--j-white)] px-5 py-3 text-[var(--j-ink)] sm:px-10">
+        <div className="border-b border-[var(--hc-border)] bg-[var(--hc-white)] px-4 py-3 text-[var(--hc-ink)] sm:px-10">
           <ResetStreamConfirm
             streamName={activeStream.name}
             judgedTotal={judgedIds.size}
@@ -677,9 +842,18 @@ export function JudgingPortal({
         judgedEarly={judgedEarly}
         notScheduled={notScheduled}
         multipleSlots={multipleSlots}
+        nowMs={adjustedNow}
       />
 
       <div className="j-content">
+        <DeskQueue
+          slots={streamSlots}
+          projects={projects}
+          activeProjectId={activeProject.id}
+          judgedIds={judgedIds}
+          winnerIds={winnerIds}
+          onSelect={selectProject}
+        />
         <div className="j-content-grid">
           <div className="j-main-col min-w-0">
             <ProjectDetails project={activeProject} />
@@ -689,75 +863,94 @@ export function JudgingPortal({
               onChange={updateNotes}
               syncStatus={syncStatus}
               pendingNotesCount={pendingSummary.notesOnly}
+              rating={ratings[activeProject.id] ?? null}
+              onRate={(value) => rateProject(activeProject.id, value)}
             />
           </div>
 
           <aside className="j-rail-col hidden lg:block">
-            <SessionRail
-              slots={streamSlots}
-              projects={projects}
-              activeProjectId={activeProject.id}
-              judgedIds={judgedIds}
-              skippedIds={skippedIds}
-              onSelect={selectProject}
-              scheduleApproximate={scheduleApproximate}
-            />
+            <div className="j-rail-stack">
+              <DelayControl
+                offsetMinutes={scheduleOffsetMinutes}
+                onApplied={handleOffsetChange}
+              />
+              <SessionRail
+                slots={streamSlots}
+                projects={projects}
+                activeProjectId={activeProject.id}
+                judgedIds={judgedIds}
+                skippedIds={skippedIds}
+                winnerIds={winnerIds}
+                onSelect={selectProject}
+                scheduleApproximate={scheduleApproximate}
+              />
+            </div>
           </aside>
         </div>
       </div>
 
-      <ScheduleDock
-        slots={streamSlots}
-        projects={projects}
-        activeProjectId={activeProject.id}
-        judgedIds={judgedIds}
-        skippedIds={skippedIds}
-        judgedCount={judgedCount}
-        skippedCount={skippedCount}
-        totalCount={totalCount}
-        onSelect={selectProject}
-        scheduleApproximate={scheduleApproximate}
-      />
-
-      <footer className="j-footer">
-        {feedback && (
-          <ActionFeedback
-            message={feedback.message}
-            detail={feedback.detail}
-            actionLabel={feedback.actionLabel}
-            onAction={feedback.onAction}
-            onDismiss={() => setFeedback(null)}
-          />
-        )}
-        <div className="j-footer-inner">
-          {skipPickerProject ? (
-            <SkipReasonPicker
-              projectName={skipPickerProject.name}
-              selected={pendingSkipReason}
-              onSelect={setPendingSkipReason}
-              onConfirm={() =>
-                completeJudging(skipPickerProject.id, "skipped", pendingSkipReason)
-              }
-              onCancel={() => {
-                setSkipPickerProjectId(null);
-                setPendingSkipReason(null);
-              }}
+      <div className="j-bottom-chrome">
+        <ScheduleDock
+          slots={streamSlots}
+          projects={projects}
+          activeProjectId={activeProject.id}
+          judgedIds={judgedIds}
+          skippedIds={skippedIds}
+          winnerIds={winnerIds}
+          judgedCount={judgedCount}
+          skippedCount={skippedCount}
+          totalCount={totalCount}
+          onSelect={selectProject}
+          scheduleApproximate={scheduleApproximate}
+          delayControl={
+            <DelayControl
+              offsetMinutes={scheduleOffsetMinutes}
+              onApplied={handleOffsetChange}
+              embedded
             />
-          ) : (
-            <JudgingFooter
-              isJudged={isJudged}
-              isSkipped={isSkipped}
-              activeSlotLive={activeSlot?.status === "live"}
-              notScheduled={notScheduled}
-              showGoToLive={Boolean(liveSlot && activeProjectId !== liveSlot.projectId)}
-              onSkip={() => startSkipFlow(activeProject.id)}
-              onReviewed={() => completeJudging(activeProject.id, "reviewed")}
-              onUnmark={() => unmarkWithToast(activeProject.id)}
-              onGoToLive={() => liveSlot && selectProject(liveSlot.projectId)}
+          }
+        />
+
+        <footer className="j-footer">
+          {feedback && (
+            <ActionFeedback
+              message={feedback.message}
+              detail={feedback.detail}
+              actionLabel={feedback.actionLabel}
+              onAction={feedback.onAction}
+              onDismiss={() => setFeedback(null)}
             />
           )}
-        </div>
-      </footer>
+          <div className="j-footer-inner">
+            {skipPickerProject ? (
+              <SkipReasonPicker
+                projectName={skipPickerProject.name}
+                selected={pendingSkipReason}
+                onSelect={setPendingSkipReason}
+                onConfirm={() =>
+                  completeJudging(skipPickerProject.id, "skipped", pendingSkipReason)
+                }
+                onCancel={() => {
+                  setSkipPickerProjectId(null);
+                  setPendingSkipReason(null);
+                }}
+              />
+            ) : (
+              <JudgingFooter
+                isJudged={isJudged}
+                isSkipped={isSkipped}
+                isWinner={winnerIds.has(activeProject.id)}
+                activeSlotLive={activeSlot?.status === "live"}
+                notScheduled={notScheduled}
+                onSkip={() => startSkipFlow(activeProject.id)}
+                onReviewed={() => completeJudging(activeProject.id, "reviewed")}
+                onUnmark={() => unmarkWithToast(activeProject.id)}
+                onToggleWinner={() => toggleWinner(activeProject.id)}
+              />
+            )}
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }

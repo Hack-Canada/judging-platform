@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/design-system";
+
 type JudgingErrorScreenProps = {
   message?: string;
 };
@@ -14,20 +16,21 @@ export function JudgingErrorScreen({
   return (
     <div className="judging-shell flex min-h-dvh flex-col items-center justify-center px-6 py-24 text-center">
       <div className="w-full max-w-md space-y-4">
-        <p className="text-sm font-semibold uppercase tracking-widest text-[var(--j-muted)]">
+        <p className="text-sm font-semibold uppercase tracking-widest text-[var(--hc-muted)]">
           Judge desk
         </p>
-        <h1 className="font-[family-name:var(--j-font-display)] text-3xl font-semibold tracking-tight text-[var(--j-ink)]">
+        <h1 className="font-[family-name:var(--hc-font-display)] text-3xl font-semibold tracking-tight text-[var(--hc-ink)]">
           Could not load schedule
         </h1>
-        <p className="text-lg leading-relaxed text-[var(--j-muted)]">{message}</p>
-        <button
+        <p className="text-lg leading-relaxed text-[var(--hc-muted)]">{message}</p>
+        <Button
           type="button"
+          variant="primary"
           onClick={handleRetry}
-          className="j-cta j-cta--primary mt-6 w-full sm:w-auto"
+          className="mt-6 w-full sm:w-auto"
         >
           Retry
-        </button>
+        </Button>
       </div>
     </div>
   );

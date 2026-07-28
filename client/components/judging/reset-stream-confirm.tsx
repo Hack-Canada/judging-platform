@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/design-system";
 
 type ResetStreamConfirmProps = {
   streamName: string;
@@ -17,23 +17,21 @@ export function ResetStreamConfirm({
 }: ResetStreamConfirmProps) {
   return (
     <div className="j-reset-confirm" role="alertdialog" aria-labelledby="reset-title">
-      <p id="reset-title" className="text-sm font-semibold text-[var(--j-ink)]">
+      <p
+        id="reset-title"
+        className="font-[family-name:var(--hc-font-display)] text-sm font-semibold text-[var(--hc-ink)]"
+      >
         Reset {streamName}?
       </p>
-      <p className="mt-1 text-xs leading-relaxed text-[var(--j-muted)]">
+      <p className="mt-1 text-xs leading-relaxed text-[var(--hc-muted)]">
         Clears {judgedTotal} marked project{judgedTotal === 1 ? "" : "s"}. You will need to re-mark
         each one.
       </p>
-      <div className="mt-3 flex gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} className="flex-1 sm:flex-none">
+      <div className="mt-3 flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto">
           Cancel
         </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={onConfirm}
-          className="flex-1 text-[var(--j-action)] sm:flex-none"
-        >
+        <Button type="button" variant="primary" onClick={onConfirm} className="w-full sm:w-auto">
           Reset stream
         </Button>
       </div>
