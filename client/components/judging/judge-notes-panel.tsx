@@ -1,7 +1,7 @@
 ﻿"use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Star } from "lucide-react";
+import { useEffect, useId, useRef } from "react";
+import { Star } from "lucide-react";
 import { Card } from "@/components/design-system";
 import { notesSyncHint } from "@/components/judging/judging-footer";
 import type { SyncStatus } from "@/lib/judging/use-judging-sync";
@@ -16,8 +16,7 @@ const NOTE_PROMPTS = [
   "Follow up",
 ];
 
-const COLLAPSED_MIN_PX = 112;
-const EXPANDED_MIN_PX = 280;
+const NOTES_MIN_PX = 160;
 
 type JudgeNotesPanelProps = {
   project: JudgingProject;
@@ -103,39 +102,19 @@ export function JudgeNotesPanel({
 }: JudgeNotesPanelProps) {
   const textareaId = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    const min = expanded ? EXPANDED_MIN_PX : COLLAPSED_MIN_PX;
-    el.style.height = "0px";
-    el.style.height = `${Math.max(el.scrollHeight, min)}px`;
-  }, [notes, expanded, project.id]);
-
-  function toggleExpanded() {
-    setExpanded((prev) => {
-      const next = !prev;
-      if (next) {
-        requestAnimationFrame(() => {
-          document.getElementById("j-scorecard")?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-          textareaRef.current?.focus({ preventScroll: true });
-        });
-      }
-      return next;
-    });
-  }
+    el.style.height = "auto";
+    // Extra line so the last typed line isn't clipped under padding / chrome
+    el.style.height = `${Math.max(el.scrollHeight + 8, NOTES_MIN_PX)}px`;
+  }, [notes, project.id]);
 
   return (
     <Card
       id="j-scorecard"
-      className={cn(
-        "j-notes-panel j-scorecard flex flex-1 flex-col p-4 sm:p-6",
-        expanded && "j-scorecard--expanded",
-      )}
+      className="j-notes-panel j-scorecard flex flex-1 flex-col p-4 sm:p-6"
       aria-labelledby={`${textareaId}-label`}
     >
       <div className="j-scorecard-head">
@@ -146,30 +125,9 @@ export function JudgeNotesPanel({
         >
           Scorecard
         </label>
-        <div className="j-scorecard-head-actions">
-          <span className="j-scorecard-tag" aria-hidden>
-            Private
-          </span>
-          <button
-            type="button"
-            className="j-notes-expand"
-            aria-expanded={expanded}
-            aria-controls={textareaId}
-            onClick={toggleExpanded}
-          >
-            {expanded ? (
-              <>
-                Collapse
-                <ChevronUp className="size-4" aria-hidden />
-              </>
-            ) : (
-              <>
-                Expand
-                <ChevronDown className="size-4" aria-hidden />
-              </>
-            )}
-          </button>
-        </div>
+        <span className="j-scorecard-tag" aria-hidden>
+          Private
+        </span>
       </div>
       <p className="mt-1 text-sm text-[var(--hc-muted)] sm:text-base">
         Notes for {project.name}. {notesSyncHint(syncStatus, pendingNotesCount)}
@@ -197,12 +155,9 @@ export function JudgeNotesPanel({
           id={textareaId}
           value={notes}
           onChange={(e) => onChange(e.target.value)}
-          onFocus={() => {
-            if (!expanded && notes.trim().length > 80) setExpanded(true);
-          }}
           placeholder="What stood out? Questions to follow up on later?"
           className="j-notes-input j-scorecard-input"
-          rows={expanded ? 10 : 4}
+          rows={5}
         />
       </div>
     </Card>

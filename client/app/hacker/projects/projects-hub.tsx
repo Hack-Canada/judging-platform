@@ -38,7 +38,7 @@ type ProjectsHubProps = {
   errorMessage: string | null;
 };
 
-type LinkKind = "github" | "youtube" | "demo" | "devpost";
+type LinkKind = "github" | "youtube" | "demo";
 type DisplayScheduleSlot = {
   id: string;
   time: string;
@@ -92,7 +92,6 @@ const linkKeys: Record<LinkKind, string[]> = {
     "project_url",
     "website",
   ],
-  devpost: ["devpost", "devpost_link", "devpost_url"],
 };
 
 function jsonText(value: Project["raw"][string]) {
@@ -124,10 +123,6 @@ function asUrl(value: string | null) {
 }
 
 function projectLink(project: Project, kind: LinkKind) {
-  if (kind === "devpost" && project.devpost_link) {
-    return asUrl(project.devpost_link);
-  }
-
   return asUrl(rawValue(project, linkKeys[kind]));
 }
 
@@ -176,7 +171,8 @@ function submittedLabel(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Submitted";
 
-  return new Intl.DateTimeFormat(undefined, {
+  // Fixed locale: server and client must format identically to avoid hydration mismatch.
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -213,7 +209,7 @@ function scheduleTime(value: string, delayMinutes: number) {
   if (Number.isNaN(date.getTime())) return "TBD";
 
   const delayedDate = new Date(date.getTime() + delayMinutes * 60_000);
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
     month: "short",
     day: "numeric",
@@ -266,8 +262,7 @@ function ProjectCard({ project }: { project: Project }) {
   const githubUrl = projectLink(project, "github");
   const youtubeUrl = projectLink(project, "youtube");
   const demoUrl = projectLink(project, "demo");
-  const devpostUrl = projectLink(project, "devpost");
-  const isReady = Boolean(githubUrl || devpostUrl || demoUrl);
+  const isReady = Boolean(githubUrl || demoUrl);
 
   return (
     <article className="rounded-lg border border-primary/10 bg-white p-4 shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/[0.02]">
@@ -313,7 +308,7 @@ function ProjectCard({ project }: { project: Project }) {
 
       <div className="mt-4 flex flex-wrap gap-2">
         <ProjectLinkButton href={githubUrl} icon={Github} label="GitHub" />
-        <ProjectLinkButton href={devpostUrl ?? demoUrl} icon={ExternalLink} label="View" />
+        <ProjectLinkButton href={demoUrl} icon={ExternalLink} label="View" />
         <ProjectLinkButton href={youtubeUrl} icon={Youtube} label="Video" />
       </div>
     </article>
@@ -380,11 +375,7 @@ export function ProjectsHub({
   }, [activeView, projects, query, selectedTeam]);
 
   const readyProjects = projects.filter((project) =>
-    Boolean(
-      projectLink(project, "github") ||
-        projectLink(project, "devpost") ||
-        projectLink(project, "demo")
-    )
+    Boolean(projectLink(project, "github") || projectLink(project, "demo"))
   ).length;
   const progressValue = projects.length > 0 ? (readyProjects / projects.length) * 100 : 0;
   const uniqueTeams = new Set(
@@ -636,7 +627,6 @@ export function ProjectsHub({
                     <div className="max-h-[620px] overflow-auto">
                       {judgingSlots.map(({ id, time, room, status, durationMinutes, project, source }, index) => {
                         const projectHref =
-                          projectLink(project, "devpost") ??
                           projectLink(project, "demo") ??
                           projectLink(project, "github");
 

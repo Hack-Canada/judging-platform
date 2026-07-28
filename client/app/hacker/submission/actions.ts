@@ -63,7 +63,6 @@ export async function submitProject(formData: FormData) {
     CREATE TABLE IF NOT EXISTS projects (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       project_name text NOT NULL,
-      devpost_link text UNIQUE,
       tracks text[] NOT NULL DEFAULT ARRAY[]::text[],
       submitter_name text,
       submitter_email text,
@@ -87,7 +86,6 @@ export async function submitProject(formData: FormData) {
     ALTER TABLE projects
       ADD COLUMN IF NOT EXISTS id uuid DEFAULT gen_random_uuid(),
       ADD COLUMN IF NOT EXISTS project_name text,
-      ADD COLUMN IF NOT EXISTS devpost_link text,
       ADD COLUMN IF NOT EXISTS tracks text[] NOT NULL DEFAULT ARRAY[]::text[],
       ADD COLUMN IF NOT EXISTS submitter_name text,
       ADD COLUMN IF NOT EXISTS submitter_email text,
@@ -104,11 +102,6 @@ export async function submitProject(formData: FormData) {
       ADD COLUMN IF NOT EXISTS challenges_faced text,
       ADD COLUMN IF NOT EXISTS lessons_learned text,
       ADD COLUMN IF NOT EXISTS next_steps text
-  `;
-
-  await sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS projects_devpost_link_unique_idx
-      ON projects (devpost_link)
   `;
 
   await sql`
