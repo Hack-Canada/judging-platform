@@ -5,6 +5,7 @@ import {
   DEFAULT_ROOMS,
 } from "@/lib/schedule";
 import { ScheduleManager } from "@/components/admin/schedule-manager";
+import { AdminPageHeading } from "@/components/admin/page-heading";
 
 export const metadata = { title: "Admin · Schedule" };
 
@@ -16,14 +17,10 @@ export default async function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">
-          Schedule manager
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Override pitch times, add delays, and search across all projects.
-        </p>
-      </div>
+      <AdminPageHeading
+        title="Schedule manager"
+        description="Drag pitches to reschedule, apply quick delays, and search across all projects — changes go live for everyone."
+      />
       <ScheduleManager
         initialSlots={slots}
         rooms={DEFAULT_ROOMS}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Pencil, Trash2, ExternalLink, Loader2, Users } from "lucide-react";
+import { Search, Pencil, Trash2, Loader2, Users } from "lucide-react";
 import type { Project } from "@/lib/queries";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,6 @@ import {
 type EditState = {
   id: string;
   project_name: string;
-  devpost_link: string;
   tracks: string; // comma-separated in the form
   submitter_name: string;
   submitter_email: string;
@@ -51,7 +50,6 @@ function toEditState(p: Project): EditState {
   return {
     id: p.id,
     project_name: p.project_name,
-    devpost_link: p.devpost_link ?? "",
     tracks: p.tracks.join(", "),
     submitter_name: p.submitter_name ?? "",
     submitter_email: p.submitter_email ?? "",
@@ -94,7 +92,6 @@ export function SubmissionsManager({ initialProjects }: { initialProjects: Proje
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           project_name: editing.project_name,
-          devpost_link: editing.devpost_link,
           tracks: editing.tracks,
           submitter_name: editing.submitter_name,
           submitter_email: editing.submitter_email,
@@ -149,7 +146,71 @@ export function SubmissionsManager({ initialProjects }: { initialProjects: Proje
         {projects.length} submissions
       </p>
 
-      <div className="max-h-[70vh] overflow-auto rounded-md border">
+      {/* Mobile: stacked cards (the 5-column table is unreadable on phones). */}
+      <div className="space-y-2 sm:hidden">
+        {filtered.map((p) => (
+          <div
+            key={p.id}
+            className="rounded-xl border border-[color:var(--bg-gray-dark)]/60 bg-white p-3 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate font-semibold text-[var(--brand-secondary)]">
+                  {p.project_name}
+                </div>
+                <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {p.submitter_name ?? "—"}
+                  {p.submitter_email ? ` · ${p.submitter_email}` : ""}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => setEditing(toEditState(p))}
+                  title="Edit"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-8 text-destructive hover:text-destructive"
+                  onClick={() => setDeleting(p)}
+                  title="Delete"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1">
+              {p.tracks.slice(0, 3).map((t) => (
+                <Badge key={t} variant="secondary" className="font-normal">
+                  {t.length > 22 ? t.slice(0, 21) + "…" : t}
+                </Badge>
+              ))}
+              {p.tracks.length > 3 && (
+                <Badge variant="outline" className="font-normal">
+                  +{p.tracks.length - 3}
+                </Badge>
+              )}
+              <span className="ml-auto inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+                <Users className="size-3.5" />
+                {p.members.length}
+              </span>
+            </div>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">
+            No submissions match “{query}”.
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: full table. */}
+      <div className="hidden max-h-[70vh] overflow-auto rounded-md border sm:block">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow>
@@ -157,7 +218,6 @@ export function SubmissionsManager({ initialProjects }: { initialProjects: Proje
               <TableHead>Tracks</TableHead>
               <TableHead>Submitter</TableHead>
               <TableHead className="w-20 text-center">Team</TableHead>
-              <TableHead className="w-20 text-center">Devpost</TableHead>
               <TableHead className="w-24 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -189,21 +249,6 @@ export function SubmissionsManager({ initialProjects }: { initialProjects: Proje
                     {p.members.length}
                   </span>
                 </TableCell>
-                <TableCell className="text-center">
-                  {p.devpost_link ? (
-                    <a
-                      href={p.devpost_link}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex text-primary hover:underline"
-                      title={p.devpost_link}
-                    >
-                      <ExternalLink className="size-4" />
-                    </a>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
                     <Button
@@ -230,7 +275,7 @@ export function SubmissionsManager({ initialProjects }: { initialProjects: Proje
             ))}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                   No submissions match “{query}”.
                 </TableCell>
               </TableRow>
@@ -286,15 +331,6 @@ export function SubmissionsManager({ initialProjects }: { initialProjects: Proje
                     onChange={(e) => setEditing({ ...editing, submitter_email: e.target.value })}
                   />
                 </div>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="devpost_link">Devpost link</Label>
-                <Input
-                  id="devpost_link"
-                  value={editing.devpost_link}
-                  onChange={(e) => setEditing({ ...editing, devpost_link: e.target.value })}
-                  placeholder="https://devpost.com/software/…"
-                />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="members">Team members</Label>

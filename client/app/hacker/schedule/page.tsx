@@ -1,3 +1,5 @@
+import { LiveJudgingSchedule } from "./live-judging-schedule";
+
 type EventType =
   | "main"
   | "sponsor"
@@ -463,11 +465,18 @@ export default function SchedulePage() {
         </p>
       </header>
 
-      <section
-        className="hacker-card-enter min-h-0 flex-1 overflow-auto rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] p-3 shadow-[0_10px_24px_rgba(15,42,67,0.06)] sm:p-6"
-        style={{ animationDelay: "120ms" }}
-      >
-        <div className="min-w-[1000px]">
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto">
+        {/* Live, DB-backed judging schedule (reads the same slots the admin
+            edits). Additive — the static event timeline below is unchanged. */}
+        <div className="hacker-card-enter" style={{ animationDelay: "100ms" }}>
+          <LiveJudgingSchedule />
+        </div>
+
+        <section
+          className="hacker-card-enter overflow-x-auto rounded-[1.75rem] border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] p-3 shadow-[0_10px_24px_rgba(15,42,67,0.06)] sm:p-6"
+          style={{ animationDelay: "160ms" }}
+        >
+          <div className="min-w-[1000px]">
           <div className="sticky top-0 z-40 mb-4 border-b-2 border-[var(--bg-gray)] bg-white/95 py-3 backdrop-blur">
             <div
               className="grid items-center gap-2"
@@ -492,8 +501,9 @@ export default function SchedulePage() {
               <DayScheduleView key={day.day} day={day} />
             ))}
           </div>
-        </div>
-      </section>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
