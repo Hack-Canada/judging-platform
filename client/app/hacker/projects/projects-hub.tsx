@@ -12,7 +12,8 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Project, ProjectScheduleSlot } from "@/lib/projects";
 import {
@@ -52,6 +53,8 @@ type RoomGroup = {
 
 const ALL_TEAMS = "All teams";
 const INITIAL_PROJECT_COUNT = 10;
+const LIVE_REFRESH_INTERVAL_MS = 15_000;
+const LIVE_REFRESH_DEBOUNCE_MS = 5_000;
 
 function EmptyState({
   title,
@@ -169,6 +172,7 @@ export function ProjectsHub({
   scheduleSlots,
   errorMessage,
 }: ProjectsHubProps) {
+  const router = useRouter();
   const [activeView, setActiveView] = useState<ActiveView>("projects");
   const [query, setQuery] = useState("");
   const [selectedTeam, setSelectedTeam] = useState(ALL_TEAMS);
@@ -177,6 +181,48 @@ export function ProjectsHub({
   const [expandedRoomProjects, setExpandedRoomProjects] = useState<Set<string>>(
     () => new Set(),
   );
+
+  useEffect(() => {
+    let lastRefreshAt = Date.now();
+
+    const refreshWhenActive = () => {
+      if (
+        document.visibilityState !== "visible" ||
+        !window.navigator.onLine
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastRefreshAt < LIVE_REFRESH_DEBOUNCE_MS) return;
+
+      lastRefreshAt = now;
+      router.refresh();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshWhenActive();
+    };
+
+    const refreshInterval = window.setInterval(
+      refreshWhenActive,
+      LIVE_REFRESH_INTERVAL_MS,
+    );
+
+    window.addEventListener("focus", refreshWhenActive);
+    window.addEventListener("online", refreshWhenActive);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(refreshInterval);
+      window.removeEventListener("focus", refreshWhenActive);
+      window.removeEventListener("online", refreshWhenActive);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+    };
+  }, [router]);
 
   function resetProjectLimits() {
     setShowAllProjects(false);
@@ -247,6 +293,28 @@ export function ProjectsHub({
       })),
     [filteredProjects, firstSlotByProject],
   );
+
+  const liveSelectedRow = useMemo<ProjectTableRow | null>(() => {
+    if (!selectedRow) return null;
+
+    const updatedProject = projects.find(
+      (project) => project.id === selectedRow.project.id,
+    );
+    if (!updatedProject) return null;
+
+    const updatedSlot =
+      (selectedRow.slot
+        ? displaySlots.find((slot) => slot.id === selectedRow.slot?.id)
+        : null) ??
+      firstSlotByProject.get(updatedProject.id) ??
+      null;
+
+    return {
+      ...selectedRow,
+      project: updatedProject,
+      slot: updatedSlot,
+    };
+  }, [displaySlots, firstSlotByProject, projects, selectedRow]);
 
   const roomGroups = useMemo<RoomGroup[]>(() => {
     const groups = new Map<string, RoomGroup>();
@@ -616,7 +684,7 @@ export function ProjectsHub({
       </main>
 
       <ProjectDetailsDialog
-        selectedRow={selectedRow}
+        selectedRow={liveSelectedRow}
         onOpenChange={(open) => {
           if (!open) setSelectedRow(null);
         }}
