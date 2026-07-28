@@ -9,7 +9,7 @@ const columns: ScheduleColumn[] = [
   { key: "sponsorWorkshop", label: "SPONSOR\nWORKSHOPS", type: "sponsor" },
   { key: "otherWorkshop", label: "OTHER\nWORKSHOPS", type: "workshop" },
   { key: "activities1", label: "ACTIVITIES", type: "activity" },
-  { key: "activities2", label: "ACTIVITIES", type: "activity" },
+  // { key: "activities2", label: "ACTIVITIES", type: "activity" },
   { key: "food", label: "FOOD", type: "food" },
   { key: "sponsorBooth", label: "SPONSOR\nBOOTH", type: "booth" },
   { key: "judging", label: "JUDGING", type: "judging" },
