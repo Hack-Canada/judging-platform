@@ -1,15 +1,14 @@
 "use client";
 
-import { HugeiconsIcon } from "@hugeicons/react";
-import { ListViewIcon, Calendar01Icon } from "@hugeicons/core-free-icons";
+import { CalendarDays, List, type LucideIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export type ScheduleView = "list" | "calendar";
 
-const options: { value: ScheduleView; icon: typeof ListViewIcon }[] = [
-  { value: "list", icon: ListViewIcon },
-  { value: "calendar", icon: Calendar01Icon },
+const options: { value: ScheduleView; icon: LucideIcon }[] = [
+  { value: "list", icon: List },
+  { value: "calendar", icon: CalendarDays },
 ];
 
 export function ViewToggle({
@@ -20,23 +19,22 @@ export function ViewToggle({
   onChange: (view: ScheduleView) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border bg-muted p-1">
+    <div className="inline-flex items-center gap-1 rounded-full border border-[color:var(--bg-gray-dark)]/65 bg-[var(--bg-white)] p-1">
       {options.map((option) => (
-        <Button
+        <button
           key={option.value}
           type="button"
-          size="default"
-          variant={view === option.value ? "default" : "outline"}
-          className={
-            view === option.value
-              ? "capitalize"
-              : "capitalize border-transparent text-blue-700 hover:text-blue-700"
-          }
           onClick={() => onChange(option.value)}
+          className={cn(
+            "inline-flex h-9 items-center gap-1.5 rounded-full px-4 [font-family:var(--font-figtree)] text-sm font-semibold capitalize transition-colors",
+            view === option.value
+              ? "bg-[var(--brand-secondary)] text-white"
+              : "text-[var(--brand-primary)] hover:bg-[var(--bg-primary-light)]"
+          )}
         >
-          <HugeiconsIcon icon={option.icon} size={16} strokeWidth={2} />
+          <option.icon className="size-4" strokeWidth={2} />
           {option.value}
-        </Button>
+        </button>
       ))}
     </div>
   );

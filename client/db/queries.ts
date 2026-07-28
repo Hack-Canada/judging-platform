@@ -10,7 +10,7 @@ import {
   volunteers,
   type eventStatusEnum,
 } from "@/db/schema";
-import type { Shift } from "@/app/volunteer/data/shifts";
+import type { Shift } from "@/app/volunteer/types";
 
 // Placeholders until real auth/sessions exist — these point at seeded rows
 // (see scripts/seed.mjs) and stand in for "the logged-in volunteer/sponsor."

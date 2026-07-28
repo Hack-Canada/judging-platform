@@ -1,4 +1,4 @@
-import { VolunteerDashboard } from "@/app/volunteer/components/volunteer-dashboard";
+import { VolunteerDashboard } from "@/app/volunteer/VolunteerDashboard";
 import { getDemoVolunteerShifts } from "@/db/queries";
 
 export default async function VolunteerPage() {
