@@ -10,8 +10,17 @@ type SyncItem = {
   action: string;
   notes?: string;
   skipReason?: string | null;
+  winner?: boolean;
+  rating?: number | null;
   clientTimestamp: string;
 };
+
+function itemRating(item: SyncItem): number | null {
+  if (item.rating === null || item.rating === undefined) return null;
+  const n = Math.round(Number(item.rating));
+  if (!Number.isFinite(n) || n < 1 || n > 5) return null;
+  return n;
+}
 
 function itemRound(item: SyncItem): number {
   const n = Number(item.round ?? 1);
@@ -42,7 +51,7 @@ export async function GET(request: Request) {
     await ensureJudgingTables();
     const sql = getSql();
     const rows = await sql`
-      SELECT project_id, action, skip_reason, notes, client_timestamp
+      SELECT project_id, action, skip_reason, notes, winner_pick, rating, client_timestamp
       FROM judgments
       WHERE judge_id = ${judgeId}
         AND stream_id = ${streamId}
@@ -113,6 +122,49 @@ export async function POST(request: Request) {
             updated_at = now()
           WHERE judgments.client_timestamp <= EXCLUDED.client_timestamp
         `;
+      } else if (item.action === "winner") {
+        // Field-level update: never clobbers the review/skip action.
+        await sql`
+          INSERT INTO judgments (
+            judge_id, stream_id, project_id, round, action, skip_reason, notes, winner_pick, client_timestamp
+          ) VALUES (
+            ${item.judgeId},
+            ${item.streamId},
+            ${item.projectId},
+            ${round},
+            'winner',
+            NULL,
+            ${item.notes ?? null},
+            ${item.winner ?? false},
+            ${item.clientTimestamp}
+          )
+          ON CONFLICT (judge_id, stream_id, project_id, round) DO UPDATE SET
+            winner_pick = EXCLUDED.winner_pick,
+            client_timestamp = EXCLUDED.client_timestamp,
+            updated_at = now()
+          WHERE judgments.client_timestamp <= EXCLUDED.client_timestamp
+        `;
+      } else if (item.action === "rating") {
+        await sql`
+          INSERT INTO judgments (
+            judge_id, stream_id, project_id, round, action, skip_reason, notes, rating, client_timestamp
+          ) VALUES (
+            ${item.judgeId},
+            ${item.streamId},
+            ${item.projectId},
+            ${round},
+            'rating',
+            NULL,
+            ${item.notes ?? null},
+            ${itemRating(item)},
+            ${item.clientTimestamp}
+          )
+          ON CONFLICT (judge_id, stream_id, project_id, round) DO UPDATE SET
+            rating = EXCLUDED.rating,
+            client_timestamp = EXCLUDED.client_timestamp,
+            updated_at = now()
+          WHERE judgments.client_timestamp <= EXCLUDED.client_timestamp
+        `;
       } else if (item.action === "unmarked") {
         await sql`
           DELETE FROM judgments
@@ -125,7 +177,7 @@ export async function POST(request: Request) {
       } else {
         await sql`
           INSERT INTO judgments (
-            judge_id, stream_id, project_id, round, action, skip_reason, notes, client_timestamp
+            judge_id, stream_id, project_id, round, action, skip_reason, notes, winner_pick, rating, client_timestamp
           ) VALUES (
             ${item.judgeId},
             ${item.streamId},
@@ -134,12 +186,16 @@ export async function POST(request: Request) {
             ${item.action},
             ${item.skipReason ?? null},
             ${item.notes ?? null},
+            ${item.winner ?? false},
+            ${itemRating(item)},
             ${item.clientTimestamp}
           )
           ON CONFLICT (judge_id, stream_id, project_id, round) DO UPDATE SET
             action = EXCLUDED.action,
             skip_reason = EXCLUDED.skip_reason,
             notes = COALESCE(EXCLUDED.notes, judgments.notes),
+            winner_pick = COALESCE(${item.winner ?? null}::boolean, judgments.winner_pick),
+            rating = COALESCE(${itemRating(item)}::int, judgments.rating),
             client_timestamp = EXCLUDED.client_timestamp,
             updated_at = now()
           WHERE judgments.client_timestamp <= EXCLUDED.client_timestamp
@@ -148,7 +204,7 @@ export async function POST(request: Request) {
 
       await sql`
         INSERT INTO judging_sync_log (
-          judge_id, stream_id, project_id, round, action, skip_reason, notes, client_timestamp
+          judge_id, stream_id, project_id, round, action, skip_reason, notes, winner_pick, rating, client_timestamp
         ) VALUES (
           ${item.judgeId},
           ${item.streamId},
@@ -157,6 +213,8 @@ export async function POST(request: Request) {
           ${item.action},
           ${item.skipReason ?? null},
           ${item.notes ?? null},
+          ${item.winner ?? null},
+          ${itemRating(item)},
           ${item.clientTimestamp}
         )
       `;

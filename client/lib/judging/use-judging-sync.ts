@@ -67,9 +67,10 @@ export function useJudgingSync(onOffsetChange?: (minutes: number) => void) {
       void syncNow();
     }, 30_000);
 
+    // Tight poll so organizer delay shows on judge desks without refresh.
     const offsetInterval = window.setInterval(() => {
       void refreshOffset();
-    }, 60_000);
+    }, 10_000);
 
     function onFocus() {
       void refreshOffset();

@@ -9,6 +9,8 @@ const EMPTY: JudgingStorage = {
   skipReasons: {},
   notes: {},
   earlyMarkedIds: [],
+  winnerIds: [],
+  ratings: {},
 };
 
 export function storageKeyForStream(streamId: string, round = 1): string {
@@ -59,6 +61,11 @@ function parseStorage(raw: string): JudgingStorage {
         : {},
     notes: parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {},
     earlyMarkedIds: Array.isArray(parsed.earlyMarkedIds) ? parsed.earlyMarkedIds : [],
+    winnerIds: Array.isArray(parsed.winnerIds) ? parsed.winnerIds : [],
+    ratings:
+      parsed.ratings && typeof parsed.ratings === "object"
+        ? (parsed.ratings as JudgingStorage["ratings"])
+        : {},
   };
 }
 

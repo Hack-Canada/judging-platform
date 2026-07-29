@@ -1,16 +1,20 @@
-import { ArrowUpRight } from "lucide-react";
-import { getDisplayDescription, formatTeamLabel, isValidRoom, resolveSlotRoom } from "@/lib/judging/format";
-import type { JudgingProject, SlotStatus } from "@/lib/judging/types";
+"use client";
+
+import { useEffect, useState } from "react";
+import { getDisplayDescription, formatTeamLabel, isValidRoom, resolveSlotRoom, deriveSlotStatus } from "@/lib/judging/format";
+import type { JudgingProject } from "@/lib/judging/types";
 import { LocationBoard } from "./location-board";
 import { SessionTimer } from "./session-timer";
+import { SplitFlapTitle } from "./split-flap-title";
 
-const MAX_TRACKS = 3;
+const MAX_TRACKS = 12;
 
 type ProjectHeroProps = {
   project: JudgingProject;
   slotStartTime?: string;
   slotEndTime?: string;
-  slotStatus: SlotStatus;
+  /** Ignored for phase UI - kept for callers; timer/pills use wall clock. */
+  slotStatus?: string;
   slotRoom?: string | null;
   isJudged: boolean;
   judgedEarly?: boolean;
@@ -18,56 +22,86 @@ type ProjectHeroProps = {
   notScheduled?: boolean;
   /** When project has multiple slots (show quiet hint) */
   multipleSlots?: boolean;
+  /** Portal clock (includes server skew). Offset already baked into start/end. */
+  nowMs?: number;
 };
 
 export function ProjectHero({
   project,
   slotStartTime,
   slotEndTime,
-  slotStatus,
   slotRoom,
   isJudged,
   judgedEarly,
   notScheduled,
   multipleSlots,
+  nowMs,
 }: ProjectHeroProps) {
+  const [localNow, setLocalNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (nowMs != null || isJudged || !slotStartTime || !slotEndTime) return;
+    const id = window.setInterval(() => setLocalNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [nowMs, isJudged, slotStartTime, slotEndTime]);
+
+  const clock = nowMs ?? localNow;
   const room = resolveSlotRoom(slotRoom ?? null, project.room);
   const hasRoom = isValidRoom(room);
-  const isLive = slotStatus === "live" && !isJudged;
+  const phase =
+    slotStartTime && slotEndTime && !notScheduled
+      ? deriveSlotStatus(slotStartTime, slotEndTime, clock)
+      : null;
+  const isLive = phase === "live" && !isJudged;
+  const isOvertime = phase === "done" && !isJudged;
+  const isUpcoming = phase === "upcoming" && !isJudged;
 
   return (
     <section className="j-hero" aria-label="Current judging slot">
       {isLive && <div className="j-hero-live-bar" aria-hidden />}
-      <div className="j-hero-inner">
-        <div className={hasRoom || isJudged ? "j-hero-grid" : "j-hero-grid j-hero-grid--solo"}>
+      {isOvertime && <div className="j-hero-overtime-bar" aria-hidden />}
+      <div
+        className={
+          isLive
+            ? "j-hero-inner j-hero-inner--live"
+            : isOvertime
+              ? "j-hero-inner j-hero-inner--overtime"
+              : "j-hero-inner"
+        }
+      >
+        <div
+          key={project.id}
+          className={hasRoom && room ? "j-hero-grid" : "j-hero-grid j-hero-grid--solo"}
+        >
           {hasRoom && room ? (
             <LocationBoard room={room} isJudged={isJudged} judgedEarly={judgedEarly} />
-          ) : isJudged ? (
-            <LocationBoard
-              room={room ?? project.name}
-              isJudged
-              judgedEarly={judgedEarly}
-            />
           ) : null}
 
-          <div className="j-hero-project flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="j-hero-project flex min-w-0 flex-col gap-2 sm:gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {isLive && (
                 <span className="j-live-pill">
                   <span className="j-live-pill-dot" aria-hidden />
                   Live
                 </span>
               )}
+              {isOvertime && (
+                <span className="j-overtime-pill">Overtime</span>
+              )}
               {isJudged && <span className="j-judged-pill">Judged</span>}
-              {slotStatus === "upcoming" && !isJudged && (
+              {isUpcoming && (
                 <span className="j-hero-muted text-sm font-semibold uppercase tracking-widest">
                   Up next
                 </span>
               )}
             </div>
 
-            <h1 className="j-hero-title">{project.name}</h1>
+            <SplitFlapTitle text={project.name} className="j-hero-title" />
             <p className="j-hero-team">{formatTeamLabel(project)}</p>
+
+            <a href="#j-scorecard" className="j-jump-notes">
+              Jump to notes
+            </a>
 
             {notScheduled && !isJudged && (
               <p className="j-hero-muted text-sm font-medium">Not scheduled</p>
@@ -82,9 +116,9 @@ export function ProjectHero({
               <SessionTimer
                 startTime={slotStartTime}
                 endTime={slotEndTime}
-                status={slotStatus}
                 isJudged={isJudged}
                 variant="hero"
+                nowMs={clock}
               />
             </div>
           ) : null}
@@ -105,72 +139,46 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
   const description = getDisplayDescription(project);
   const visibleTracks = project.tracks.slice(0, MAX_TRACKS);
   const hiddenTrackCount = project.tracks.length - MAX_TRACKS;
+  const hasTeam = project.members.length > 0;
+  const hasTracks = project.tracks.length > 0;
+
+  if (!description && !hasTeam && !hasTracks) {
+    return (
+      <p className="j-project-brief-empty">No project summary yet.</p>
+    );
+  }
 
   return (
-    <div>
-      {description ? (
-        <p className="j-description">{description}</p>
-      ) : (
-        <p className="text-base leading-relaxed text-[var(--j-muted)]">
-          {project.members.length > 0 ? (
-            <>
-              Built by <span className="font-medium text-[var(--j-ink)]">{formatTeamLabel(project)}</span>
-              {project.devpostUrl
-                ? " - open Devpost for the full write-up."
-                : "."}
-            </>
-          ) : (
-            <>
-              No summary yet.
-              {project.devpostUrl && " Open Devpost below for details."}
-            </>
-          )}
-        </p>
-      )}
+    <aside className="j-project-brief" aria-label="Project brief">
+      {description ? <p className="j-description">{description}</p> : null}
 
-      <div className="j-meta-grid">
-        {project.members.length > 0 && (
-          <div>
-            <p className="j-meta-label">Team</p>
-            <p className="text-base font-medium leading-relaxed text-[var(--j-ink)]">
-              {project.members.join(", ")}
+      {(hasTeam || hasTracks) && (
+        <div className="j-project-brief-meta">
+          {hasTeam ? (
+            <p className="j-project-brief-team">
+              <span className="j-meta-label">Team</span>
+              <span>{project.members.join(", ")}</span>
             </p>
-          </div>
-        )}
-
-        {project.tracks.length > 0 && (
-          <div>
-            <p className="j-meta-label">Tracks</p>
-            <div className="flex flex-wrap gap-1.5">
-              {visibleTracks.map((track) => (
-                <span key={track} className="j-track-pill j-track-pill--quiet">
-                  {track}
-                </span>
-              ))}
-              {hiddenTrackCount > 0 && (
-                <span className="j-track-pill j-track-pill--quiet">
-                  +{hiddenTrackCount} more
-                </span>
-              )}
+          ) : null}
+          {hasTracks ? (
+            <div className="j-project-brief-tracks">
+              <span className="j-meta-label">Tracks</span>
+              <div className="flex flex-wrap gap-1.5">
+                {visibleTracks.map((track) => (
+                  <span key={track} className="j-track-pill j-track-pill--quiet">
+                    {track}
+                  </span>
+                ))}
+                {hiddenTrackCount > 0 ? (
+                  <span className="j-track-pill j-track-pill--quiet">
+                    +{hiddenTrackCount} more
+                  </span>
+                ) : null}
+              </div>
             </div>
-          </div>
-        )}
-
-        {project.devpostUrl && (
-          <div className={project.members.length > 0 ? "sm:col-span-2" : ""}>
-            <p className="j-meta-label">Submission</p>
-            <a
-              href={project.devpostUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-lg font-semibold text-[var(--j-action)] underline-offset-4 hover:text-[var(--j-action-hover)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--j-action)]"
-            >
-              Open Devpost
-              <ArrowUpRight className="size-5" aria-hidden />
-            </a>
-          </div>
-        )}
-      </div>
-    </div>
+          ) : null}
+        </div>
+      )}
+    </aside>
   );
 }

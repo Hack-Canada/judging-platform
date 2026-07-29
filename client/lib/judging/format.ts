@@ -12,7 +12,7 @@ export function formatSlotTime(iso: string) {
 }
 
 export function formatSlotRange(start: string, end: string) {
-  return `${formatSlotTime(start)} – ${formatSlotTime(end)}`;
+  return `${formatSlotTime(start)} - ${formatSlotTime(end)}`;
 }
 
 export function formatRelativeUntil(iso: string, at = Date.now()) {

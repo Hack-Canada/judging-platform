@@ -11,20 +11,33 @@ function asSkipReason(raw: string | null): SkipReason | undefined {
 /** Map authoritative server rows into portal storage fields. */
 export function serverRowsToStorage(rows: ServerJudgmentRow[]): Pick<
   JudgingStorage,
-  "judgedIds" | "skippedIds" | "skipReasons" | "notes"
+  "judgedIds" | "skippedIds" | "skipReasons" | "notes" | "winnerIds" | "ratings"
 > {
   const judgedSet = new Set<string>();
   const skippedSet = new Set<string>();
   const skipReasons: Record<string, SkipReason> = {};
   const notes: Record<string, string> = {};
+  const winnerSet = new Set<string>();
+  const ratings: Record<string, number> = {};
 
   for (const row of rows) {
     const id = row.project_id;
     const action = row.action;
 
     if (row.notes) notes[id] = row.notes;
+    if (row.winner_pick) winnerSet.add(id);
+    if (typeof row.rating === "number" && row.rating >= 1 && row.rating <= 5) {
+      ratings[id] = row.rating;
+    }
 
-    if (action === "notes" || action === "unmarked") continue;
+    if (
+      action === "notes" ||
+      action === "unmarked" ||
+      action === "winner" ||
+      action === "rating"
+    ) {
+      continue;
+    }
 
     if (action === "skipped") {
       judgedSet.add(id);
@@ -49,6 +62,8 @@ export function serverRowsToStorage(rows: ServerJudgmentRow[]): Pick<
     skippedIds: [...skippedSet],
     skipReasons,
     notes,
+    winnerIds: [...winnerSet],
+    ratings,
   };
 }
 
@@ -58,11 +73,14 @@ export function mergeStorageWithServer(
 ): JudgingStorage {
   const judgedIds = new Set([...local.judgedIds, ...fromServer.judgedIds]);
   const skippedIds = new Set([...local.skippedIds, ...fromServer.skippedIds]);
+  const winnerIds = new Set([...local.winnerIds, ...fromServer.winnerIds]);
   return {
     judgedIds: [...judgedIds],
     skippedIds: [...skippedIds],
     skipReasons: { ...fromServer.skipReasons, ...local.skipReasons },
     notes: { ...fromServer.notes, ...local.notes },
     earlyMarkedIds: local.earlyMarkedIds,
+    winnerIds: [...winnerIds],
+    ratings: { ...fromServer.ratings, ...local.ratings },
   };
 }

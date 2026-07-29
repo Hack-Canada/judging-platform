@@ -10,7 +10,6 @@ function makeProjects(count: number, stream = "Maple Hall"): JudgingProject[] {
     tracks: [stream],
     members: [],
     description: null,
-    devpostUrl: null,
     room: null,
   }));
 }

@@ -66,6 +66,20 @@ async function migrateJudgmentsRound(sql: NeonQueryFunction<false, false>) {
   }
 }
 
+/** Winner picks + optional ratings live on the same judgments row. */
+async function migrateWinnerColumns(sql: NeonQueryFunction<false, false>) {
+  await sql`
+    ALTER TABLE judgments
+      ADD COLUMN IF NOT EXISTS winner_pick BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS rating INT
+  `;
+  await sql`
+    ALTER TABLE judging_sync_log
+      ADD COLUMN IF NOT EXISTS winner_pick BOOLEAN,
+      ADD COLUMN IF NOT EXISTS rating INT
+  `;
+}
+
 /**
  * Sync store decision: `judgments` is the authoritative current-state read model
  * (PK: judge_id, stream_id, project_id). Reconcile on client_timestamp, not received_at.
@@ -117,6 +131,8 @@ export async function ensureJudgingTables() {
     )
   `;
 
+  await migrateWinnerColumns(sql);
+
   ensured = true;
 }
 
@@ -135,6 +151,30 @@ export async function getScheduleOffsetMinutes(): Promise<number> {
   } catch {
     return Number(process.env.JUDGING_SCHEDULE_OFFSET_MINUTES ?? 0) || 0;
   }
+}
+
+/** Persist absolute schedule offset for judges (positive = running behind). */
+export async function setScheduleOffsetMinutes(minutes: number): Promise<number> {
+  const next = Number.isFinite(minutes) ? Math.round(minutes) : 0;
+  if (!process.env.DATABASE_URL) {
+    return next;
+  }
+  await ensureJudgingTables();
+  const sql = getSql();
+  const payload = JSON.stringify({ scheduleOffsetMinutes: next });
+  await sql`
+    INSERT INTO judging_event_config (key, value, updated_at)
+    VALUES ('schedule', ${payload}::jsonb, now())
+    ON CONFLICT (key) DO UPDATE
+    SET value = ${payload}::jsonb, updated_at = now()
+  `;
+  return next;
+}
+
+/** Add minutes to the current judging schedule offset. */
+export async function bumpScheduleOffsetMinutes(deltaMinutes: number): Promise<number> {
+  const current = await getScheduleOffsetMinutes();
+  return setScheduleOffsetMinutes(current + deltaMinutes);
 }
 
 export function getServerNowIso(): string {

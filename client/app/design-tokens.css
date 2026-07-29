@@ -1,0 +1,34 @@
+/*
+ * HackCanada shared tokens (judging is source of truth).
+ * Loaded from judging layout; values also mirrored on .judging-shell.
+ */
+:root {
+  --hc-paper: #f5f7fa;
+  --hc-ink: #141210;
+  --hc-muted: #5b6470;
+  --hc-faint: #66707c;
+  --hc-border: #d5dbe3;
+  --hc-white: #ffffff;
+  --hc-live: #e11d2e;
+  --hc-live-bg: #fef2f2;
+  --hc-action: #0f2a43;
+  --hc-action-hover: #0a1f33;
+  --hc-overtime: #d97706;
+  --hc-on-ink: #ffffff;
+  --hc-on-ink-muted: #c8d6e6;
+  --hc-on-ink-faint: #9eb0c4;
+  --hc-font-display: var(--font-fredoka), system-ui, sans-serif;
+  --hc-font-body: var(--font-rubik), system-ui, sans-serif;
+  --hc-space-1: 0.25rem;
+  --hc-space-2: 0.5rem;
+  --hc-space-3: 0.75rem;
+  --hc-space-4: 1rem;
+  --hc-space-5: 1.25rem;
+  --hc-space-6: 1.5rem;
+  --hc-space-8: 2rem;
+  --hc-space-10: 2.5rem;
+  --hc-space-12: 3rem;
+  --hc-radius: 4px;
+  --hc-radius-lg: 8px;
+  --hc-shadow: 0 8px 32px rgb(15 42 67 / 0.12);
+}

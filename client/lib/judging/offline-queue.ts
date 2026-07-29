@@ -11,7 +11,9 @@ export type JudgmentAction =
   | "judged"
   | "skipped"
   | "unmarked"
-  | "notes";
+  | "notes"
+  | "winner"
+  | "rating";
 
 export type QueuedJudgment = {
   /** Deterministic: judgeId:streamId:projectId:r{round} */
@@ -23,6 +25,8 @@ export type QueuedJudgment = {
   action: JudgmentAction;
   notes?: string;
   skipReason?: SkipReason | null;
+  winner?: boolean;
+  rating?: number | null;
   clientTimestamp: string;
 };
 
@@ -37,6 +41,8 @@ export type ServerJudgmentRow = {
   action: string;
   skip_reason: string | null;
   notes: string | null;
+  winner_pick?: boolean | null;
+  rating?: number | null;
   client_timestamp: string;
 };
 
@@ -61,6 +67,8 @@ function normalizeQueueItem(raw: Partial<QueuedJudgment>): QueuedJudgment | null
     action: normalizeAction(raw.action as JudgmentAction),
     notes: raw.notes,
     skipReason: raw.skipReason,
+    winner: raw.winner,
+    rating: raw.rating,
     clientTimestamp: raw.clientTimestamp ?? new Date().toISOString(),
   };
 }
@@ -136,6 +144,8 @@ export function enqueueJudgment(
         : item.skipReason !== undefined
           ? item.skipReason
           : prior?.skipReason,
+    winner: item.winner !== undefined ? item.winner : prior?.winner,
+    rating: item.rating !== undefined ? item.rating : prior?.rating,
     clientTimestamp: item.clientTimestamp ?? new Date().toISOString(),
   };
 
@@ -259,6 +269,99 @@ export async function syncNotesNow(item: {
   }
 
   enqueueNotes(item);
+}
+
+type FieldSyncTarget = {
+  judgeId: string;
+  streamId: string;
+  projectId: string;
+  round?: number;
+};
+
+type FieldPayload =
+  | { action: "winner"; winner: boolean }
+  | { action: "rating"; rating: number | null };
+
+/** Field-level merge: updates winner/rating without replacing a queued mark. */
+function enqueueField(item: FieldSyncTarget, field: FieldPayload) {
+  const judgeId = resolveJudgeId(item.judgeId);
+  const round = Number(item.round ?? 1) || 1;
+  const syncKey = judgmentSyncKey(judgeId, item.streamId, item.projectId, round);
+  const queue = readQueue();
+  const existing = queue.find((q) => q.syncKey === syncKey);
+  if (existing) {
+    if (field.action === "winner") existing.winner = field.winner;
+    else existing.rating = field.rating;
+    existing.clientTimestamp = new Date().toISOString();
+    writeQueue(queue);
+    return syncKey;
+  }
+  return enqueueJudgment({
+    judgeId,
+    streamId: item.streamId,
+    projectId: item.projectId,
+    round,
+    action: field.action,
+    winner: field.action === "winner" ? field.winner : undefined,
+    rating: field.action === "rating" ? field.rating : undefined,
+  });
+}
+
+async function syncFieldNow(item: FieldSyncTarget, field: FieldPayload) {
+  const judgeId = resolveJudgeId(item.judgeId);
+  const round = Number(item.round ?? 1) || 1;
+  const syncKey = judgmentSyncKey(judgeId, item.streamId, item.projectId, round);
+
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    enqueueField(item, field);
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/judgments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [
+          {
+            judgeId,
+            streamId: item.streamId,
+            projectId: item.projectId,
+            round,
+            action: field.action,
+            winner: field.action === "winner" ? field.winner : undefined,
+            rating: field.action === "rating" ? field.rating : undefined,
+            clientTimestamp: new Date().toISOString(),
+          },
+        ],
+      }),
+    });
+    if (res.ok) {
+      const queue = readQueue();
+      const existing = queue.find((q) => q.syncKey === syncKey);
+      if (existing && existing.action !== field.action) {
+        if (field.action === "winner") existing.winner = field.winner;
+        else existing.rating = field.rating;
+        existing.clientTimestamp = new Date().toISOString();
+        writeQueue(queue);
+      } else if (existing) {
+        writeQueue(queue.filter((q) => q.syncKey !== syncKey));
+      }
+      return;
+    }
+  } catch {
+    // fall through to queue
+  }
+
+  enqueueField(item, field);
+}
+
+export async function syncWinnerNow(item: FieldSyncTarget & { winner: boolean }) {
+  await syncFieldNow(item, { action: "winner", winner: item.winner });
+}
+
+export async function syncRatingNow(item: FieldSyncTarget & { rating: number | null }) {
+  await syncFieldNow(item, { action: "rating", rating: item.rating });
 }
 
 export async function fetchJudgmentsFromServer(options: {

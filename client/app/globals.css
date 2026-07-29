@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@plugin "../node_modules/daisyui" {
+@plugin "daisyui" {
   themes: false;
   logs: false;
 }
@@ -169,15 +169,53 @@
   }
 }
 
+@keyframes beaver-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes portal-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .hacker-card-enter {
   animation: hacker-card-enter 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity, transform;
 }
 
+.beaver-float {
+  animation: beaver-float 4.2s ease-in-out infinite;
+}
+
+.portal-pop {
+  animation: portal-pop-in 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.portal-pop:active {
+  transform: translateY(0) scale(0.98);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .hacker-card-enter {
+  .hacker-card-enter,
+  .portal-pop {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+
+  .beaver-float {
+    animation: none;
   }
 }

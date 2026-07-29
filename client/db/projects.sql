@@ -3,7 +3,6 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS public.projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_name text NOT NULL,
-  devpost_link text UNIQUE,
   tracks text[] NOT NULL DEFAULT ARRAY[]::text[],
   submitter_name text,
   submitter_email text,
