@@ -1,4 +1,13 @@
-import { pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const eventStatusEnum = pgEnum("event_status", [
   "upcoming",
@@ -19,6 +28,42 @@ export const events = pgTable("events", {
     .notNull()
     .defaultNow(),
 });
+
+// Public schedule cells rendered by /hacker/schedule. Repeated entries across
+// adjacent time slots or columns are merged visually by HackathonSchedule.
+export const hackerSchedule = pgTable(
+  "hacker_schedule",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    day: text("day").notNull(),
+    dateLabel: text("date_label").notNull(),
+    time: text("time").notNull(),
+    eventKey: text("event_key").notNull(),
+    title: text("title").notNull(),
+    location: text("location").notNull().default(""),
+    dayOrder: integer("day_order").notNull(),
+    timeOrder: integer("time_order").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("hacker_schedule_day_time_event_unique").on(
+      table.day,
+      table.dateLabel,
+      table.time,
+      table.eventKey,
+    ),
+    index("hacker_schedule_display_order_idx").on(
+      table.dayOrder,
+      table.timeOrder,
+      table.eventKey,
+    ),
+  ],
+);
 
 // Work items that get assigned to specific volunteers/sponsors (shifts,
 // booth setup, etc.) via volunteer_assignments / sponsor_assignments.

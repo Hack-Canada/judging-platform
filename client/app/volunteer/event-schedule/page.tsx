@@ -5,10 +5,12 @@ export default async function EventSchedulePage() {
   const events = await getPublicEvents();
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-muted p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto bg-[var(--bg-gray)] px-4 py-5 sm:gap-6 sm:px-6 sm:py-7">
       <div>
-        <h1 className="text-2xl text-blue-700 font-semibold">Event Schedule</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="[font-family:var(--font-fredoka)] text-2xl font-semibold tracking-[-0.02em] text-[var(--brand-secondary)]">
+          Event Schedule
+        </h1>
+        <p className="mt-1 [font-family:var(--font-figtree)] text-sm text-[var(--text-secondary)]">
           Everything happening during the event.
         </p>
       </div>

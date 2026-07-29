@@ -1,7 +1,6 @@
 "use client";
 
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Menu01Icon } from "@hugeicons/core-free-icons";
+import { Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -15,9 +14,9 @@ export function MobileNavTrigger() {
       size="icon-sm"
       onClick={toggleSidebar}
       aria-label="Open navigation"
-      className="text-foreground"
+      className="text-[var(--brand-secondary)] hover:bg-[var(--bg-primary-light)]"
     >
-      <HugeiconsIcon icon={Menu01Icon} strokeWidth={2.5} />
+      <Menu className="size-5" strokeWidth={2} />
     </Button>
   );
 }
