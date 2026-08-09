@@ -1,0 +1,555 @@
+/* Mid-fi underwater shell — tokens + swim stolen from HC-2027 feat/mid-fi-landing-page */
+
+.ocean-shell {
+  --ocean-ice: #d3f9ff;
+  --ocean-foam: #8ee7ff;
+  --ocean-surf: #4da3ff;
+  --ocean-lagoon: #16456f;
+  --ocean-deep: #0a2745;
+  --ocean-abyss: #061426;
+  --ocean-glass: rgba(211, 249, 255, 0.08);
+  --ocean-glass-border: rgba(211, 249, 255, 0.22);
+  --ocean-text: rgba(211, 249, 255, 0.88);
+  --ocean-muted: rgba(211, 249, 255, 0.72);
+  --font-ocean-display: var(--font-londrina), var(--font-fredoka), system-ui, sans-serif;
+
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  /* `clip` (not `hidden`) contains the drifting caustics + swim critters without
+     creating a scroll container, so position:sticky still works for the dive scrub. */
+  overflow-x: clip;
+  color: var(--ocean-ice);
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -8%, rgba(77, 163, 255, 0.35), transparent 55%),
+    radial-gradient(ellipse 70% 40% at 85% 30%, rgba(14, 90, 140, 0.4), transparent 50%),
+    linear-gradient(180deg, #0c3a5e 0%, var(--ocean-deep) 38%, var(--ocean-abyss) 100%);
+}
+
+.ocean-caustics {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.35;
+  background:
+    radial-gradient(ellipse 40% 18% at 20% 12%, rgba(211, 249, 255, 0.18), transparent 70%),
+    radial-gradient(ellipse 35% 16% at 75% 22%, rgba(142, 231, 255, 0.12), transparent 70%),
+    radial-gradient(ellipse 50% 20% at 45% 55%, rgba(77, 163, 255, 0.1), transparent 70%);
+  mix-blend-mode: screen;
+  animation: ocean-caustic-drift 14s ease-in-out infinite alternate;
+}
+
+@keyframes ocean-caustic-drift {
+  from {
+    transform: translate3d(-1.5%, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(1.5%, 1%, 0) scale(1.04);
+  }
+}
+
+.ocean-shell > header,
+.ocean-shell > main,
+.ocean-shell > footer {
+  position: relative;
+  z-index: 2;
+}
+
+.ocean-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--ocean-glass-border);
+  background: rgba(6, 20, 38, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.ocean-nav-link {
+  border-radius: 9999px;
+  padding: 0.45rem 0.7rem;
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ocean-muted);
+  transition: color 160ms ease, background 160ms ease;
+}
+
+@media (min-width: 640px) {
+  .ocean-nav-link {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+  }
+}
+
+.ocean-nav-link:hover {
+  color: var(--ocean-ice);
+  background: var(--ocean-glass);
+}
+
+.ocean-nav-link[aria-current="page"] {
+  color: var(--ocean-abyss);
+  background: var(--ocean-ice);
+}
+
+.ocean-display {
+  font-family: var(--font-ocean-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 0.95;
+  color: var(--ocean-ice);
+  text-shadow: 0 4px 6.4px rgba(0, 0, 0, 0.25);
+}
+
+.ocean-eyebrow {
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ocean-foam);
+}
+
+.ocean-body {
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  color: var(--ocean-text);
+}
+
+.ocean-glass {
+  border: 1px solid var(--ocean-glass-border);
+  border-radius: 1.5rem;
+  background: var(--ocean-glass);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 40px rgba(0, 10, 30, 0.28);
+}
+
+.ocean-section {
+  border-top: 1px solid rgba(211, 249, 255, 0.1);
+}
+
+.ocean-glass--tier {
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.ocean-glass--tier:hover {
+  border-color: rgba(211, 249, 255, 0.34);
+  background: rgba(211, 249, 255, 0.1);
+}
+
+/* ---------- glass bubble (CSS replacement for sponsor-bubble.png) ----------
+   A soap bubble is a rim, a refractive tint and two speculars. Layered
+   radial-gradients do that better than a raster ever could, at zero bytes and
+   crisp at any size. Each piece animates independently. */
+.glass-bubble {
+  --bubble-accent: #8ee7ff;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  isolation: isolate;
+}
+
+/* Rim + refraction. The near-transparent centre is what sells it as glass. */
+.glass-bubble-skin {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 9999px;
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--bubble-accent) 16%, transparent) 0%,
+      color-mix(in srgb, var(--bubble-accent) 5%, transparent) 46%,
+      transparent 62%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 58%,
+      color-mix(in srgb, var(--bubble-accent) 34%, transparent) 80%,
+      rgba(255, 255, 255, 0.5) 92%,
+      color-mix(in srgb, var(--bubble-accent) 22%, transparent) 97%,
+      transparent 100%
+    );
+  box-shadow:
+    inset 0 0 20px rgba(255, 255, 255, 0.16),
+    inset 7px -10px 26px color-mix(in srgb, var(--bubble-accent) 20%, transparent),
+    inset -6px 8px 22px rgba(255, 255, 255, 0.1);
+}
+
+/* Speculars + slow iridescent drift. */
+.glass-bubble-sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 9999px;
+  background:
+    radial-gradient(
+      ellipse 26% 18% at 31% 24%,
+      rgba(255, 255, 255, 0.92),
+      rgba(255, 255, 255, 0.28) 45%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 13% 9% at 69% 77%,
+      rgba(255, 255, 255, 0.5),
+      transparent 70%
+    ),
+    conic-gradient(
+      from 210deg at 50% 50%,
+      transparent 0deg,
+      color-mix(in srgb, var(--bubble-accent) 26%, transparent) 70deg,
+      rgba(255, 214, 240, 0.16) 145deg,
+      transparent 220deg,
+      color-mix(in srgb, var(--bubble-accent) 18%, transparent) 310deg,
+      transparent 360deg
+    );
+  opacity: 0.82;
+}
+
+/* Opt-in only. A CSS animation outranks GSAP's inline styles, so bubbles that
+   `bubble-motion.ts` drives via [data-bubble-shine] must NOT get these
+   keyframes — they'd silently win and the tween would look dead. */
+.glass-bubble--ambient .glass-bubble-sheen {
+  animation: glass-bubble-sheen 9s ease-in-out infinite;
+  animation-delay: calc(var(--bubble-i, 0) * -0.7s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-bubble--ambient .glass-bubble-sheen {
+    animation: none;
+  }
+}
+
+.glass-bubble-body {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 18%;
+  box-sizing: border-box;
+}
+
+@keyframes glass-bubble-sheen {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(9deg) scale(1.03);
+  }
+}
+
+/* ---------- swim layer (from mid-fi global.css) ---------- */
+.swim-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.swim {
+  position: absolute;
+  left: 0;
+  will-change: transform;
+}
+
+.swim-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0.88;
+  filter: drop-shadow(0 8px 10px rgba(0, 20, 40, 0.28));
+}
+
+.swim-img.flip {
+  transform: scaleX(-1);
+}
+
+.swim--drift-r {
+  animation: swim-r var(--dur, 32s) linear var(--delay, 0s) infinite;
+}
+
+.swim--drift-l {
+  animation: swim-l var(--dur, 32s) linear var(--delay, 0s) infinite;
+}
+
+.swim--float {
+  animation: bob-v var(--dur, 7s) ease-in-out var(--delay, 0s) infinite;
+}
+
+.swim-bob {
+  animation: bob var(--bdur, 6s) ease-in-out var(--bdelay, 0s) infinite;
+}
+
+.swim-jelly {
+  transform-origin: center top;
+  animation: jelly var(--bdur, 5s) ease-in-out var(--bdelay, 0s) infinite;
+}
+
+.swim-sway {
+  transform-origin: center;
+  animation: sway var(--bdur, 5s) ease-in-out var(--bdelay, 0s) infinite;
+}
+
+@keyframes swim-r {
+  from {
+    transform: translateX(-20vw);
+  }
+  to {
+    transform: translateX(110vw);
+  }
+}
+
+@keyframes swim-l {
+  from {
+    transform: translateX(110vw);
+  }
+  to {
+    transform: translateX(-20vw);
+  }
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(var(--bob, 16px));
+  }
+}
+
+@keyframes bob-v {
+  0%,
+  100% {
+    transform: translateY(calc(var(--bob, 22px) * -1));
+  }
+  50% {
+    transform: translateY(var(--bob, 22px));
+  }
+}
+
+@keyframes jelly {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-22px) scale(1.05, 0.93);
+  }
+}
+
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(var(--swA, -7deg));
+  }
+  50% {
+    transform: rotate(var(--swB, 7deg));
+  }
+}
+
+.ocean-shell--quiet .ocean-caustics {
+  opacity: 0.18;
+}
+
+.swim-layer--quiet .swim-img {
+  opacity: 0.55;
+}
+
+/* ---------- panel assemble (Judges signature) ---------- */
+.panel-assemble-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 640px) {
+  .panel-assemble-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem 1.25rem;
+  }
+}
+
+.panel-assemble-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  text-align: center;
+  animation: panel-slot-in 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(90ms + var(--i, 0) * 110ms);
+}
+
+.panel-assemble--reduced .panel-assemble-slot {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+@keyframes panel-slot-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* `box-shadow` on the orb, not `filter: drop-shadow` on the bubble inside it —
+   keeps soft lift without fighting the creature swim-in transform. */
+.panel-assemble-orb {
+  position: relative;
+  width: clamp(7rem, 26vw, 9.25rem);
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  box-shadow: 0 10px 18px rgba(0, 20, 40, 0.4);
+}
+
+.panel-assemble-creature {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  animation: panel-creature-in 780ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(160ms + var(--i, 0) * 110ms);
+}
+
+.panel-assemble--reduced .panel-assemble-creature {
+  animation: none;
+}
+
+@keyframes panel-creature-in {
+  from {
+    transform: translateX(-42vw) rotate(-12deg);
+    opacity: 0.2;
+  }
+  to {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Pending placeholders keep a soft idle bob after they land */
+.panel-assemble-slot--pending .panel-assemble-orb {
+  opacity: 0.6;
+  animation: panel-pending-bob 3.6s ease-in-out calc(200ms + var(--i, 0) * 180ms)
+    infinite;
+}
+
+.panel-assemble--reduced .panel-assemble-slot--pending .panel-assemble-orb {
+  animation: none;
+}
+
+@keyframes panel-pending-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+/* What sits inside the bubble when there's no portrait: initials, or `?`. */
+.panel-assemble-mark {
+  font-family: var(--font-ocean-display, var(--font-londrina), system-ui);
+  font-size: 2.25rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--bubble-accent) 45%, #ffffff);
+  text-shadow: 0 1px 8px rgba(0, 20, 40, 0.6);
+}
+
+.panel-assemble-slot--pending .panel-assemble-mark {
+  font-size: 2.6rem;
+  opacity: 0.75;
+}
+
+.panel-assemble-slot--pending .panel-assemble-name {
+  font-size: 1.05rem;
+  color: var(--ocean-muted);
+}
+
+.panel-assemble-name {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.panel-assemble-role {
+  margin: 0;
+  max-width: 14rem;
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  text-wrap: balance;
+  color: rgba(211, 249, 255, 0.75);
+}
+
+.panel-assemble-meta {
+  margin: 0;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ocean-muted);
+}
+
+.panel-assemble-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  outline: none;
+}
+
+/* Keeps the lift shadow — a bare ring would drop it on focus. */
+.panel-assemble-link:focus-visible .panel-assemble-orb {
+  box-shadow:
+    0 0 0 3px var(--ocean-ice),
+    0 10px 18px rgba(0, 20, 40, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ocean-caustics,
+  .swim,
+  .swim-bob,
+  .swim-jelly,
+  .swim-sway,
+  .panel-assemble-slot,
+  .panel-assemble-creature,
+  .panel-assemble-slot--pending .panel-assemble-orb {
+    animation: none !important;
+  }
+
+  .swim--drift-r,
+  .swim--drift-l {
+    transform: translateX(var(--rest, 35vw));
+  }
+
+  .panel-assemble-slot {
+    opacity: 1;
+    transform: none;
+  }
+
+  .panel-assemble-creature {
+    opacity: 1;
+  }
+}

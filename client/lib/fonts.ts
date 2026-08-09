@@ -1,4 +1,10 @@
-import { Figtree, Fredoka, JetBrains_Mono, Rubik } from "next/font/google";
+import {
+  Figtree,
+  Fredoka,
+  JetBrains_Mono,
+  Londrina_Solid,
+  Rubik,
+} from "next/font/google";
 
 export const fredoka = Fredoka({
   subsets: ["latin"],
@@ -18,4 +24,11 @@ export const figtree = Figtree({
 export const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-jetbrains-mono",
+});
+
+/** Mid-fi landing display face (HC-2027 feat/mid-fi-landing-page). */
+export const londrina = Londrina_Solid({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-londrina",
 });
