@@ -6,7 +6,11 @@
       "Bash(npx tsc --noEmit)",
       "Bash(python3 -c \":*)",
       "Bash(gh pr *)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node shots.mjs)",
+      "Bash(node overflow.mjs)"
     ]
   }
 }

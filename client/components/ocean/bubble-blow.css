@@ -1,0 +1,45 @@
+/* Full-viewport bubble wipe — GSAP drives transforms */
+
+.bubble-blow {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.bubble-blow-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 70%, rgba(14, 72, 118, 0.75), transparent 70%),
+    rgba(6, 20, 38, 0.55);
+}
+
+.bubble-blow-field {
+  position: absolute;
+  inset: 0;
+}
+
+/* Orbs are `.glass-bubble` elements, so these must out-specify the shared bubble
+   rules in ocean.css (which set position:relative and width/height:100%).
+   Two classes beats one, independent of stylesheet order.
+
+   No drop-shadow here: the glass skin carries its own inset lighting, and an
+   alpha-following filter on 18 near-viewport-sized nodes is a real frame cost. */
+.bubble-blow-field .bubble-blow-orb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-blow {
+    display: none !important;
+  }
+}

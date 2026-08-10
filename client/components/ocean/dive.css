@@ -1,0 +1,651 @@
+/* Cinematic dive — AI storyboard frames + bubble overlays */
+
+.dive-scene {
+  /* Written each frame by paintFrames(). Declared here so every layer inherits
+     the same depth reading — rays, water and grade must agree. */
+  --water-top: #7fd4ff;
+  --water-bottom: #2b8fd0;
+  --depth: 0;
+  position: relative;
+  aspect-ratio: 3 / 2;
+  width: 100%;
+  min-height: 18rem;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  isolation: isolate;
+  background-color: #061426;
+  box-shadow: inset 0 0 0 1px rgba(211, 249, 255, 0.12);
+}
+
+.dive-scene--hero {
+  display: block;
+  border-radius: 0;
+  box-shadow: none;
+  max-width: none;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  overflow: hidden;
+  background: #061426;
+}
+
+/* Immersive stage — fills the sticky phone/desktop viewport */
+.dive-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0a2745;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+/* Landing hero — one viewport, dive plays on load */
+.dive-landing {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: calc(100svh - 4rem);
+  height: calc(100dvh - 4rem);
+  overflow: hidden;
+  contain: paint;
+  transform: translateZ(0);
+}
+
+.dive-hero {
+  width: 100%;
+  min-width: 0;
+}
+
+.dive-hero-stage {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Brand + seat count — full-width top chrome, safe on every viewport */
+.dive-hero-title {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 7;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  padding:
+    max(0.75rem, env(safe-area-inset-top, 0px))
+    max(1rem, env(safe-area-inset-right, 0px))
+    1.75rem
+    max(1rem, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(6, 20, 38, 0.55) 0%,
+    rgba(6, 20, 38, 0.22) 55%,
+    transparent 100%
+  );
+}
+
+.dive-hero-brand {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: clamp(1.75rem, 4.5vw + 0.6rem, 3.25rem);
+  line-height: 0.95;
+  overflow-wrap: anywhere;
+  text-shadow: 0 2px 12px rgba(0, 20, 40, 0.55);
+}
+
+.dive-hero-lede {
+  margin: 0;
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  max-width: none;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--ocean-ice, #d3f9ff);
+  text-shadow: 0 1px 8px rgba(0, 20, 40, 0.7);
+}
+
+@media (min-width: 480px) {
+  .dive-hero-lede {
+    align-items: flex-end;
+    text-align: right;
+  }
+}
+
+.dive-hero-hint {
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(211, 249, 255, 0.72);
+}
+
+.dive-hero-actions {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 0.95rem;
+}
+
+.dive-hero-cta {
+  display: inline-flex;
+  min-height: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 9999px;
+  padding: 0 1.1rem;
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.dive-hero-cta:focus-visible {
+  outline: 2px solid #d3f9ff;
+  outline-offset: 3px;
+}
+
+.dive-hero-cta--primary {
+  background: #d3f9ff;
+  color: #061426;
+  box-shadow: 0 10px 24px rgba(0, 20, 40, 0.35);
+}
+
+.dive-hero-cta--primary:hover {
+  transform: translateY(-1px);
+}
+
+/* No `backdrop-filter`: this sits on top of the dive, which repaints every
+   frame, and a live blur of an animating backdrop is one of the most expensive
+   things a browser can be asked to do. A denser tint reads the same. */
+.dive-hero-cta--ghost {
+  border: 1px solid rgba(211, 249, 255, 0.28);
+  background: rgba(6, 20, 38, 0.72);
+  color: #d3f9ff;
+}
+
+.dive-hero-cta--ghost:hover {
+  background: rgba(211, 249, 255, 0.12);
+}
+
+.dive-hero-skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #d3f9ff;
+  text-decoration: none;
+  text-shadow:
+    0 0 12px rgba(6, 20, 38, 0.9),
+    0 1px 2px rgba(6, 20, 38, 0.85);
+  transition: color 160ms ease;
+}
+
+.dive-hero-skip:hover {
+  color: #d3f9ff;
+}
+
+.dive-hero-skip:focus-visible {
+  outline: 2px solid #d3f9ff;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.dive-hero-below {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 0.5rem;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .dive-hero-below {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+/* After dive seals — keep chrome, drop the diving hint */
+.dive-scene--complete .dive-hero-title {
+  padding-bottom: 1.1rem;
+  background: linear-gradient(
+    180deg,
+    rgba(6, 20, 38, 0.9) 0%,
+    rgba(6, 20, 38, 0.45) 70%,
+    transparent 100%
+  );
+}
+
+.dive-scene--complete .dive-hero-brand {
+  font-size: clamp(1.45rem, 3vw + 0.5rem, 2rem);
+}
+
+.dive-scene--complete .dive-hero-hint {
+  display: none;
+}
+
+.dive-scene--complete .dive-hero-actions {
+  margin-top: 0.5rem;
+}
+
+/* ---------- layered scene ----------
+   Rule: crop the texture, position the subject.
+
+   The frames are 1536x1024 (1.50) and a phone hero box is ~390x780 (0.50), so
+   `object-fit: cover` discards about two thirds of the width. There is no
+   object-position that fixes that for both orientations — the previous
+   `36% 40%` / `42% 44%` pair was a magic number chasing the beaver around the
+   frame, and it still lost the reef and seabed on mobile.
+
+   So the composition is split. `.dive-water` is a gradient and owns full-bleed
+   coverage (gradients cannot crop). The frames sit on top as texture at partial
+   opacity, where losing their edges costs nothing.
+
+   There is deliberately no SVG seabed layer: the frames already paint a reef
+   and floor, so an anchored silhouette over them landed at a different height
+   and read as a hard black band across the middle of the scene. */
+
+.dive-parallax {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* The one layer that always reaches every edge. JS walks --water-top /
+   --water-bottom through the depth palette in STAGES. */
+.dive-water {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 120% 70% at 50% -10%,
+      rgba(255, 255, 255, calc(0.28 * (1 - var(--depth)))),
+      transparent 60%
+    ),
+    linear-gradient(180deg, var(--water-top) 0%, var(--water-bottom) 100%);
+}
+
+/* God-rays. Fade out as the dive runs out of surface light. */
+.dive-rays {
+  position: absolute;
+  inset: -20% -10% 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: calc(0.5 * (1 - var(--depth, 0)));
+  background: repeating-linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 0px,
+    rgba(255, 255, 255, 0.09) 22px,
+    rgba(255, 255, 255, 0.14) 34px,
+    rgba(255, 255, 255, 0) 74px
+  );
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.35) 45%, transparent 78%);
+  will-change: transform;
+}
+
+/* Texture, not subject — plain alpha over the water gradient.
+   Deliberately NOT `mix-blend-mode`: `.dive-parallax` is a stacking context
+   (position + z-index), so a blend here can only see its siblings inside that
+   context — `.dive-rays`, which lands around 5% effective alpha. It would never
+   reach `.dive-water`, so it read as a no-op that the comment lied about.
+   Blending for real needs `.dive-water` moved inside `.dive-parallax`, and at
+   soft-light the beaver stops being legible on mobile — which is the exact
+   regression this rebuild existed to fix. Straight alpha it is. */
+.dive-plates {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.72;
+  will-change: transform;
+}
+
+/* Suspended particles. Pure CSS, so it scales to any viewport for free. */
+.dive-motes {
+  position: absolute;
+  inset: -10%;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.45;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.55) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(211, 249, 255, 0.4) 1px, transparent 2px);
+  background-size: 120px 120px, 200px 200px;
+  background-position: 0 0, 60px 90px;
+  will-change: transform;
+}
+
+.dive-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  will-change: opacity, transform;
+  transform: translate3d(0, 0, 0) scale(1);
+  backface-visibility: hidden;
+}
+
+.dive-frame[data-active="true"] {
+  z-index: 2;
+}
+
+/* Centre-cropped on purpose. These are texture plates now, so whichever slice
+   survives the crop is fine — no subject depends on staying in frame. */
+.dive-frame-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.dive-scene:not(.dive-scene--ready) .dive-frame {
+  transition: none;
+}
+
+.dive-grade {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 55%, rgba(6, 20, 38, 0.28) 100%),
+    linear-gradient(180deg, transparent 70%, rgba(6, 20, 38, 0.2) 100%);
+  transition: background 420ms ease;
+}
+
+/* Slight vignette so CSS roster bubbles read clearly on the abyss */
+.dive-scene--complete .dive-grade {
+  background:
+    radial-gradient(ellipse at 55% 45%, transparent 35%, rgba(6, 20, 38, 0.42) 100%),
+    linear-gradient(180deg, transparent 60%, rgba(6, 20, 38, 0.28) 100%);
+}
+
+/* ---------- bubbles — circular orbs, float + pop ---------- */
+.dive-roster {
+  position: absolute;
+  inset: 6% 5% 8%;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(var(--seat-cols, 3), minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  place-items: center;
+  gap: clamp(0.35rem, 1.5vmin, 0.85rem);
+  pointer-events: none;
+}
+
+.dive-roster--live {
+  pointer-events: auto;
+}
+
+.dive-seat {
+  --bubble-size: clamp(3.25rem, 14vmin, 6.75rem);
+  position: relative;
+  display: flex;
+  width: var(--bubble-size);
+  height: var(--bubble-size);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  text-decoration: none;
+  outline: none;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.dive-seat--pending {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dive-roster--live .dive-seat--on {
+  pointer-events: auto;
+}
+
+/* `box-shadow`, not `filter: drop-shadow`. GSAP tweens this element's transform
+   every frame, and drop-shadow re-derives its blur from the element's alpha mask
+   on each one — that was the bulk of the float stutter. The orb is a perfect
+   circle, so box-shadow is visually identical and stays on the compositor. */
+.dive-seat-orb {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  pointer-events: none;
+  box-shadow: 0 10px 16px rgba(0, 20, 40, 0.35);
+  will-change: transform;
+}
+
+.dive-seat-logo {
+  position: relative;
+  z-index: 2;
+  width: 52%;
+  height: 52%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 20, 40, 0.45));
+}
+
+.dive-seat-label {
+  position: relative;
+  z-index: 2;
+  max-width: 70%;
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  font-size: clamp(0.55rem, 1.4vmin, 0.72rem);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  color: #e8fbff;
+  text-shadow: 0 1px 6px rgba(0, 20, 40, 0.8);
+}
+
+/* A bubble whose sponsor isn't public yet. It still floats and still catches
+   the light — the roster should look full — but it sits back so a real logo
+   beside it is obviously the thing worth looking at. */
+.dive-seat--tba .dive-seat-orb {
+  opacity: 0.55;
+}
+
+.dive-seat-label--tba {
+  font-weight: 600;
+  color: rgba(232, 251, 255, 0.62);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: clamp(0.44rem, 1.1vmin, 0.58rem);
+}
+
+.dive-roster--live .dive-seat--on:hover .dive-seat-orb,
+.dive-roster--live .dive-seat--on:focus-visible .dive-seat-orb {
+  box-shadow: 0 12px 22px rgba(0, 20, 40, 0.5);
+}
+
+.dive-roster--live .dive-seat--on:focus-visible {
+  outline: 2px solid #d3f9ff;
+  outline-offset: 3px;
+}
+
+/* ---------- HUD — quiet progress only ---------- */
+.dive-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 4%;
+  z-index: 6;
+  display: flex;
+  width: min(42%, 220px);
+  transform: translateX(-50%);
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.dive-status {
+  margin: 0;
+  font-family: var(--font-londrina), var(--font-fredoka), system-ui, sans-serif;
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  line-height: 1;
+  color: #d3f9ff;
+  text-shadow: 0 2px 12px rgba(0, 20, 40, 0.7);
+}
+
+.dive-bar {
+  width: 100%;
+  height: 0.28rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 1px 8px rgba(0, 20, 40, 0.35);
+}
+
+.dive-bar > span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  border-radius: inherit;
+  background: #8ee7ff;
+  will-change: transform;
+}
+
+/* The HUD is pointer-events:none so it never eats clicks on the art; the skip
+   button opts itself back in. */
+.dive-skip {
+  pointer-events: auto;
+  margin-top: 0.15rem;
+  border: 1px solid rgba(211, 249, 255, 0.3);
+  border-radius: 9999px;
+  padding: 0.3rem 0.85rem;
+  /* Solid tint rather than backdrop-blur — see .dive-hero-cta--ghost. */
+  background: rgba(6, 20, 38, 0.78);
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #d3f9ff;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.dive-skip:hover {
+  background: rgba(211, 249, 255, 0.16);
+  border-color: rgba(211, 249, 255, 0.5);
+}
+
+.dive-skip:focus-visible {
+  outline: 2px solid #d3f9ff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .dive-roster {
+    inset: 5% 4% 7%;
+    gap: 0.35rem;
+  }
+
+  .dive-seat {
+    --bubble-size: clamp(2.85rem, 18vmin, 5.25rem);
+  }
+
+  .dive-hero-title {
+    gap: 0.25rem 0.75rem;
+    padding-inline: max(0.75rem, env(safe-area-inset-left, 0px))
+      max(0.75rem, env(safe-area-inset-right, 0px));
+    padding-bottom: 1.35rem;
+  }
+
+  .dive-hero-cta {
+    min-height: 2.75rem;
+    height: 2.75rem;
+    font-size: 0.78rem;
+  }
+
+  .dive-hud {
+    width: min(55%, 180px);
+    bottom: 3%;
+  }
+}
+
+/* Short / landscape viewports — keep chrome out of the art */
+@media (max-height: 520px) {
+  .dive-hero-title {
+    padding-top: 0.5rem;
+    padding-bottom: 0.85rem;
+  }
+
+  .dive-hero-brand {
+    font-size: clamp(1.35rem, 5vh, 1.85rem);
+  }
+
+  .dive-hero-hint {
+    display: none;
+  }
+
+  .dive-hud {
+    bottom: 2%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dive-seat,
+  .dive-seat--on .dive-seat-orb,
+  .dive-seat-orb .glass-bubble-sheen {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* ParallaxStage already skips its transform work when `reduced`; this pins
+     the layers that animate purely in CSS. */
+  .dive-rays,
+  .dive-motes,
+  .dive-plates {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .dive-seat--on {
+    opacity: 1;
+    transform: none;
+  }
+
+  .dive-seat--pending {
+    opacity: 0;
+  }
+
+  .dive-roster--live .dive-seat--on:hover,
+  .dive-roster--live .dive-seat--on:focus-visible {
+    transform: none;
+  }
+
+  .dive-bar > span {
+    transition: none !important;
+  }
+}

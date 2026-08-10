@@ -1,8 +1,17 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { figtree, fredoka, jetbrainsMono, rubik } from "@/lib/fonts";
+import {
+  figtree,
+  fredoka,
+  jetbrainsMono,
+  londrina,
+  rubik,
+} from "@/lib/fonts";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://platform.hackcanada.org",
+  ),
   title: "HackCanada Judging Platform",
   description:
     "Hackathon judging platform for organizers, judges, hackers, volunteers, and sponsors.",
@@ -16,7 +25,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${rubik.variable} ${fredoka.variable} ${figtree.variable} ${jetbrainsMono.variable} h-full`}
+      className={`${rubik.variable} ${fredoka.variable} ${figtree.variable} ${jetbrainsMono.variable} ${londrina.variable} h-full`}
       suppressHydrationWarning
     >
       <body

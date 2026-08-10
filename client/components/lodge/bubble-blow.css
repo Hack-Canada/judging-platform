@@ -1,0 +1,75 @@
+/* GSAP-driven full-viewport bubble wipe — self-contained orb styles */
+
+.lodge-blow {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.lodge-blow-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 70%, rgba(14, 72, 118, 0.8), transparent 70%),
+    rgba(4, 16, 28, 0.7);
+}
+
+.lodge-blow-field {
+  position: absolute;
+  inset: 0;
+}
+
+.lodge-blow-field .lodge-blow-orb {
+  --bubble-accent: #8ee7ff;
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  border-radius: 9999px;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform, opacity;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--bubble-accent) 22%, transparent) 0%,
+      color-mix(in srgb, var(--bubble-accent) 8%, transparent) 45%,
+      transparent 62%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 55%,
+      color-mix(in srgb, var(--bubble-accent) 45%, transparent) 78%,
+      rgba(255, 255, 255, 0.55) 92%,
+      transparent 100%
+    );
+  box-shadow:
+    inset 0 0 24px rgba(255, 255, 255, 0.2),
+    inset 8px -12px 28px color-mix(in srgb, var(--bubble-accent) 28%, transparent),
+    0 0 40px color-mix(in srgb, var(--bubble-accent) 25%, transparent);
+}
+
+.lodge-blow-field .lodge-blow-orb::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    ellipse 40% 28% at 32% 28%,
+    rgba(255, 255, 255, 0.85),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lodge-blow {
+    display: none !important;
+  }
+}
