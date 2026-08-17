@@ -12,6 +12,11 @@ type DelayControlProps = {
   onApplied: (minutes: number) => void;
   /** Compact, no Card wrapper - for the mobile schedule drawer. */
   embedded?: boolean;
+  /**
+   * Collapse behind a summary row. This control retimes every judge desk, so
+   * it stays one click away rather than sitting open on the judging surface.
+   */
+  collapsible?: boolean;
 };
 
 type Patch = { addMinutes: number } | { scheduleOffsetMinutes: number };
@@ -40,6 +45,7 @@ export function DelayControl({
   offsetMinutes,
   onApplied,
   embedded = false,
+  collapsible = false,
 }: DelayControlProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -62,29 +68,35 @@ export function DelayControl({
   const statusLabel = formatOffsetLabel(offsetMinutes) ?? "On time";
   const behind = offsetMinutes > 0;
 
+  const summaryRow = (
+    <>
+      <span className="j-delay-icon" aria-hidden>
+        <Clock className="size-3.5" />
+      </span>
+      <span className="font-[family-name:var(--hc-font-display)] text-base font-semibold tracking-[-0.02em] text-[var(--hc-ink)]">
+        Schedule pace
+      </span>
+      <span
+        className={cn(
+          "j-delay-status ml-auto",
+          behind && "j-delay-status--behind",
+          pulse === "up" && "j-delay-status--pulse-up",
+          pulse === "down" && "j-delay-status--pulse-down",
+          pulse === "clear" && "j-delay-status--pulse-clear",
+        )}
+      >
+        {statusLabel}
+      </span>
+    </>
+  );
+
   const inner = (
     <>
-      <div className="flex items-center gap-2">
-        <span className="j-delay-icon" aria-hidden>
-          <Clock className="size-3.5" />
-        </span>
-        <span className="font-[family-name:var(--hc-font-display)] text-base font-semibold tracking-[-0.02em] text-[var(--hc-ink)]">
-          Schedule pace
-        </span>
-        <span
-          className={cn(
-            "j-delay-status ml-auto",
-            behind && "j-delay-status--behind",
-            pulse === "up" && "j-delay-status--pulse-up",
-            pulse === "down" && "j-delay-status--pulse-down",
-            pulse === "clear" && "j-delay-status--pulse-clear",
-          )}
-        >
-          {statusLabel}
-        </span>
-      </div>
+      {!collapsible && (
+        <div className="flex items-center gap-2">{summaryRow}</div>
+      )}
 
-      {!embedded && (
+      {!embedded && !collapsible && (
         <p className="mt-1.5 text-sm leading-relaxed text-[var(--hc-muted)]">
           Running late? Nudge every judge desk. Updates in about 10 seconds.
         </p>
@@ -154,6 +166,15 @@ export function DelayControl({
       )}
     </>
   );
+
+  if (collapsible) {
+    return (
+      <details className="j-delay-disclosure">
+        <summary className="j-delay-summary">{summaryRow}</summary>
+        <div className="j-delay-disclosure-body">{inner}</div>
+      </details>
+    );
+  }
 
   if (embedded) {
     return <div className="j-delay-embedded">{inner}</div>;

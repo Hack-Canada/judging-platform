@@ -1,7 +1,6 @@
 "use client";
 
 import { AppHeader, AppHeaderBack } from "@/components/design-system";
-import { BoardingProgress } from "@/components/judging/boarding-progress";
 import { StreamSelector } from "@/components/judging/stream-selector";
 import { SyncStatusBadge } from "@/components/judging/sync-status";
 import { EVENT_NAME } from "@/lib/judging/constants";
@@ -43,8 +42,6 @@ export function JudgingHeader({
   onSelectStream,
   streamLocked = false,
 }: JudgingHeaderProps) {
-  const completedCount = judgedCount + skippedCount;
-
   const showStreamSelect =
     !streamLocked &&
     streams &&
@@ -105,6 +102,7 @@ export function JudgingHeader({
     </div>
   );
 
+  // No `middle`: the lamp strip only restated the judged count beside it.
   return (
     <div>
       <AppHeader
@@ -113,16 +111,6 @@ export function JudgingHeader({
         portalName="Judge desk"
         context={context}
         status={status}
-        middle={
-          totalCount > 0 ? (
-            <BoardingProgress
-              completed={completedCount}
-              total={totalCount}
-              judged={judgedCount}
-              skipped={skippedCount}
-            />
-          ) : null
-        }
       />
     </div>
   );

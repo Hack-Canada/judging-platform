@@ -59,18 +59,6 @@ function WinnerToggle({
   );
 }
 
-function KeyHints({ keys }: { keys: [string, string][] }) {
-  return (
-    <p className="j-kbd-hints" aria-hidden>
-      {keys.map(([key, action]) => (
-        <span key={key} className="j-kbd-hint">
-          <kbd>{key}</kbd> {action}
-        </span>
-      ))}
-    </p>
-  );
-}
-
 export function JudgingFooter({
   isJudged,
   isSkipped,
@@ -91,13 +79,6 @@ export function JudgingFooter({
               ? "Marked skipped."
               : "Marked reviewed - tap Unmark if this was a mistake."}
           </p>
-          <KeyHints
-            keys={[
-              ["U", "unmark"],
-              ["W", "winner"],
-              ["← →", "browse"],
-            ]}
-          />
         </div>
         <div className="flex w-full flex-row items-stretch gap-2 sm:w-auto sm:items-center sm:gap-3">
           <WinnerToggle
@@ -123,14 +104,6 @@ export function JudgingFooter({
     <>
       <div className="hidden sm:block">
         <p className="text-base text-[var(--hc-muted)]">{hint}</p>
-        <KeyHints
-          keys={[
-            ["J", "reviewed"],
-            ["S", "skip"],
-            ["W", "winner"],
-            ["← →", "browse"],
-          ]}
-        />
       </div>
       <div className="flex w-full flex-row items-stretch gap-2 sm:w-auto sm:items-center sm:gap-3">
         <WinnerToggle

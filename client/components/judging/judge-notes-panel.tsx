@@ -129,9 +129,15 @@ export function JudgeNotesPanel({
           Private
         </span>
       </div>
-      <p className="mt-1 text-sm text-[var(--hc-muted)] sm:text-base">
-        Notes for {project.name}. {notesSyncHint(syncStatus, pendingNotesCount)}
-      </p>
+      {/*
+        Only surfaced when sync is not the happy path. "Synced to the server"
+        on every card was noise; "Offline - saved on this device" is not.
+      */}
+      {syncStatus && syncStatus !== "synced" ? (
+        <p className="mt-1 text-sm text-[var(--hc-muted)]">
+          {notesSyncHint(syncStatus, pendingNotesCount)}
+        </p>
+      ) : null}
       {onRate ? <RatingRow rating={rating} onRate={onRate} /> : null}
       <div
         className="j-note-prompts"

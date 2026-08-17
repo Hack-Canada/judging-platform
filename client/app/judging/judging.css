@@ -177,68 +177,11 @@
  * Banners sit as inset rounded cards on the paper rather than full-bleed rules,
  * matching how every hacker surface is a card in a padded column.
  */
-.j-delay-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.875rem;
-  width: 100%;
-  max-width: 96rem;
-  margin: var(--hc-space-4) auto 0;
-  padding: 0.85rem 1.15rem;
-  background: var(--j-white);
-  border: 1px solid color-mix(in srgb, var(--j-border) 65%, transparent);
-  border-radius: var(--j-radius-lg);
-  color: var(--j-ink);
-}
-
-.j-delay-banner,
 .j-completion-banner,
 .j-break-banner,
 .j-live-ribbon {
   /* Keep the inset cards inside the same gutter as .j-content */
   max-width: min(96rem, calc(100% - 2 * var(--j-gutter)));
-}
-
-.j-delay-banner-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--j-radius-pill);
-  background: var(--j-accent-soft);
-  color: var(--j-accent-strong);
-  flex-shrink: 0;
-}
-
-.j-delay-banner-label {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--j-muted);
-}
-
-.j-delay-banner-value {
-  font-family: var(--j-font-display);
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--j-ink);
-}
-
-.j-delay-banner-hint {
-  font-size: 0.75rem;
-  color: var(--j-muted);
-  margin-left: auto;
-}
-
-@media (max-width: 639px) {
-  .j-delay-banner-hint {
-    margin-left: 0;
-    width: 100%;
-    padding-left: 2.25rem;
-  }
 }
 
 .j-hero-inner {
@@ -659,173 +602,6 @@
   margin: 0;
 }
 
-.j-desk-queue {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1rem 1.5rem;
-  padding: 1.25rem 0 1rem;
-  border-bottom: 1px solid var(--j-border-soft);
-}
-
-.j-desk-queue-block {
-  flex: 1 1 16rem;
-  min-width: 0;
-}
-
-.j-desk-queue-block--picks {
-  flex: 1 1 12rem;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.j-desk-queue-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0 0 0.5rem;
-  font-family: var(--j-font-body);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--j-muted);
-}
-
-.j-desk-queue-count {
-  margin-left: 0.15rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: var(--j-radius-pill);
-  background: var(--j-accent-soft);
-  border: 1px solid transparent;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
-  text-transform: none;
-  font-size: 0.6875rem;
-  color: var(--j-accent-strong);
-}
-
-.j-desk-queue-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.j-desk-queue-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.65rem;
-  align-items: center;
-  width: 100%;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid color-mix(in srgb, var(--j-border) 65%, transparent);
-  border-radius: var(--j-radius-lg);
-  background: var(--j-white);
-  text-align: left;
-  transition:
-    border-color 200ms ease,
-    box-shadow 200ms ease,
-    transform 200ms ease;
-}
-
-.j-desk-queue-card:hover {
-  border-color: color-mix(in srgb, var(--j-accent) 55%, transparent);
-  box-shadow: var(--j-shadow-soft);
-  transform: translateY(-1px);
-}
-
-.j-desk-queue-card:hover .j-desk-queue-ord {
-  background: var(--j-accent);
-  color: var(--j-on-ink);
-}
-
-.j-desk-queue-card:focus-visible {
-  outline: 2px solid var(--j-accent);
-  outline-offset: 2px;
-}
-
-.j-desk-queue-ord {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.65rem;
-  height: 1.65rem;
-  border-radius: var(--j-radius-pill);
-  background: var(--j-accent-soft);
-  border: none;
-  font-size: 0.75rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--j-accent-strong);
-  transition: background 200ms ease, color 200ms ease;
-}
-
-.j-desk-queue-name {
-  font-family: var(--j-font-body);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--j-ink);
-}
-
-.j-desk-queue-meta {
-  margin-top: 0.15rem;
-  font-size: 0.75rem;
-  color: var(--j-muted);
-}
-
-.j-desk-queue-picks {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0 0 0.15rem;
-  list-style: none;
-  max-width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-.j-desk-queue-pick {
-  max-width: 9.5rem;
-  flex: 0 0 auto;
-  padding: 0.4rem 0.8rem;
-  border: 1px solid color-mix(in srgb, var(--j-border) 65%, transparent);
-  border-radius: var(--j-radius-pill);
-  background: var(--j-white);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--j-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: border-color 200ms ease, background 200ms ease;
-}
-
-.j-desk-queue-pick:hover,
-.j-desk-queue-pick--active {
-  border-color: color-mix(in srgb, var(--j-accent) 55%, transparent);
-  background: var(--j-accent-soft);
-}
-
-.j-desk-queue-pick--more {
-  max-width: none;
-  border-style: dashed;
-  color: var(--j-muted);
-  font-weight: 600;
-  cursor: default;
-}
-
-.j-desk-queue-pick:focus-visible {
-  outline: 2px solid var(--j-accent);
-  outline-offset: 2px;
-}
-
 .j-note-prompts {
   display: flex;
   flex-wrap: wrap;
@@ -1083,45 +859,6 @@
   border-radius: inherit;
   background: var(--j-accent);
   transition: width 300ms ease;
-}
-
-/* Signature: boarding-gate lamp strip */
-.j-boarding-progress {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  width: 100%;
-  min-height: 10px;
-  padding: 2px 0;
-}
-
-.j-boarding-lamp {
-  flex: 1 1 0;
-  height: 7px;
-  border-radius: var(--j-radius-pill);
-  background: var(--j-border-soft);
-  box-shadow: none;
-  transition:
-    background 280ms ease,
-    box-shadow 280ms ease,
-    transform 280ms ease;
-}
-
-.j-boarding-lamp--on {
-  background: var(--j-accent);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--j-accent) 45%, transparent);
-  animation: j-lamp-on 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes j-lamp-on {
-  from {
-    transform: scaleY(0.55);
-    filter: brightness(0.7);
-  }
-  to {
-    transform: scaleY(1);
-    filter: brightness(1);
-  }
 }
 
 .j-header-status {
@@ -1529,11 +1266,11 @@
   line-height: 1.15;
 }
 
+/* A caveat, not an announcement — reads as fine print under the title. */
 .j-schedule-approx {
-  padding: 0.7rem 0.85rem;
-  background: var(--j-accent-soft);
-  color: var(--j-accent-strong);
-  border-radius: var(--j-radius);
+  padding: 0;
+  background: transparent;
+  color: var(--j-muted);
 }
 
 .j-schedule-row {
@@ -2394,40 +2131,6 @@
   }
 }
 
-/* Signature: keyboard hints (desktop) */
-.j-kbd-hints {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.875rem;
-  margin-top: 0.375rem;
-}
-
-.j-kbd-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.75rem;
-  color: var(--j-faint);
-}
-
-.j-kbd-hint kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.45rem;
-  height: 1.45rem;
-  padding: 0 0.4rem;
-  border: 1px solid color-mix(in srgb, var(--j-border) 65%, transparent);
-  border-bottom-width: 2px;
-  border-radius: var(--j-radius-sm);
-  background: var(--j-paper);
-  font-family: var(--j-font-body);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: var(--j-muted);
-  line-height: 1;
-}
-
 /* Signature: departure-board timeline in schedule */
 .j-schedule-list::before {
   content: "";
@@ -2497,7 +2200,6 @@
   .j-live-ribbon::before,
   .j-live-ribbon-beacon-dot,
   .j-split-title-char,
-  .j-boarding-lamp--on,
   .j-winner-burst-mark,
   .j-winner-burst-ring,
   .j-winner-burst-spark,
@@ -2618,19 +2320,6 @@
     order: 0;
   }
 
-  .j-desk-queue {
-    padding-top: 0.65rem;
-  }
-
-  /* Up next lives in the schedule dock on mobile */
-  .j-desk-queue-block:not(.j-desk-queue-block--picks) {
-    display: none;
-  }
-
-  .j-desk-queue:not(:has(.j-desk-queue-block--picks)) {
-    display: none;
-  }
-
   .j-jump-notes {
     display: inline-flex;
     align-self: flex-start;
@@ -2715,15 +2404,6 @@
     gap: 0.35rem 0.5rem;
   }
 
-  /*
-   * The delay already has its own banner immediately below the header — a
-   * second copy here is what forced the status column wide enough to wrap the
-   * title onto three lines.
-   */
-  .j-header-status .j-sync-badge--offset {
-    display: none;
-  }
-
   .j-header-progress-block p:not(.j-header-count) {
     font-size: 0.6875rem;
     line-height: 1.2;
@@ -2735,8 +2415,7 @@
     white-space: nowrap;
   }
 
-  .j-header-mid-progress,
-  .j-boarding-progress {
+  .j-header-mid-progress {
     display: none;
   }
 
@@ -2856,6 +2535,44 @@
   border: 1px solid color-mix(in srgb, var(--j-border) 65%, transparent);
   background: var(--j-paper);
   padding: 0.9rem;
+}
+
+/*
+ * Collapsed pace control. Retimes every judge desk, so it sits as one quiet
+ * row on the judging surface and opens on click.
+ */
+.j-delay-disclosure {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--j-border) 65%, transparent);
+  border-radius: var(--j-radius-lg);
+  background: var(--j-white);
+}
+
+.j-delay-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  list-style: none;
+  border-radius: inherit;
+}
+
+.j-delay-summary::-webkit-details-marker {
+  display: none;
+}
+
+.j-delay-summary:hover {
+  background: var(--j-paper);
+}
+
+.j-delay-summary:focus-visible {
+  outline: 2px solid var(--j-accent);
+  outline-offset: 2px;
+}
+
+.j-delay-disclosure-body {
+  padding: 0 0.9rem 0.9rem;
 }
 
 .j-delay-icon {

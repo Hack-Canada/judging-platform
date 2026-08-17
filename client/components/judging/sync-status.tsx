@@ -39,12 +39,18 @@ export function SyncStatusBadge({
 }: SyncStatusProps) {
   return (
     <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
+      {/*
+        The only delay indicator now that the standalone banner is gone, so it
+        shows at every width - abbreviated on phones where the full sentence
+        pushed the header title onto a third line.
+      */}
       {scheduleOffsetLabel && (
         <span
           className="j-sync-badge j-sync-badge--offset"
-          title="Organizer schedule delay. Slot times are shifted on this desk."
+          title={`Organizer schedule delay: running ${scheduleOffsetLabel}. Slot times are shifted on this desk.`}
         >
-          Running {scheduleOffsetLabel}
+          <span className="hidden sm:inline">Running {scheduleOffsetLabel}</span>
+          <span className="sm:hidden">{scheduleOffsetLabel}</span>
         </span>
       )}
       <span
