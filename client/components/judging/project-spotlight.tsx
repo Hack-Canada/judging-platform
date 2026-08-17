@@ -7,7 +7,8 @@ import { LocationBoard } from "./location-board";
 import { SessionTimer } from "./session-timer";
 import { SplitFlapTitle } from "./split-flap-title";
 
-const MAX_TRACKS = 12;
+/* Judges skim tracks, they don't read all twelve mid-pitch. */
+const MAX_TRACKS = 3;
 
 type ProjectHeroProps = {
   project: JudgingProject;

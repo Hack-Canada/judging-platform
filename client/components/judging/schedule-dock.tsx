@@ -70,7 +70,7 @@ export function ScheduleDock({
       </DrawerTrigger>
       <DrawerContent className="j-schedule-drawer border-[var(--hc-border)] bg-[var(--hc-white)] px-0 pb-[max(2rem,env(safe-area-inset-bottom))] text-[var(--hc-ink)]">
         <DrawerHeader className="shrink-0 border-b border-[var(--hc-border)] px-4 pb-4 text-left sm:px-5">
-          <DrawerTitle className="font-[family-name:var(--hc-font-display)] text-lg font-semibold text-[var(--hc-ink)]">
+          <DrawerTitle className="font-[family-name:var(--hc-font-display)] text-2xl font-semibold tracking-[-0.02em] text-[var(--hc-ink)]">
             Your schedule
           </DrawerTitle>
           <p className="text-sm text-[var(--hc-muted)]">

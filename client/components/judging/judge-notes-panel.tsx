@@ -121,7 +121,7 @@ export function JudgeNotesPanel({
         <label
           id={`${textareaId}-label`}
           htmlFor={textareaId}
-          className="font-[family-name:var(--hc-font-display)] text-xl font-semibold text-[var(--hc-ink)]"
+          className="font-[family-name:var(--hc-font-display)] text-2xl font-semibold tracking-[-0.02em] text-[var(--hc-ink)]"
         >
           Scorecard
         </label>
@@ -129,9 +129,15 @@ export function JudgeNotesPanel({
           Private
         </span>
       </div>
-      <p className="mt-1 text-sm text-[var(--hc-muted)] sm:text-base">
-        Notes for {project.name}. {notesSyncHint(syncStatus, pendingNotesCount)}
-      </p>
+      {/*
+        Only surfaced when sync is not the happy path. "Synced to the server"
+        on every card was noise; "Offline - saved on this device" is not.
+      */}
+      {syncStatus && syncStatus !== "synced" ? (
+        <p className="mt-1 text-sm text-[var(--hc-muted)]">
+          {notesSyncHint(syncStatus, pendingNotesCount)}
+        </p>
+      ) : null}
       {onRate ? <RatingRow rating={rating} onRate={onRate} /> : null}
       <div
         className="j-note-prompts"

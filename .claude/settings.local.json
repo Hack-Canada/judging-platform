@@ -6,7 +6,8 @@
       "Bash(npx tsc --noEmit)",
       "Bash(python3 -c \":*)",
       "Bash(gh pr *)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(git checkout *)"
     ]
   }
 }

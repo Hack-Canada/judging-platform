@@ -1,7 +1,6 @@
 "use client";
 
 import { AppHeader, AppHeaderBack } from "@/components/design-system";
-import { BoardingProgress } from "@/components/judging/boarding-progress";
 import { StreamSelector } from "@/components/judging/stream-selector";
 import { SyncStatusBadge } from "@/components/judging/sync-status";
 import { EVENT_NAME } from "@/lib/judging/constants";
@@ -43,8 +42,6 @@ export function JudgingHeader({
   onSelectStream,
   streamLocked = false,
 }: JudgingHeaderProps) {
-  const completedCount = judgedCount + skippedCount;
-
   const showStreamSelect =
     !streamLocked &&
     streams &&
@@ -53,12 +50,16 @@ export function JudgingHeader({
     progressByStream &&
     onSelectStream;
 
+  /*
+   * The event name and "live" suffix are desktop-only: on a phone they pushed
+   * the stream picker onto its own line and made the header three rows tall.
+   */
   const context = (
     <span className="inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-1">
-      <span className="text-[var(--hc-muted)]">{EVENT_NAME}</span>
+      <span className="hidden text-[var(--hc-muted)] sm:inline">{EVENT_NAME}</span>
       {showStreamSelect ? (
         <>
-          <span className="text-[var(--hc-faint)]" aria-hidden>
+          <span className="hidden text-[var(--hc-faint)] sm:inline" aria-hidden>
             ·
           </span>
           <StreamSelector
@@ -69,7 +70,10 @@ export function JudgingHeader({
           />
         </>
       ) : streamName ? (
-        <span className="text-[var(--hc-faint)]"> · {streamName}</span>
+        <span className="text-[var(--hc-faint)]">
+          <span className="hidden sm:inline"> · </span>
+          {streamName}
+        </span>
       ) : null}
       <span className="hidden text-[var(--hc-faint)] sm:inline"> · live</span>
     </span>
@@ -98,6 +102,7 @@ export function JudgingHeader({
     </div>
   );
 
+  // No `middle`: the lamp strip only restated the judged count beside it.
   return (
     <div>
       <AppHeader
@@ -106,16 +111,6 @@ export function JudgingHeader({
         portalName="Judge desk"
         context={context}
         status={status}
-        middle={
-          totalCount > 0 ? (
-            <BoardingProgress
-              completed={completedCount}
-              total={totalCount}
-              judged={judgedCount}
-              skipped={skippedCount}
-            />
-          ) : null
-        }
       />
     </div>
   );

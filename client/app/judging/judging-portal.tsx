@@ -5,7 +5,6 @@ import { ActionFeedback } from "@/components/judging/action-feedback";
 import { BreakBanner } from "@/components/judging/break-banner";
 import { CompletionBanner } from "@/components/judging/completion-banner";
 import { DelayControl } from "@/components/judging/delay-control";
-import { DeskQueue } from "@/components/judging/desk-queue";
 import { JudgeNotesPanel } from "@/components/judging/judge-notes-panel";
 import { JudgingFooter } from "@/components/judging/judging-footer";
 import { JudgingHeader } from "@/components/judging/judging-header";
@@ -779,22 +778,6 @@ export function JudgingPortal({
         streamLocked={streamLocked}
       />
 
-      {scheduleOffsetLabel ? (
-        <div className="j-delay-banner" role="status" aria-live="polite">
-          <span className="j-delay-banner-icon" aria-hidden>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 2" />
-            </svg>
-          </span>
-          <span className="j-delay-banner-label">Schedule delay</span>
-          <span className="j-delay-banner-value">Running {scheduleOffsetLabel}</span>
-          <span className="j-delay-banner-hint">
-            Every judge desk updates within ~10s
-          </span>
-        </div>
-      ) : null}
-
       {streamAllDone && activeStream && (
         <CompletionBanner
           judgedCount={judgedCount}
@@ -846,14 +829,6 @@ export function JudgingPortal({
       />
 
       <div className="j-content">
-        <DeskQueue
-          slots={streamSlots}
-          projects={projects}
-          activeProjectId={activeProject.id}
-          judgedIds={judgedIds}
-          winnerIds={winnerIds}
-          onSelect={selectProject}
-        />
         <div className="j-content-grid">
           <div className="j-main-col min-w-0">
             <ProjectDetails project={activeProject} />
@@ -873,6 +848,7 @@ export function JudgingPortal({
               <DelayControl
                 offsetMinutes={scheduleOffsetMinutes}
                 onApplied={handleOffsetChange}
+                collapsible
               />
               <SessionRail
                 slots={streamSlots}
