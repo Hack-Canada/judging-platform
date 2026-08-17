@@ -121,7 +121,7 @@ export function JudgeNotesPanel({
         <label
           id={`${textareaId}-label`}
           htmlFor={textareaId}
-          className="font-[family-name:var(--hc-font-display)] text-xl font-semibold text-[var(--hc-ink)]"
+          className="font-[family-name:var(--hc-font-display)] text-2xl font-semibold tracking-[-0.02em] text-[var(--hc-ink)]"
         >
           Scorecard
         </label>

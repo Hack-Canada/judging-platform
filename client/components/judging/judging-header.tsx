@@ -53,12 +53,16 @@ export function JudgingHeader({
     progressByStream &&
     onSelectStream;
 
+  /*
+   * The event name and "live" suffix are desktop-only: on a phone they pushed
+   * the stream picker onto its own line and made the header three rows tall.
+   */
   const context = (
     <span className="inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-1">
-      <span className="text-[var(--hc-muted)]">{EVENT_NAME}</span>
+      <span className="hidden text-[var(--hc-muted)] sm:inline">{EVENT_NAME}</span>
       {showStreamSelect ? (
         <>
-          <span className="text-[var(--hc-faint)]" aria-hidden>
+          <span className="hidden text-[var(--hc-faint)] sm:inline" aria-hidden>
             ·
           </span>
           <StreamSelector
@@ -69,7 +73,10 @@ export function JudgingHeader({
           />
         </>
       ) : streamName ? (
-        <span className="text-[var(--hc-faint)]"> · {streamName}</span>
+        <span className="text-[var(--hc-faint)]">
+          <span className="hidden sm:inline"> · </span>
+          {streamName}
+        </span>
       ) : null}
       <span className="hidden text-[var(--hc-faint)] sm:inline"> · live</span>
     </span>

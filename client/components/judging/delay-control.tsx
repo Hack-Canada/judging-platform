@@ -68,7 +68,7 @@ export function DelayControl({
         <span className="j-delay-icon" aria-hidden>
           <Clock className="size-3.5" />
         </span>
-        <span className="font-[family-name:var(--hc-font-display)] text-sm font-semibold text-[var(--hc-ink)]">
+        <span className="font-[family-name:var(--hc-font-display)] text-base font-semibold tracking-[-0.02em] text-[var(--hc-ink)]">
           Schedule pace
         </span>
         <span

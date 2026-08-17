@@ -1,24 +1,52 @@
 /*
- * HackCanada shared tokens (judging is source of truth).
- * Loaded from judging layout; values also mirrored on .judging-shell.
+ * HackCanada shared tokens.
+ *
+ * These mirror the hacker portal's palette in globals.css (--brand-*, --text-*,
+ * --bg-*) so judging reads as the same product: same navy ink, same soft blue
+ * paper, Fredoka for display and Figtree for body, rounded cards and pills.
+ * Judging aliases these as --j-* in judging.css.
  */
 :root {
-  --hc-paper: #f5f7fa;
-  --hc-ink: #141210;
-  --hc-muted: #5b6470;
-  --hc-faint: #66707c;
-  --hc-border: #d5dbe3;
+  /* Surfaces — mirrors --bg-light / --bg-white */
+  --hc-paper: #f5f9ff;
   --hc-white: #ffffff;
-  --hc-live: #e11d2e;
-  --hc-live-bg: #fef2f2;
+  --hc-sunken: #eaf0f7;
+
+  /* Ink — mirrors --brand-secondary / --text-secondary / --text-tertiary */
+  --hc-ink: #0f2a43;
+  --hc-muted: #5a7184;
+  --hc-faint: #9aa9bc;
+
+  /* Lines — mirrors --bg-gray-dark / --bg-gray */
+  --hc-border: #cdd8e5;
+  --hc-border-soft: #eaf0f7;
+
+  /* Accent — mirrors --brand-primary / --text-primary / --bg-primary-light */
+  --hc-accent: #4da3ff;
+  --hc-accent-strong: #2b8af0;
+  --hc-accent-soft: #dcebfb;
+  --hc-mint: #00d0c0;
+
+  /* Status — mirrors --text-danger / --bg-danger-light / --text-warning */
+  --hc-live: #d24b57;
+  --hc-live-bg: #fbe1e3;
+  --hc-overtime: #d98a2b;
+  --hc-overtime-bg: #fbefd8;
+  --hc-success: #2e9e6b;
+
+  /* Primary action — navy fill, same CTA as the hacker home hero */
   --hc-action: #0f2a43;
   --hc-action-hover: #0a1f33;
-  --hc-overtime: #d97706;
+
+  /* On dark surfaces (hero board, live ribbon) */
   --hc-on-ink: #ffffff;
   --hc-on-ink-muted: #c8d6e6;
   --hc-on-ink-faint: #9eb0c4;
+
+  /* Type — Fredoka displays, Figtree reads */
   --hc-font-display: var(--font-fredoka), system-ui, sans-serif;
-  --hc-font-body: var(--font-rubik), system-ui, sans-serif;
+  --hc-font-body: var(--font-figtree), system-ui, sans-serif;
+
   --hc-space-1: 0.25rem;
   --hc-space-2: 0.5rem;
   --hc-space-3: 0.75rem;
@@ -28,7 +56,16 @@
   --hc-space-8: 2rem;
   --hc-space-10: 2.5rem;
   --hc-space-12: 3rem;
-  --hc-radius: 4px;
-  --hc-radius-lg: 8px;
-  --hc-shadow: 0 8px 32px rgb(15 42 67 / 0.12);
+
+  /* Radii — chips are pills, panels are the hacker 1.75rem card */
+  --hc-radius-sm: 0.5rem;
+  --hc-radius: 0.75rem;
+  --hc-radius-lg: 1.25rem;
+  --hc-radius-card: 1.75rem;
+  --hc-radius-pill: 999px;
+
+  /* Elevation — soft blue-tinted lift, never a hard drop shadow */
+  --hc-shadow: 0 18px 42px rgb(77 163 255 / 0.12);
+  --hc-shadow-soft: 0 10px 24px rgb(15 42 67 / 0.08);
+  --hc-shadow-press: 0 8px 18px rgb(15 42 67 / 0.16);
 }
